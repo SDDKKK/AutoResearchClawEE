@@ -336,13 +336,13 @@ RUN pip install --no-cache-dir llamafactory>=0.9.0
 | 1 | 2026-03-xx | Continual Learning | sandbox | - | - | Bug 1-4 |
 | 2 | 2026-03-xx | RIM Agents | sandbox | - | - | Bug 1-4 |
 | 3 | 2026-03-xx | (与 Run 1 同主题) | sandbox | - | - | Bug 1-4 |
-| 4 | 2026-03-xx | RL for AI4Science | sandbox | - | - | Bug 5-8 |
-| 5 | 2026-03-xx | Graph Neural ODE | sandbox | - | - | Bug 5-8 |
+| 4 | 2026-03-xx | RL for AI4Science | sandbox | 4/10 | - | Bug 5-8, 变量作用域, 5/7条件崩溃 |
+| 5 | 2026-03-xx | Graph Neural ODE | sandbox | 4/10 | - | Bug 5-8, nn.Linear in forward, no-op ablation |
 | 6 | 2026-03-xx | Meta-Learning | sandbox | - | - | Bug 5-8 |
 | 7 | 2026-03-14 | Normalization Techniques | docker | 3/10 | 3/10 | P1-P14 |
-| 8 | TBD | LoRA Rank Allocation (ViT) | docker | - | - | - |
-| 9 | TBD | Generative Trajectory RL | docker | - | - | - |
-| 10 | TBD | First-Token Reasoning | docker | - | - | - |
+| 8 | 2026-03-15 | KD Comparison (CIFAR-10) | docker | 5/10 | - | Q13-Q15, 随机水平结果 |
+| 9 | 2026-03-15 | PPO/SAC/TD3+PER | docker | 7/10 | - | Q11, MuJoCo缺失致完全失败 |
+| 10 | 2026-03-15 | Neural ODE Robustness | docker | 7/10 | - | Q12/Q16, CIFAR-10挂载失败 |
 | 11 | TBD | QLoRA Qwen Fine-Tuning | docker | - | - | - |
 | 12 | TBD | VLM Hallucination | docker | - | - | - |
 | 13 | TBD | Offline RL Comparison | docker | - | - | - |
@@ -351,16 +351,22 @@ RUN pip install --no-cache-dir llamafactory>=0.9.0
 
 | 问题 ID | 描述 | Phase | 状态 | 修复 Commit |
 |---------|------|-------|------|-------------|
-| Q1 | 代码过于简单/偷懒 | P1 | ⬜ 待诊断 | - |
-| Q2 | 不支持 LLM 微调 | P2 | ⬜ 待实施 | - |
-| Q3 | Docker 缺关键包 | P2 | ⬜ 待实施 | - |
-| Q4 | 计算预算不匹配 | P2 | ⬜ 待实施 | - |
-| Q5 | 数据集指导不全 | P1/P2 | ⬜ 待实施 | - |
-| Q6 | 缺先进训练技巧 | P2 | ⬜ 待实施 | - |
+| Q1 | 代码过于简单/偷懒 | P1 | ✅ 已修复 | cb4af26 |
+| Q2 | 不支持 LLM 微调 | P2 | ✅ 已修复 | e72a818 |
+| Q3 | Docker 缺关键包 | P2 | ✅ 已修复 | e72a818 |
+| Q4 | 计算预算不匹配 | P2 | ✅ 已修复 | e72a818 |
+| Q5 | 数据集指导不全 | P1/P2 | ✅ 已修复 | (本次) |
+| Q6 | 缺先进训练技巧 | P2 | ✅ 已修复 | e72a818 |
 | Q7 | 选题前沿性验证 | P4 | ⬜ 待实施 | - |
-| Q8 | 实验设计与代码脱节 | P1 | ⬜ 待实施 | - |
-| Q9 | 消融实验质量低 | P1 | ⬜ 待诊断 | - |
+| Q8 | 实验设计与代码脱节 | P1 | ✅ 已修复 | cb4af26 |
+| Q9 | 消融实验质量低 | P1 | ✅ 已修复 | cb4af26 |
 | Q10 | 论文写作质量 | P4 | 🟡 V7已部分修复 | - |
+| Q11 | Docker 缺 MuJoCo | P0 | ✅ 已修复 | (本次) |
+| Q12 | CIFAR-10 挂载失效 | P0 | ✅ 已修复 | (本次,重建镜像) |
+| Q13 | 训练 epoch 过少 | P0 | ✅ 已修复 | (本次) |
+| Q14 | Feature KD 维度不匹配 | P1 | 🟡 P1代码审查会捕获 | - |
+| Q15 | 消融与 baseline 重复 | P1 | 🟡 P1深度验证会捕获 | - |
+| Q16 | 缺少关键实验条件 | P1 | 🟡 P1代码审查会捕获 | - |
 
 ---
 

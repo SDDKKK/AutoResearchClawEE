@@ -21,7 +21,8 @@ RUN python3 -m pip install \
         torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 \
     && python3 -m pip install \
         numpy scipy scikit-learn pandas matplotlib seaborn \
-        tqdm gymnasium networkx torchdiffeq PyYAML
+        tqdm gymnasium networkx torchdiffeq PyYAML \
+    && python3 -m pip install "gymnasium[mujoco]" mujoco
 
 # LLM / Transformer training stack
 RUN python3 -m pip install \
@@ -37,7 +38,9 @@ RUN python3 -m pip install \
 # Pre-cache standard datasets for offline use
 RUN mkdir -p /opt/datasets && \
     python3 -c "import torchvision; torchvision.datasets.CIFAR10(root='/opt/datasets', train=True, download=True); torchvision.datasets.CIFAR10(root='/opt/datasets', train=False, download=True)" && \
+    python3 -c "import torchvision; torchvision.datasets.CIFAR100(root='/opt/datasets', train=True, download=True); torchvision.datasets.CIFAR100(root='/opt/datasets', train=False, download=True)" && \
     python3 -c "import torchvision; torchvision.datasets.FashionMNIST(root='/opt/datasets', train=True, download=True); torchvision.datasets.FashionMNIST(root='/opt/datasets', train=False, download=True)" && \
+    python3 -c "import torchvision; torchvision.datasets.MNIST(root='/opt/datasets', train=True, download=True); torchvision.datasets.MNIST(root='/opt/datasets', train=False, download=True)" && \
     chmod -R a+r /opt/datasets
 
 # Non-root user for security
