@@ -2049,6 +2049,83 @@ def _execute_experiment_design(
             "risks": ["overfitting", "data leakage"],
             "compute_budget": {"max_gpu": 1, "max_hours": 4},
         }
+    # ── BA: BenchmarkAgent — intelligent dataset/baseline selection ──────
+    _benchmark_plan = None
+    if (
+        config.experiment.benchmark_agent.enabled
+        and config.experiment.mode in ("sandbox", "docker")
+        and llm is not None
+    ):
+        try:
+            from researchclaw.agents.benchmark_agent import BenchmarkOrchestrator
+            from researchclaw.agents.benchmark_agent.orchestrator import (
+                BenchmarkAgentConfig as _BACfg,
+            )
+
+            _ba_cfg_raw = config.experiment.benchmark_agent
+            _ba_cfg = _BACfg(
+                enabled=_ba_cfg_raw.enabled,
+                enable_hf_search=_ba_cfg_raw.enable_hf_search,
+                max_hf_results=_ba_cfg_raw.max_hf_results,
+                tier_limit=_ba_cfg_raw.tier_limit,
+                min_benchmarks=_ba_cfg_raw.min_benchmarks,
+                min_baselines=_ba_cfg_raw.min_baselines,
+                prefer_cached=_ba_cfg_raw.prefer_cached,
+                max_iterations=_ba_cfg_raw.max_iterations,
+            )
+
+            _hw = _load_hardware_profile(run_dir)
+            _ba = BenchmarkOrchestrator(
+                llm,
+                config=_ba_cfg,
+                gpu_memory_mb=(
+                    _hw.get("gpu_memory_mb", 49000) if _hw else 49000
+                ),
+                time_budget_sec=config.experiment.time_budget_sec,
+                network_policy=(
+                    config.experiment.docker.network_policy
+                    if config.experiment.mode == "docker"
+                    else "full"
+                ),
+                stage_dir=stage_dir / "benchmark_agent",
+            )
+            _benchmark_plan = _ba.orchestrate({
+                "topic": config.research.topic,
+                "hypothesis": hypotheses,
+                "experiment_plan": plan.get("objectives", "") if isinstance(plan, dict) else "",
+            })
+
+            # Inject BenchmarkAgent selections into experiment plan
+            if isinstance(plan, dict) and _benchmark_plan.selected_benchmarks:
+                plan["datasets"] = [
+                    b["name"] for b in _benchmark_plan.selected_benchmarks
+                ]
+                plan["baselines"] = [
+                    bl["name"] for bl in _benchmark_plan.selected_baselines
+                ] + plan.get("baselines", [])
+                # Deduplicate baselines
+                plan["baselines"] = list(dict.fromkeys(plan["baselines"]))
+
+            logger.info(
+                "BenchmarkAgent: %d benchmarks, %d baselines selected (%d LLM calls, %.1fs)",
+                len(_benchmark_plan.selected_benchmarks),
+                len(_benchmark_plan.selected_baselines),
+                _benchmark_plan.total_llm_calls,
+                _benchmark_plan.elapsed_sec,
+            )
+        except Exception as _ba_exc:
+            logger.warning("BenchmarkAgent failed (non-fatal): %s", _ba_exc)
+
+    # Save benchmark plan for code_generation stage
+    if _benchmark_plan is not None:
+        try:
+            (stage_dir / "benchmark_plan.json").write_text(
+                json.dumps(_benchmark_plan.to_dict(), indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
     plan.setdefault("topic", config.research.topic)
     (stage_dir / "exp_plan.yaml").write_text(
         yaml.dump(plan, default_flow_style=False, allow_unicode=True),
@@ -2157,6 +2234,42 @@ def _execute_code_generation(
             extra_guidance += _pm.block("multi_seed_enforcement")
         except Exception:  # noqa: BLE001
             pass
+
+    # --- BA: Inject BenchmarkAgent plan from Stage 9 ---
+    _bp_path = None
+    for _s9_dir in sorted(run_dir.glob("stage-09*"), reverse=True):
+        _candidate = _s9_dir / "benchmark_plan.json"
+        if _candidate.exists():
+            _bp_path = _candidate
+            break
+    if _bp_path is not None:
+        try:
+            import json as _json_bp
+            _bp_data = _json_bp.loads(_bp_path.read_text(encoding="utf-8"))
+            # Reconstruct the prompt block
+            from researchclaw.agents.benchmark_agent.orchestrator import BenchmarkPlan
+            _bp = BenchmarkPlan(
+                selected_benchmarks=_bp_data.get("selected_benchmarks", []),
+                selected_baselines=_bp_data.get("selected_baselines", []),
+                data_loader_code=_bp_data.get("data_loader_code", ""),
+                baseline_code=_bp_data.get("baseline_code", ""),
+                experiment_notes=_bp_data.get("experiment_notes", ""),
+            )
+            _bp_block = _bp.to_prompt_block()
+            if _bp_block:
+                extra_guidance += (
+                    "\n\n## BenchmarkAgent Selections (USE THESE)\n"
+                    "The following datasets, baselines, and code snippets were "
+                    "automatically selected and validated by the BenchmarkAgent. "
+                    "You MUST use these selections in your experiment code.\n\n"
+                    + _bp_block
+                )
+                logger.info(
+                    "BA: Injected benchmark plan (%d benchmarks, %d baselines)",
+                    len(_bp.selected_benchmarks), len(_bp.selected_baselines),
+                )
+        except Exception as _bp_exc:
+            logger.debug("BA: Failed to load benchmark plan: %s", _bp_exc)
 
     # --- P2.2+P2.3: LLM training topic detection and guidance ---
     _llm_keywords = (

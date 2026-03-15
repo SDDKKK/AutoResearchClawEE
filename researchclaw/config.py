@@ -188,6 +188,23 @@ class CodeAgentConfig:
 
 
 @dataclass(frozen=True)
+class BenchmarkAgentConfig:
+    """Configuration for the BenchmarkAgent multi-agent system."""
+
+    enabled: bool = True
+    # Surveyor
+    enable_hf_search: bool = True
+    max_hf_results: int = 10
+    # Selector
+    tier_limit: int = 2
+    min_benchmarks: int = 1
+    min_baselines: int = 2
+    prefer_cached: bool = True
+    # Orchestrator
+    max_iterations: int = 2
+
+
+@dataclass(frozen=True)
 class ExperimentConfig:
     mode: str = "simulated"
     time_budget_sec: int = 300
@@ -199,6 +216,7 @@ class ExperimentConfig:
     docker: DockerSandboxConfig = field(default_factory=DockerSandboxConfig)
     ssh_remote: SshRemoteConfig = field(default_factory=SshRemoteConfig)
     code_agent: CodeAgentConfig = field(default_factory=CodeAgentConfig)
+    benchmark_agent: BenchmarkAgentConfig = field(default_factory=BenchmarkAgentConfig)
 
 
 @dataclass(frozen=True)
@@ -456,6 +474,24 @@ def _parse_experiment_config(data: dict[str, Any]) -> ExperimentConfig:
             ),
         ),
         code_agent=_parse_code_agent_config(data.get("code_agent") or {}),
+        benchmark_agent=_parse_benchmark_agent_config(
+            data.get("benchmark_agent") or {}
+        ),
+    )
+
+
+def _parse_benchmark_agent_config(data: dict[str, Any]) -> BenchmarkAgentConfig:
+    if not data:
+        return BenchmarkAgentConfig()
+    return BenchmarkAgentConfig(
+        enabled=bool(data.get("enabled", True)),
+        enable_hf_search=bool(data.get("enable_hf_search", True)),
+        max_hf_results=int(data.get("max_hf_results", 10)),
+        tier_limit=int(data.get("tier_limit", 2)),
+        min_benchmarks=int(data.get("min_benchmarks", 1)),
+        min_baselines=int(data.get("min_baselines", 2)),
+        prefer_cached=bool(data.get("prefer_cached", True)),
+        max_iterations=int(data.get("max_iterations", 2)),
     )
 
 

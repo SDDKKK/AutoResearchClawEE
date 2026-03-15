@@ -356,10 +356,18 @@ class DockerSandbox:
             # Full network throughout — for development/debugging
             cmd.extend(["--user", f"{os.getuid()}:{os.getgid()}"])
 
-        # Mount pre-cached datasets (read-only)
+        # Mount pre-cached datasets
+        # Priority: /opt/datasets (system) > ~/.cache/datasets (user)
         datasets_host = Path("/opt/datasets")
+        user_datasets = Path.home() / ".cache" / "datasets"
         if datasets_host.is_dir():
-            cmd.extend(["-v", "/opt/datasets:/workspace/data:ro"])
+            cmd.extend(["-v", f"{datasets_host}:/workspace/data:ro"])
+        elif user_datasets.is_dir():
+            cmd.extend(["-v", f"{user_datasets}:/workspace/data:rw"])
+        else:
+            # Create user-level cache so containers can download datasets
+            user_datasets.mkdir(parents=True, exist_ok=True)
+            cmd.extend(["-v", f"{user_datasets}:/workspace/data:rw"])
 
         # Mount HuggingFace model cache (read-write for downloading)
         hf_mounted = False
