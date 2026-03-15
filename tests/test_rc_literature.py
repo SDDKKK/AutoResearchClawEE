@@ -391,18 +391,24 @@ class TestSearchPapers:
         # Should be sorted by citation_count desc
         assert papers[0].citation_count >= papers[1].citation_count
 
-    def test_default_sources_arxiv_first(self) -> None:
-        """arXiv should be the primary (first) source by default."""
+    def test_default_sources_openalex_first(self) -> None:
+        """OpenAlex should be the primary (first) source — least restrictive limits."""
         from researchclaw.literature.search import _DEFAULT_SOURCES
-        assert _DEFAULT_SOURCES[0] == "arxiv"
+        assert _DEFAULT_SOURCES[0] == "openalex"
         assert "semantic_scholar" in _DEFAULT_SOURCES
+        assert "arxiv" in _DEFAULT_SOURCES
 
-    def test_s2_failure_does_not_block_arxiv(
+    def test_s2_failure_does_not_block_others(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """When S2 fails, arXiv results should still be returned."""
+        """When S2 fails, other sources should still return results."""
         arxiv_paper = _make_paper(
-            paper_id="arxiv-ok", title="ArXiv Paper", source="arxiv"
+            paper_id="arxiv-ok", title="ArXiv Paper", source="arxiv",
+            doi="10.1/ax", arxiv_id="2401.99991",
+        )
+        monkeypatch.setattr(
+            "researchclaw.literature.search.search_openalex",
+            lambda *a, **kw: [],
         )
         monkeypatch.setattr(
             "researchclaw.literature.search.search_semantic_scholar",
@@ -482,3 +488,288 @@ class TestEdgeCases:
         assert p.paper_id == "s2-x"
         assert p.title == ""
         assert p.authors == ()
+
+
+# ──────────────────────────────────────────────────────────────────────
+# arXiv circuit breaker tests
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestArxivCircuitBreaker:
+    def setup_method(self) -> None:
+        from researchclaw.literature.arxiv_client import _reset_circuit_breaker
+        _reset_circuit_breaker()
+
+    def test_429_triggers_circuit_breaker(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Three consecutive 429s should trip the arXiv circuit breaker."""
+        from researchclaw.literature import arxiv_client
+        _call_count = 0
+
+        def _mock_urlopen(*a: Any, **kw: Any) -> None:
+            nonlocal _call_count
+            _call_count += 1
+            exc = urllib.error.HTTPError(
+                "http://test", 429, "Too Many Requests", {}, None  # type: ignore[arg-type]
+            )
+            raise exc
+
+        monkeypatch.setattr(
+            "researchclaw.literature.arxiv_client.urllib.request.urlopen",
+            _mock_urlopen,
+        )
+        monkeypatch.setattr("researchclaw.literature.arxiv_client.time.sleep", lambda _: None)
+
+        # First call: 3 retries, each triggers a 429 → breaker trips
+        result = arxiv_client._fetch_with_retry("http://test")
+        assert result is None
+        assert arxiv_client._cb_state == arxiv_client._CB_OPEN
+        assert arxiv_client._cb_trip_count == 1
+
+    def test_breaker_open_skips_requests(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When breaker is OPEN, requests should be skipped immediately."""
+        import time as time_mod
+        from researchclaw.literature import arxiv_client
+
+        # Manually set breaker to OPEN
+        arxiv_client._cb_state = arxiv_client._CB_OPEN
+        arxiv_client._cb_open_since = time_mod.monotonic()
+        arxiv_client._cb_cooldown_sec = 999  # won't expire during test
+
+        result = arxiv_client._fetch_with_retry("http://test")
+        assert result is None
+
+    def test_success_resets_breaker(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A successful request should reset the circuit breaker."""
+        from researchclaw.literature import arxiv_client
+
+        arxiv_client._cb_state = arxiv_client._CB_HALF_OPEN
+        arxiv_client._cb_consecutive_429s = 2
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"<feed></feed>"
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        monkeypatch.setattr(
+            "researchclaw.literature.arxiv_client.urllib.request.urlopen",
+            lambda *a, **kw: mock_resp,
+        )
+
+        result = arxiv_client._fetch_with_retry("http://test")
+        assert result == "<feed></feed>"
+        assert arxiv_client._cb_state == arxiv_client._CB_CLOSED
+        assert arxiv_client._cb_consecutive_429s == 0
+
+    def test_retry_after_header_respected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """429 with Retry-After header should use that value."""
+        from researchclaw.literature import arxiv_client
+        import io
+        _sleep_values: list[float] = []
+
+        call_count = 0
+
+        def _mock_urlopen(*a: Any, **kw: Any) -> Any:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 1:
+                headers = {"Retry-After": "10"}
+                exc = urllib.error.HTTPError(
+                    "http://test", 429, "Too Many Requests",
+                    headers,  # type: ignore[arg-type]
+                    io.BytesIO(b""),
+                )
+                raise exc
+            # Second call succeeds
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = b"<feed></feed>"
+            mock_resp.__enter__ = lambda s: s
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            return mock_resp
+
+        def _mock_sleep(secs: float) -> None:
+            _sleep_values.append(secs)
+
+        monkeypatch.setattr(
+            "researchclaw.literature.arxiv_client.urllib.request.urlopen",
+            _mock_urlopen,
+        )
+        monkeypatch.setattr(
+            "researchclaw.literature.arxiv_client.time.sleep", _mock_sleep,
+        )
+
+        result = arxiv_client._fetch_with_retry("http://test")
+        assert result == "<feed></feed>"
+        # First sleep should be based on Retry-After: 10 + jitter
+        assert len(_sleep_values) >= 1
+        assert _sleep_values[0] >= 10.0  # At least the Retry-After value
+
+    def test_rate_elevation_after_429(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """After a 429, rate should be elevated to _RATE_LIMIT_ELEVATED."""
+        from researchclaw.literature import arxiv_client
+
+        arxiv_client._rate_elevated = False
+        arxiv_client._cb_on_429()
+        assert arxiv_client._rate_elevated is True
+
+        arxiv_client._cb_on_success()
+        assert arxiv_client._rate_elevated is False
+
+
+# ──────────────────────────────────────────────────────────────────────
+# OpenAlex client tests
+# ──────────────────────────────────────────────────────────────────────
+
+
+SAMPLE_OPENALEX_RESPONSE = {
+    "results": [
+        {
+            "id": "https://openalex.org/W123456",
+            "title": "Attention Is All You Need",
+            "authorships": [
+                {
+                    "author": {"display_name": "Ashish Vaswani"},
+                    "institutions": [{"display_name": "Google Brain"}],
+                }
+            ],
+            "publication_year": 2017,
+            "primary_location": {
+                "source": {"display_name": "NeurIPS"}
+            },
+            "cited_by_count": 85000,
+            "doi": "https://doi.org/10.5555/3295222.3295349",
+            "ids": {
+                "openalex": "https://openalex.org/W123456",
+                "arxiv": "https://arxiv.org/abs/1706.03762",
+            },
+            "abstract_inverted_index": {
+                "The": [0],
+                "dominant": [1],
+                "models": [2, 6],
+                "are": [3],
+                "based": [4],
+                "on": [5],
+            },
+        }
+    ]
+}
+
+
+class TestOpenAlex:
+    def test_parse_openalex_response(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Mock urllib to return sample OpenAlex response."""
+        from researchclaw.literature.openalex_client import search_openalex
+
+        response_bytes = json.dumps(SAMPLE_OPENALEX_RESPONSE).encode("utf-8")
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = response_bytes
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        monkeypatch.setattr(
+            "researchclaw.literature.openalex_client.urllib.request.urlopen",
+            lambda *a, **kw: mock_resp,
+        )
+
+        papers = search_openalex("attention", limit=5)
+        assert len(papers) == 1
+        p = papers[0]
+        assert p.title == "Attention Is All You Need"
+        assert p.year == 2017
+        assert p.citation_count == 85000
+        assert p.doi == "10.5555/3295222.3295349"
+        assert p.arxiv_id == "1706.03762"
+        assert p.source == "openalex"
+        assert p.authors[0].name == "Ashish Vaswani"
+
+    def test_abstract_reconstruction(self) -> None:
+        from researchclaw.literature.openalex_client import _reconstruct_abstract
+
+        inv_idx = {"Hello": [0], "world": [1], "foo": [3], "bar": [2]}
+        result = _reconstruct_abstract(inv_idx)
+        assert result == "Hello world bar foo"
+
+    def test_abstract_empty(self) -> None:
+        from researchclaw.literature.openalex_client import _reconstruct_abstract
+        assert _reconstruct_abstract(None) == ""
+        assert _reconstruct_abstract({}) == ""
+
+    def test_openalex_network_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Should return empty list on network error."""
+        from researchclaw.literature.openalex_client import search_openalex
+
+        monkeypatch.setattr(
+            "researchclaw.literature.openalex_client.urllib.request.urlopen",
+            lambda *a, **kw: (_ for _ in ()).throw(urllib.error.URLError("timeout")),
+        )
+        monkeypatch.setattr(
+            "researchclaw.literature.openalex_client.time.sleep", lambda _: None,
+        )
+
+        papers = search_openalex("test", limit=5)
+        assert papers == []
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Multi-source fallback tests
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestMultiSourceFallback:
+    def test_openalex_failure_falls_back_to_s2_and_arxiv(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When OpenAlex fails, S2 and arXiv should still return results."""
+        arxiv_paper = _make_paper(
+            paper_id="arxiv-ok", title="ArXiv Paper", source="arxiv",
+            doi="10.1/ax", arxiv_id="2401.99999",
+        )
+        s2_paper = _make_paper(
+            paper_id="s2-ok", title="S2 Paper", source="semantic_scholar",
+            doi="10.1/s2", arxiv_id="2402.99999",
+        )
+
+        monkeypatch.setattr(
+            "researchclaw.literature.search.search_openalex",
+            lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("OpenAlex down")),
+        )
+        monkeypatch.setattr(
+            "researchclaw.literature.search.search_semantic_scholar",
+            lambda *a, **kw: [s2_paper],
+        )
+        monkeypatch.setattr(
+            "researchclaw.literature.search.search_arxiv",
+            lambda *a, **kw: [arxiv_paper],
+        )
+        monkeypatch.setattr("researchclaw.literature.search.time.sleep", lambda _: None)
+
+        papers = search_papers("test")
+        assert len(papers) >= 1
+        sources = {p.source for p in papers}
+        assert "semantic_scholar" in sources or "arxiv" in sources
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Cache TTL tests
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestCacheTTL:
+    def test_source_specific_ttl(self, tmp_path: Any) -> None:
+        """arXiv cache should expire after 24h, not 7 days."""
+        from researchclaw.literature.cache import get_cached, put_cache, _SOURCE_TTL
+
+        assert _SOURCE_TTL["arxiv"] == 86400  # 24h
+        assert _SOURCE_TTL["semantic_scholar"] == 86400 * 3
+
+        # Put and get immediately — should hit
+        put_cache("test", "arxiv", 10, [{"paper_id": "x", "title": "Y"}], cache_base=tmp_path)
+        result = get_cached("test", "arxiv", 10, cache_base=tmp_path)
+        assert result is not None
+        assert len(result) == 1
+
+    def test_citation_verify_ttl_is_permanent(self) -> None:
+        from researchclaw.literature.cache import _SOURCE_TTL
+        assert _SOURCE_TTL["citation_verify"] >= 86400 * 365
+
+
+import urllib.error
