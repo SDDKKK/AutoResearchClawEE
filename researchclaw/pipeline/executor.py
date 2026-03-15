@@ -2353,7 +2353,15 @@ def _execute_code_generation(
                 user=review_prompt,
                 max_tokens=2048,
             )
-            review_data = _safe_json_loads(review_resp, {})
+            # Extract JSON from LLM response (may be wrapped in markdown fences)
+            _review_text = review_resp.content if hasattr(review_resp, "content") else str(review_resp)
+            _review_text = _review_text.strip()
+            if _review_text.startswith("```"):
+                _lines = _review_text.splitlines()
+                _start = 1 if _lines[0].strip().startswith("```") else 0
+                _end = len(_lines) - 1 if _lines[-1].strip() == "```" else len(_lines)
+                _review_text = "\n".join(_lines[_start:_end])
+            review_data = _safe_json_loads(_review_text, {})
             if isinstance(review_data, dict):
                 review_score = review_data.get("score", 0)
                 review_verdict = review_data.get("verdict", "unknown")
