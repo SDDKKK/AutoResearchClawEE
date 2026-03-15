@@ -2,12 +2,12 @@
 
 > **Created**: 2026-03-15
 > **Updated**: 2026-03-15
-> **Status**: BenchmarkAgent IMPLEMENTED, FigureAgent PLANNED
+> **Status**: BenchmarkAgent IMPLEMENTED, FigureAgent IMPLEMENTED
 > **Scope**: Two new multi-agent subsystems for AutoResearchClaw pipeline
 >
 > **Implementation Progress**:
 > - [x] Part B: BenchmarkAgent — fully implemented (4 agents + orchestrator + config + pipeline integration + 43 tests)
-> - [ ] Part A: FigureAgent — designed, not yet implemented
+> - [x] Part A: FigureAgent — fully implemented (5 agents + orchestrator + config + pipeline integration + 45 tests)
 >
 > **Key Research Findings (supplemental)**:
 > - Papers With Code was shut down by Meta in July 2025; HuggingFace Hub API is now the primary dataset discovery source

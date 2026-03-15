@@ -4190,27 +4190,81 @@ Generated: {_utcnow_iso()}
     if (stage_dir / "results_table.tex").exists():
         artifacts.append("results_table.tex")
 
-    # IMP-6: Generate charts early (Stage 14) so paper draft can reference them
-    try:
-        from researchclaw.experiment.visualize import (
-            generate_all_charts as _gen_charts_early,
-        )
+    # IMP-6 + FA: Generate charts early (Stage 14) so paper draft can reference them
+    # Try FigureAgent first (multi-agent intelligent charts), fall back to visualize.py
+    _figure_plan_saved = False
+    if config.experiment.figure_agent.enabled and llm is not None:
+        try:
+            from researchclaw.agents.figure_agent import FigureOrchestrator
+            from researchclaw.agents.figure_agent.orchestrator import FigureAgentConfig as _FACfg
 
-        _charts_dir = stage_dir / "charts"
-        _early_charts = _gen_charts_early(
-            run_dir,
-            _charts_dir,
-            metric_key=config.experiment.metric_key,
-        )
-        if _early_charts:
-            for _cp in _early_charts:
-                artifacts.append(f"charts/{_cp.name}")
-            logger.info(
-                "Stage 14: Generated %d early charts for paper embedding",
-                len(_early_charts),
+            _fa_cfg = _FACfg(
+                enabled=True,
+                min_figures=config.experiment.figure_agent.min_figures,
+                max_figures=config.experiment.figure_agent.max_figures,
+                max_iterations=config.experiment.figure_agent.max_iterations,
+                render_timeout_sec=config.experiment.figure_agent.render_timeout_sec,
+                strict_mode=config.experiment.figure_agent.strict_mode,
+                dpi=config.experiment.figure_agent.dpi,
             )
-    except Exception as _chart_exc:
-        logger.warning("Stage 14: Early chart generation failed: %s", _chart_exc)
+            _fa = FigureOrchestrator(llm, _fa_cfg, stage_dir=stage_dir)
+
+            # Build conditions list from condition_summaries
+            _fa_conditions = list(_condition_summaries.keys()) if _condition_summaries else []
+
+            _fa_plan = _fa.orchestrate({
+                "experiment_results": exp_data.get("structured_results", {}),
+                "condition_summaries": _condition_summaries,
+                "metrics_summary": exp_data.get("metrics_summary", {}),
+                "metric_key": config.experiment.metric_key,
+                "conditions": _fa_conditions,
+                "topic": _read_prior_artifact(run_dir, "topic.md") or config.research.topic,
+                "hypothesis": _read_prior_artifact(run_dir, "hypotheses.md") or "",
+                "output_dir": str(stage_dir / "charts"),
+            })
+
+            if _fa_plan.figure_count > 0:
+                # Save figure plan for Stage 17 to read
+                (stage_dir / "figure_plan.json").write_text(
+                    json.dumps(_fa_plan.to_dict(), indent=2, default=str),
+                    encoding="utf-8",
+                )
+                _figure_plan_saved = True
+                for _cf_name in _fa_plan.get_chart_files():
+                    artifacts.append(f"charts/{_cf_name}")
+                logger.info(
+                    "Stage 14: FigureAgent generated %d charts (%d passed review, %.1fs)",
+                    _fa_plan.figure_count,
+                    _fa_plan.passed_count,
+                    _fa_plan.elapsed_sec,
+                )
+            else:
+                logger.warning("Stage 14: FigureAgent produced no charts, falling back")
+        except Exception as _fa_exc:
+            logger.warning("Stage 14: FigureAgent failed (%s), falling back to visualize.py", _fa_exc)
+
+    # Fallback: legacy visualize.py chart generation
+    if not _figure_plan_saved:
+        try:
+            from researchclaw.experiment.visualize import (
+                generate_all_charts as _gen_charts_early,
+            )
+
+            _charts_dir = stage_dir / "charts"
+            _early_charts = _gen_charts_early(
+                run_dir,
+                _charts_dir,
+                metric_key=config.experiment.metric_key,
+            )
+            if _early_charts:
+                for _cp in _early_charts:
+                    artifacts.append(f"charts/{_cp.name}")
+                logger.info(
+                    "Stage 14: Generated %d early charts (legacy) for paper embedding",
+                    len(_early_charts),
+                )
+        except Exception as _chart_exc:
+            logger.warning("Stage 14: Early chart generation failed: %s", _chart_exc)
 
     return StageResult(
         stage=Stage.RESULT_ANALYSIS,
@@ -5268,32 +5322,50 @@ def _execute_paper_draft(
         "- FORBIDDEN: generating numbers that 'look right' based on your training data\n"
     )
 
-    # IMP-6: Inject chart references into paper draft prompt
-    _chart_files: list[str] = []
+    # IMP-6 + FA: Inject chart references into paper draft prompt
+    # Prefer FigureAgent's figure_plan.json (rich descriptions) over raw file scan
+    _fa_descriptions = ""
     for _s14_dir in sorted(run_dir.glob("stage-14*")):
-        _charts_path = _s14_dir / "charts"
-        if _charts_path.is_dir():
-            for _cf in sorted(_charts_path.glob("*.png")):
-                _chart_files.append(_cf.name)
-    if _chart_files:
-        _chart_block = (
-            "\n\n## AVAILABLE FIGURES (embed in the paper)\n"
-            "The following figures were generated from actual experiment data. "
-            "You MUST reference at least 1-2 of these in the Results section "
-            "using markdown image syntax: `![Caption](charts/filename.png)`\n\n"
-        )
-        for _cf_name in _chart_files:
-            _label = _cf_name.replace("_", " ").replace(".png", "").title()
-            _chart_block += f"- `charts/{_cf_name}` — {_label}\n"
-        _chart_block += (
-            "\nFor each figure referenced, write a descriptive caption and "
-            "discuss what the figure shows in 2-3 sentences.\n"
-        )
-        exp_metrics_instruction += _chart_block
-        logger.info(
-            "Stage 17: Injected %d chart references into paper draft prompt",
-            len(_chart_files),
-        )
+        _fp_path = _s14_dir / "figure_plan.json"
+        if _fp_path.exists():
+            try:
+                _fp_data = json.loads(_fp_path.read_text(encoding="utf-8"))
+                _fa_descriptions = _fp_data.get("figure_descriptions", "")
+            except (json.JSONDecodeError, OSError):
+                pass
+            if _fa_descriptions:
+                break
+
+    if _fa_descriptions:
+        exp_metrics_instruction += "\n\n" + _fa_descriptions
+        logger.info("Stage 17: Injected FigureAgent figure descriptions into paper draft prompt")
+    else:
+        # Fallback: scan for chart files
+        _chart_files: list[str] = []
+        for _s14_dir in sorted(run_dir.glob("stage-14*")):
+            _charts_path = _s14_dir / "charts"
+            if _charts_path.is_dir():
+                for _cf in sorted(_charts_path.glob("*.png")):
+                    _chart_files.append(_cf.name)
+        if _chart_files:
+            _chart_block = (
+                "\n\n## AVAILABLE FIGURES (embed in the paper)\n"
+                "The following figures were generated from actual experiment data. "
+                "You MUST reference at least 1-2 of these in the Results section "
+                "using markdown image syntax: `![Caption](charts/filename.png)`\n\n"
+            )
+            for _cf_name in _chart_files:
+                _label = _cf_name.replace("_", " ").replace(".png", "").title()
+                _chart_block += f"- `charts/{_cf_name}` — {_label}\n"
+            _chart_block += (
+                "\nFor each figure referenced, write a descriptive caption and "
+                "discuss what the figure shows in 2-3 sentences.\n"
+            )
+            exp_metrics_instruction += _chart_block
+            logger.info(
+                "Stage 17: Injected %d chart references into paper draft prompt",
+                len(_chart_files),
+            )
 
     # P5: Extract hyperparameters from results.json for paper Method section
     _hp_table = ""

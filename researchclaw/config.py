@@ -205,6 +205,24 @@ class BenchmarkAgentConfig:
 
 
 @dataclass(frozen=True)
+class FigureAgentConfig:
+    """Configuration for the FigureAgent multi-agent system."""
+
+    enabled: bool = True
+    # Planner
+    min_figures: int = 3
+    max_figures: int = 8
+    # Orchestrator
+    max_iterations: int = 3  # max CodeGen→Renderer→Critic retry loops
+    # Renderer
+    render_timeout_sec: int = 30
+    # Critic
+    strict_mode: bool = False
+    # Output
+    dpi: int = 300
+
+
+@dataclass(frozen=True)
 class ExperimentConfig:
     mode: str = "simulated"
     time_budget_sec: int = 300
@@ -217,6 +235,7 @@ class ExperimentConfig:
     ssh_remote: SshRemoteConfig = field(default_factory=SshRemoteConfig)
     code_agent: CodeAgentConfig = field(default_factory=CodeAgentConfig)
     benchmark_agent: BenchmarkAgentConfig = field(default_factory=BenchmarkAgentConfig)
+    figure_agent: FigureAgentConfig = field(default_factory=FigureAgentConfig)
 
 
 @dataclass(frozen=True)
@@ -477,6 +496,7 @@ def _parse_experiment_config(data: dict[str, Any]) -> ExperimentConfig:
         benchmark_agent=_parse_benchmark_agent_config(
             data.get("benchmark_agent") or {}
         ),
+        figure_agent=_parse_figure_agent_config(data.get("figure_agent") or {}),
     )
 
 
@@ -492,6 +512,20 @@ def _parse_benchmark_agent_config(data: dict[str, Any]) -> BenchmarkAgentConfig:
         min_baselines=int(data.get("min_baselines", 2)),
         prefer_cached=bool(data.get("prefer_cached", True)),
         max_iterations=int(data.get("max_iterations", 2)),
+    )
+
+
+def _parse_figure_agent_config(data: dict[str, Any]) -> FigureAgentConfig:
+    if not data:
+        return FigureAgentConfig()
+    return FigureAgentConfig(
+        enabled=bool(data.get("enabled", True)),
+        min_figures=int(data.get("min_figures", 3)),
+        max_figures=int(data.get("max_figures", 8)),
+        max_iterations=int(data.get("max_iterations", 3)),
+        render_timeout_sec=int(data.get("render_timeout_sec", 30)),
+        strict_mode=bool(data.get("strict_mode", False)),
+        dpi=int(data.get("dpi", 300)),
     )
 
 
