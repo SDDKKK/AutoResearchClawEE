@@ -182,6 +182,44 @@ class ExperimentConfig:
 
 
 @dataclass(frozen=True)
+class MetaClawPRMConfig:
+    """PRM quality gate settings for MetaClaw bridge."""
+
+    enabled: bool = False
+    api_base: str = ""
+    api_key_env: str = ""
+    api_key: str = ""
+    model: str = "gpt-5.4"
+    votes: int = 3
+    temperature: float = 0.6
+    gate_stages: tuple[int, ...] = (5, 9, 15, 20)
+
+
+@dataclass(frozen=True)
+class MetaClawLessonToSkillConfig:
+    """Settings for converting lessons into MetaClaw skills."""
+
+    enabled: bool = True
+    min_severity: str = "error"
+    max_skills_per_run: int = 3
+
+
+@dataclass(frozen=True)
+class MetaClawBridgeConfig:
+    """MetaClaw integration bridge configuration."""
+
+    enabled: bool = False
+    proxy_url: str = "http://localhost:30000"
+    skills_dir: str = "~/.metaclaw/skills"
+    fallback_url: str = ""
+    fallback_api_key: str = ""
+    prm: MetaClawPRMConfig = field(default_factory=MetaClawPRMConfig)
+    lesson_to_skill: MetaClawLessonToSkillConfig = field(
+        default_factory=MetaClawLessonToSkillConfig
+    )
+
+
+@dataclass(frozen=True)
 class ExportConfig:
     """Configuration for paper export and LaTeX generation."""
 
@@ -207,6 +245,9 @@ class RCConfig:
     experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     prompts: PromptsConfig = field(default_factory=PromptsConfig)
+    metaclaw_bridge: MetaClawBridgeConfig = field(
+        default_factory=MetaClawBridgeConfig
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -236,6 +277,7 @@ class RCConfig:
         experiment = data.get("experiment") or {}
         export = data.get("export") or {}
         prompts = data.get("prompts") or {}
+        metaclaw = data.get("metaclaw_bridge") or {}
 
         return cls(
             project=ProjectConfig(
@@ -292,6 +334,7 @@ class RCConfig:
             prompts=PromptsConfig(
                 custom_file=prompts.get("custom_file", ""),
             ),
+            metaclaw_bridge=_parse_metaclaw_bridge_config(metaclaw),
         )
 
     @classmethod
@@ -434,6 +477,35 @@ def _parse_experiment_config(data: dict[str, Any]) -> ExperimentConfig:
             remote_workdir=ssh_data.get(
                 "remote_workdir", "/tmp/researchclaw_experiments"
             ),
+        ),
+    )
+
+
+def _parse_metaclaw_bridge_config(data: dict[str, Any]) -> MetaClawBridgeConfig:
+    prm_data = data.get("prm") or {}
+    l2s_data = data.get("lesson_to_skill") or {}
+    return MetaClawBridgeConfig(
+        enabled=bool(data.get("enabled", False)),
+        proxy_url=data.get("proxy_url", "http://localhost:30000"),
+        skills_dir=data.get("skills_dir", "~/.metaclaw/skills"),
+        fallback_url=data.get("fallback_url", ""),
+        fallback_api_key=data.get("fallback_api_key", ""),
+        prm=MetaClawPRMConfig(
+            enabled=bool(prm_data.get("enabled", False)),
+            api_base=prm_data.get("api_base", ""),
+            api_key_env=prm_data.get("api_key_env", ""),
+            api_key=prm_data.get("api_key", ""),
+            model=prm_data.get("model", "gpt-5.4"),
+            votes=int(prm_data.get("votes", 3)),
+            temperature=float(prm_data.get("temperature", 0.6)),
+            gate_stages=tuple(
+                int(s) for s in prm_data.get("gate_stages", (5, 9, 15, 20))
+            ),
+        ),
+        lesson_to_skill=MetaClawLessonToSkillConfig(
+            enabled=bool(l2s_data.get("enabled", True)),
+            min_severity=l2s_data.get("min_severity", "error"),
+            max_skills_per_run=int(l2s_data.get("max_skills_per_run", 3)),
         ),
     )
 

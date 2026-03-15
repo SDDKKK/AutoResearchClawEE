@@ -82,3 +82,31 @@ experiment:
 # Copy prompts.default.yaml, edit the prompts you want, and set the path here.
 prompts:
   custom_file: ""  # e.g. "my_prompts.yaml" (empty = use built-in defaults)
+
+
+# === MetaClaw Integration ===
+# Enable the MetaClaw bridge to get skill injection, PRM quality gates,
+# and continuous learning from research pipeline failures.
+# Requires MetaClaw to be running: metaclaw start --mode skills_only
+metaclaw_bridge:
+  enabled: false
+  proxy_url: "http://localhost:30000"    # MetaClaw proxy endpoint
+  skills_dir: "~/.metaclaw/skills"       # MetaClaw skills directory
+  fallback_url: ""                       # Direct LLM URL if proxy is down
+  fallback_api_key: ""
+
+  # PRM quality gate: LLM-as-judge scoring at gate stages
+  prm:
+    enabled: false
+    api_base: ""                         # OpenAI-compatible API for PRM judge
+    api_key_env: "PRM_API_KEY"
+    api_key: ""
+    model: "gpt-5.4"
+    votes: 3                             # Majority vote count
+    gate_stages: [5, 9, 15, 20]          # Stages to apply PRM gating
+
+  # Lesson-to-skill: auto-convert pipeline failures into MetaClaw skills
+  lesson_to_skill:
+    enabled: true
+    min_severity: "error"                # Only convert error-level lessons
+    max_skills_per_run: 3

@@ -2353,7 +2353,17 @@ def _execute_code_generation(
                 user=review_prompt,
                 max_tokens=2048,
             )
-            review_data = _safe_json_loads(review_resp, {})
+            # Extract JSON from LLM response (may be wrapped in markdown fences)
+            _review_text = review_resp.content if hasattr(review_resp, "content") else str(review_resp)
+            # Strip markdown JSON fences if present
+            _review_text = _review_text.strip()
+            if _review_text.startswith("```"):
+                _lines = _review_text.splitlines()
+                # Remove first line (```json) and last line (```)
+                _start = 1 if _lines[0].strip().startswith("```") else 0
+                _end = len(_lines) - 1 if _lines[-1].strip() == "```" else len(_lines)
+                _review_text = "\n".join(_lines[_start:_end])
+            review_data = _safe_json_loads(_review_text, {})
             if isinstance(review_data, dict):
                 review_score = review_data.get("score", 0)
                 review_verdict = review_data.get("verdict", "unknown")
@@ -6239,6 +6249,68 @@ def execute_stage(
                         evidence_refs=result.evidence_refs,
                     )
                     break
+
+    # --- MetaClaw PRM quality gate evaluation ---
+    try:
+        mc_bridge = getattr(config, "metaclaw_bridge", None)
+        if (
+            mc_bridge
+            and getattr(mc_bridge, "enabled", False)
+            and result.status == StageStatus.DONE
+        ):
+            mc_prm = getattr(mc_bridge, "prm", None)
+            if mc_prm and getattr(mc_prm, "enabled", False):
+                prm_stages = getattr(mc_prm, "gate_stages", (5, 9, 15, 20))
+                if int(stage) in prm_stages:
+                    from researchclaw.metaclaw_bridge.prm_gate import ResearchPRMGate
+
+                    prm_gate = ResearchPRMGate.from_bridge_config(mc_prm)
+                    if prm_gate is not None:
+                        # Read stage output for PRM evaluation
+                        output_text = ""
+                        for art in result.artifacts:
+                            art_path = stage_dir / art
+                            if art_path.exists() and art_path.is_file():
+                                try:
+                                    output_text += art_path.read_text(encoding="utf-8")[:4000]
+                                except (UnicodeDecodeError, OSError):
+                                    pass
+                        if output_text:
+                            prm_score = prm_gate.evaluate_stage(int(stage), output_text)
+                            logger.info(
+                                "MetaClaw PRM score for stage %d: %.1f",
+                                int(stage),
+                                prm_score,
+                            )
+                            # Write PRM score to stage health
+                            import json as _prm_json
+
+                            prm_report = {
+                                "stage": int(stage),
+                                "prm_score": prm_score,
+                                "model": prm_gate.model,
+                                "votes": prm_gate.votes,
+                            }
+                            (stage_dir / "prm_score.json").write_text(
+                                _prm_json.dumps(prm_report, indent=2),
+                                encoding="utf-8",
+                            )
+                            # If PRM score is -1 (fail), mark stage as failed
+                            if prm_score == -1.0:
+                                logger.warning(
+                                    "MetaClaw PRM rejected stage %d output",
+                                    int(stage),
+                                )
+                                result = StageResult(
+                                    stage=result.stage,
+                                    status=StageStatus.FAILED,
+                                    artifacts=result.artifacts,
+                                    error="PRM quality gate: output below quality threshold",
+                                    decision="retry",
+                                    evidence_refs=result.evidence_refs,
+                                )
+    except Exception:  # noqa: BLE001
+        logger.warning("MetaClaw PRM evaluation failed (non-blocking)")
 
     if gate_required(stage, config.security.hitl_required_stages):
         if auto_approve_gates:
