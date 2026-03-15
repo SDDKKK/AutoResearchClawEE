@@ -2202,7 +2202,10 @@ def _execute_code_generation(
         )
 
     # --- R10-Fix6: Code complexity and quality check ---
-    from researchclaw.experiment.validator import check_code_complexity
+    from researchclaw.experiment.validator import (
+        check_code_complexity,
+        deep_validate_files,
+    )
 
     complexity_warnings: list[str] = []
     for fname, code in files.items():
@@ -2211,12 +2214,177 @@ def _execute_code_generation(
             for w in cw:
                 complexity_warnings.append(f"[{fname}] {w}")
                 logger.warning("Stage 10 code quality: [%s] %s", fname, w)
+
+    # --- P1.1+P1.2: Deep quality analysis (class quality, scoping, API) ---
+    deep_warnings = deep_validate_files(files)
+    for w in deep_warnings:
+        logger.warning("Stage 10 deep quality: %s", w)
+    complexity_warnings.extend(deep_warnings)
+
+    # --- P1.2: If critical deep issues found, attempt one repair cycle ---
+    critical_deep = [w for w in deep_warnings if any(
+        kw in w for kw in ("UnboundLocalError", "unregistered", "does not exist",
+                           "empty or trivial subclass")
+    )]
+    if critical_deep and llm is not None:
+        logger.info(
+            "Stage 10: %d critical code issues found — triggering repair cycle",
+            len(critical_deep),
+        )
+        repair_issues = "\n".join(f"- {w}" for w in critical_deep)
+        all_code_ctx = "\n\n".join(
+            f"```filename:{f}\n{c}\n```" for f, c in files.items()
+        )
+        repair_prompt = (
+            f"CRITICAL CODE QUALITY ISSUES FOUND:\n{repair_issues}\n\n"
+            f"Fix ALL these issues in the code below. Return the complete "
+            f"corrected files using ```filename:xxx.py format.\n\n"
+            f"RULES:\n"
+            f"- nn.Linear/nn.Conv must be created in __init__(), not forward()\n"
+            f"- Variables used after if/else must be defined before the branch\n"
+            f"- Use scipy.special.erf, not np.erf\n"
+            f"- Ablation/variant classes must have genuinely different logic\n"
+            f"- Every class must have a real implementation, not just `pass`\n\n"
+            f"Current code:\n{all_code_ctx}\n"
+        )
+        try:
+            repair_resp = _chat_with_prompt(
+                llm,
+                _pm.prompts["code_generation"]["system"],
+                repair_prompt,
+                max_tokens=_code_max_tokens,
+            )
+            repaired = _extract_multi_file_blocks(repair_resp.content)
+            if repaired and "main.py" in repaired:
+                files = repaired
+                for fname, code in files.items():
+                    (exp_dir / fname).write_text(code, encoding="utf-8")
+                # Re-check after repair
+                deep_warnings_after = deep_validate_files(files)
+                fixed = len(critical_deep) - len([
+                    w for w in deep_warnings_after
+                    if any(kw in w for kw in (
+                        "UnboundLocalError", "unregistered", "does not exist",
+                        "empty or trivial subclass"
+                    ))
+                ])
+                logger.info(
+                    "Stage 10: Deep repair fixed %d/%d critical issues",
+                    fixed, len(critical_deep),
+                )
+                complexity_warnings.append(
+                    f"[REPAIR] Deep repair fixed {fixed}/{len(critical_deep)} "
+                    f"critical issues"
+                )
+        except Exception as exc:
+            logger.debug("Deep repair failed: %s", exc)
+
     if complexity_warnings:
         health: dict[str, Any] = {}
         health["code_complexity_warnings"] = complexity_warnings
         (stage_dir / "stage_health.json").write_text(
             json.dumps(health, indent=2), encoding="utf-8"
         )
+
+    # --- P1.4: LLM Code Review (Stage 10.5) ---
+    if llm is not None:
+        all_code_review = "\n\n".join(
+            f"# --- {fname} ---\n{code}" for fname, code in files.items()
+        )
+        if len(all_code_review) > 12000:
+            all_code_review = all_code_review[:12000] + "\n... [truncated]"
+        review_prompt = (
+            f"You are a senior ML researcher reviewing experiment code for a "
+            f"conference submission.\n\n"
+            f"TOPIC: {config.research.topic}\n"
+            f"EXPERIMENT PLAN:\n{exp_plan[:3000]}\n\n"
+            f"CODE:\n```python\n{all_code_review}\n```\n\n"
+            f"Review the code and return JSON with this EXACT structure:\n"
+            f'{{"score": <1-10>, "issues": ['
+            f'{{"severity": "critical|major|minor", '
+            f'"description": "...", "fix": "..."}}], '
+            f'"verdict": "pass|needs_fix"}}\n\n'
+            f"Check specifically:\n"
+            f"1. Does each algorithm/method have a DISTINCT implementation? "
+            f"(Not just renamed copies)\n"
+            f"2. Are ablation conditions genuinely different from the main method?\n"
+            f"3. Are loss functions / training loops mathematically correct?\n"
+            f"4. Will the code actually run without errors? Check variable scoping, "
+            f"API usage, tensor shape compatibility.\n"
+            f"5. Is the code complex enough for a research paper? (Not trivial)\n"
+            f"6. Are experimental conditions fairly compared (same seeds, data)?\n"
+        )
+        try:
+            review_resp = llm.chat(
+                system="You are a meticulous ML code reviewer. Be strict.",
+                user=review_prompt,
+                max_tokens=2048,
+            )
+            review_data = _safe_json_loads(review_resp, {})
+            if isinstance(review_data, dict):
+                review_score = review_data.get("score", 0)
+                review_verdict = review_data.get("verdict", "unknown")
+                review_issues = review_data.get("issues", [])
+
+                # Write review report
+                review_report = {
+                    "score": review_score,
+                    "verdict": review_verdict,
+                    "issues": review_issues,
+                    "timestamp": _utcnow_iso(),
+                }
+                (stage_dir / "code_review.json").write_text(
+                    json.dumps(review_report, indent=2), encoding="utf-8"
+                )
+
+                # If critical issues found and score low, attempt fix
+                critical_issues = [
+                    i for i in review_issues
+                    if isinstance(i, dict)
+                    and i.get("severity") == "critical"
+                ]
+                if critical_issues and review_score <= 4:
+                    logger.warning(
+                        "Stage 10 code review: score=%d, %d critical issues — "
+                        "attempting fix",
+                        review_score, len(critical_issues),
+                    )
+                    fix_descriptions = "\n".join(
+                        f"- [{i.get('severity', '?')}] {i.get('description', '?')}: "
+                        f"{i.get('fix', 'no fix suggested')}"
+                        for i in critical_issues
+                    )
+                    fix_prompt = (
+                        f"Code review found {len(critical_issues)} CRITICAL issues "
+                        f"(score: {review_score}/10):\n{fix_descriptions}\n\n"
+                        f"Fix ALL critical issues. Return complete corrected files "
+                        f"using ```filename:xxx.py format.\n\n"
+                        f"Current code:\n"
+                        + "\n\n".join(
+                            f"```filename:{f}\n{c}\n```" for f, c in files.items()
+                        )
+                    )
+                    try:
+                        fix_resp = _chat_with_prompt(
+                            llm,
+                            _pm.prompts["code_generation"]["system"],
+                            fix_prompt,
+                            max_tokens=_code_max_tokens,
+                        )
+                        fixed_files = _extract_multi_file_blocks(fix_resp.content)
+                        if fixed_files and "main.py" in fixed_files:
+                            files = fixed_files
+                            for fname, code in files.items():
+                                (exp_dir / fname).write_text(code, encoding="utf-8")
+                            logger.info(
+                                "Stage 10: Code fixed after review "
+                                "(was %d/10, %d critical issues)",
+                                review_score, len(critical_issues),
+                            )
+                    except Exception as exc:
+                        logger.debug("Review-fix failed: %s", exc)
+        except Exception as exc:
+            logger.debug("Code review failed: %s", exc)
 
     # --- FIX-3: Topic-experiment alignment check ---
     alignment_ok = True

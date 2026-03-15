@@ -475,3 +475,254 @@ def check_code_complexity(code: str) -> list[str]:
             warnings.append(f"Trivial computation detected: {desc}")
 
     return warnings
+
+
+# ---------------------------------------------------------------------------
+# Deep code quality analysis (Phase 1 / P1.1 + P1.2)
+# ---------------------------------------------------------------------------
+
+
+def check_class_quality(all_files: dict[str, str]) -> list[str]:
+    """Analyze class implementations across all experiment files.
+
+    Detects:
+    - Empty or trivial class inheritance (class B(A): pass)
+    - Classes with too few methods (< 2 non-dunder)
+    - Duplicate class bodies (identical forward/train logic across variants)
+    - nn.Module created inside forward() instead of __init__()
+    """
+    warnings: list[str] = []
+
+    class_info: dict[str, dict[str, Any]] = {}
+
+    for fname, code in all_files.items():
+        if not fname.endswith(".py"):
+            continue
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            continue
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+
+            cls_name = node.name
+            methods: list[str] = []
+            method_sources: dict[str, str] = {}
+            has_forward_new_module = False
+            body_lines = 0
+
+            for item in ast.walk(node):
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    methods.append(item.name)
+                    # Approximate method body size
+                    m_start = item.lineno
+                    m_end = item.end_lineno or item.lineno
+                    body_len = m_end - m_start
+                    method_sources[item.name] = f"{fname}:{m_start}-{m_end}"
+
+                    # Check for nn.Module creation inside forward()
+                    if item.name in ("forward", "__call__"):
+                        for sub in ast.walk(item):
+                            if isinstance(sub, ast.Call):
+                                call_name = _resolve_call_name(sub.func)
+                                if call_name.startswith("nn.") and call_name != "nn.Module":
+                                    has_forward_new_module = True
+
+            # Count effective body lines
+            code_lines = code.splitlines()
+            if node.end_lineno and node.lineno:
+                cls_body = code_lines[node.lineno - 1 : node.end_lineno]
+                body_lines = sum(
+                    1 for l in cls_body
+                    if l.strip() and not l.strip().startswith("#")
+                    and not l.strip().startswith(("import ", "from "))
+                )
+
+            non_dunder = [m for m in methods if not m.startswith("__")]
+
+            class_info[f"{fname}:{cls_name}"] = {
+                "methods": methods,
+                "non_dunder": non_dunder,
+                "body_lines": body_lines,
+                "file": fname,
+                "has_forward_new_module": has_forward_new_module,
+            }
+
+            # --- Check 1: Empty or trivial class ---
+            if body_lines <= 2:
+                warnings.append(
+                    f"[{fname}] Class '{cls_name}' has only {body_lines} body lines "
+                    f"— likely an empty or trivial subclass (class B(A): pass)"
+                )
+
+            # --- Check 2: Too few methods for an algorithm class ---
+            if body_lines > 5 and len(non_dunder) < 2:
+                warnings.append(
+                    f"[{fname}] Class '{cls_name}' has only {len(non_dunder)} "
+                    f"non-dunder method(s) — algorithm classes should have at "
+                    f"least __init__ + one core method (forward/train_step/predict)"
+                )
+
+            # --- Check 3: nn.Module created in forward() ---
+            if has_forward_new_module:
+                warnings.append(
+                    f"[{fname}] Class '{cls_name}' creates nn.Module (nn.Linear etc.) "
+                    f"inside forward() — these modules are unregistered and untrained. "
+                    f"Move to __init__() and register as submodules."
+                )
+
+    # --- Check 4: Duplicate class implementations ---
+    # Compare class body hashes to find copy-paste variants
+    class_names = list(class_info.keys())
+    for i, name_a in enumerate(class_names):
+        info_a = class_info[name_a]
+        for name_b in class_names[i + 1:]:
+            info_b = class_info[name_b]
+            if (
+                info_a["body_lines"] > 5
+                and info_b["body_lines"] > 5
+                and info_a["non_dunder"] == info_b["non_dunder"]
+                and abs(info_a["body_lines"] - info_b["body_lines"]) <= 2
+            ):
+                # Same methods, same body size — likely duplicates
+                warnings.append(
+                    f"Classes '{name_a.split(':')[1]}' and '{name_b.split(':')[1]}' "
+                    f"have identical method signatures and similar body sizes "
+                    f"({info_a['body_lines']} vs {info_b['body_lines']} lines) — "
+                    f"may be copy-paste variants with no real algorithmic difference"
+                )
+
+    return warnings
+
+
+def check_variable_scoping(code: str, fname: str = "main.py") -> list[str]:
+    """Detect common variable scoping bugs in experiment code.
+
+    Catches the pattern where a variable is defined inside an if-branch
+    but used outside that branch (UnboundLocalError at runtime).
+    """
+    warnings: list[str] = []
+
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return warnings
+
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+
+        # Collect variables assigned only inside if/elif/else branches
+        if_only_vars: dict[str, int] = {}
+        top_level_vars: set[str] = set()
+
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.If):
+                _collect_if_only_assignments(child, if_only_vars)
+            elif isinstance(child, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+                for target in _extract_assign_targets(child):
+                    top_level_vars.add(target)
+
+        # Check for variables used after the if block but only defined inside it
+        for var_name, var_line in if_only_vars.items():
+            if var_name not in top_level_vars:
+                # Check if this variable is used later in the function
+                for later_node in ast.walk(node):
+                    if (
+                        isinstance(later_node, ast.Name)
+                        and later_node.id == var_name
+                        and isinstance(later_node.ctx, ast.Load)
+                        and later_node.lineno > var_line
+                    ):
+                        warnings.append(
+                            f"[{fname}:{var_line}] Variable '{var_name}' is assigned "
+                            f"only inside an if-branch but used at line "
+                            f"{later_node.lineno} — will cause UnboundLocalError "
+                            f"if the branch is not taken"
+                        )
+                        break
+
+    return warnings
+
+
+def _collect_if_only_assignments(
+    if_node: ast.If, result: dict[str, int]
+) -> None:
+    """Collect variables assigned only inside if/elif branches."""
+    for child in ast.iter_child_nodes(if_node):
+        if isinstance(child, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+            for target in _extract_assign_targets(child):
+                result[target] = child.lineno
+        elif isinstance(child, ast.If):
+            _collect_if_only_assignments(child, result)
+
+
+def _extract_assign_targets(node: ast.AST) -> list[str]:
+    """Extract variable names from assignment targets."""
+    names: list[str] = []
+    if isinstance(node, ast.Assign):
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                names.append(target.id)
+    elif isinstance(node, ast.AugAssign):
+        if isinstance(node.target, ast.Name):
+            names.append(node.target.id)
+    elif isinstance(node, ast.AnnAssign):
+        if isinstance(node.target, ast.Name):
+            names.append(node.target.id)
+    return names
+
+
+def check_api_correctness(code: str, fname: str = "main.py") -> list[str]:
+    """Detect common API misuse patterns.
+
+    Catches:
+    - np.erf() (should be scipy.special.erf)
+    - nn.Linear/nn.Conv2d inside forward() (unregistered module)
+    - random.seed() without numpy.random.seed() (incomplete seeding)
+    """
+    import re as _re
+
+    warnings: list[str] = []
+
+    lines = code.splitlines()
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+
+        # np.erf doesn't exist
+        if _re.search(r"\bnp\.erf\b", stripped):
+            warnings.append(
+                f"[{fname}:{i}] np.erf() does not exist — use "
+                f"scipy.special.erf() or math.erf() instead"
+            )
+
+        # np.random.RandomState with hardcoded seed in a function called multiple times
+        if _re.search(r"RandomState\(\s*\d+\s*\)", stripped) and "def " not in stripped:
+            # Check if this is inside a function that generates data
+            warnings.append(
+                f"[{fname}:{i}] Hardcoded RandomState seed inside a loop/function "
+                f"may produce identical results across calls — pass seed as parameter"
+            )
+
+    return warnings
+
+
+def deep_validate_files(
+    files: dict[str, str],
+) -> list[str]:
+    """Run all deep quality checks across all experiment files.
+
+    Returns a list of warning strings. Empty = no concerns.
+    """
+    warnings: list[str] = []
+    warnings.extend(check_class_quality(files))
+    for fname, code in files.items():
+        if not fname.endswith(".py"):
+            continue
+        warnings.extend(check_variable_scoping(code, fname))
+        warnings.extend(check_api_correctness(code, fname))
+    return warnings
