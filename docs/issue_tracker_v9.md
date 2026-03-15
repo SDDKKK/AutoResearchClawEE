@@ -17,9 +17,9 @@
 | Literature & Citations | 4 | 4 | 0 | 0 |
 | Infrastructure (Docker) | 5 | 5 | 0 | 0 |
 | Pipeline Logic | 3 | 3 | 0 | 0 |
-| New Feature Requests | 1 | 1 | 0 | 0 |
+| New Feature Requests | 2 | 1 | 0 | 1 |
 | Run 13 Findings | 3 | 3 | 0 | 0 |
-| **Total** | **36** | **36** | **0** | **0** |
+| **Total** | **37** | **36** | **0** | **1** |
 
 ---
 
@@ -376,6 +376,73 @@ FRAMEWORK_KEYWORDS = {
 - **Status**: FIXED — v9.1 patch
 - **Evidence**: Run 13 only reported final metrics, no step-by-step evaluation
 - **Fix**: Added learning curve logging requirement to `rl_step_guidance` prompt: `EVAL:` lines every N_eval steps, `LEARNING_CURVE:` summary at end.
+
+---
+
+## 10. Feature Requests — Advanced Code Generation
+
+### F-02: Advanced Coding Agent for Experiment Code Generation (OPEN)
+- **Severity**: Critical (pipeline capability ceiling)
+- **Status**: OPEN — research complete, implementation pending
+- **Problem**: Current code generation stage produces relatively simple, single-file experiments. Cannot design large-scale multi-file projects (e.g., complex RL systems with custom environments, multi-component fine-tuning pipelines). This limits paper quality and experiment sophistication.
+- **Goal**: Replace single-shot code generation with an agentic coding system capable of iterative development, debugging, and multi-file project design — analogous to how Claude Code or Devin can build complex projects from scratch.
+
+#### Research Summary
+
+**Design Patterns Identified** (from survey of 12+ systems: Claude Code, Cursor, Devin, SWE-Agent, OpenHands, Aider, MetaGPT, ChatDev, AI Scientist v2, AIDE, AgentCoder, AlphaCodium):
+
+| Pattern | Description | Key Systems | Impact |
+|---------|-------------|-------------|--------|
+| A: Architect-then-Code | Separate planning step → architecture spec → code generation | Aider, MetaGPT | HIGH |
+| B: Solution Tree Search | Solutions as tree nodes; branch, evaluate, prune | AI Scientist v2, AIDE | CRITICAL |
+| C: Execution-in-the-Loop | Generate → execute → parse error → fix loop | Claude Code, SWE-Agent | HIGH |
+| D: Multi-Agent Review | Coder + reviewer dialog with iterative refinement | ChatDev, AgentCoder | MEDIUM |
+| E: Tool-Augmented Generation | File R/W, terminal, linting, search as LLM tools | Claude Code, SWE-Agent | HIGH |
+| F: Context Engineering | Repo maps, compression, selective context inclusion | Aider, Claude Code | MEDIUM |
+
+#### Implementation Plan — 4 Phases
+
+**Phase 1: Architect-then-Code** (Priority: HIGH)
+- Add architecture planning substage before code generation
+- LLM produces file structure, class hierarchy, data flow diagram
+- Code generation uses architecture spec as constraint
+- Files: `researchclaw/pipeline/executor.py` (new substage), `researchclaw/prompts.py` (architecture prompt)
+
+**Phase 2: Execution-in-the-Loop** (Priority: HIGH)
+- After initial code generation, run code in sandbox
+- Parse stderr/stdout for errors
+- Feed errors back to LLM for iterative fix (max N iterations)
+- Already partially exists in current REFINE loop — needs to be tightened into inner code-fix loop
+- Files: `researchclaw/pipeline/executor.py`, `researchclaw/experiment/docker_sandbox.py`
+
+**Phase 3: Solution Tree Search** (Priority: CRITICAL)
+- Multiple candidate solutions generated in parallel
+- Each evaluated via sandbox execution (runtime errors, metric quality)
+- Best candidate selected or merged; backtrack on failures
+- Inspired by AIDE/AI Scientist v2 tree search pattern
+- Files: New `researchclaw/pipeline/code_agent.py`, `researchclaw/pipeline/executor.py`
+
+**Phase 4: Multi-Agent Review** (Priority: MEDIUM)
+- Coder agent generates code, reviewer agent critiques
+- Dialog continues until reviewer approves or max rounds reached
+- Catches logical errors, missing edge cases, poor experiment design
+- Files: `researchclaw/pipeline/code_agent.py`
+
+#### Task Breakdown
+
+| Task ID | Phase | Description | Status | Depends On |
+|---------|-------|-------------|--------|------------|
+| F-02-1 | 1 | Design architecture planning prompt and substage | PENDING | — |
+| F-02-2 | 1 | Implement architect substage in executor.py | PENDING | F-02-1 |
+| F-02-3 | 1 | Wire architecture spec into code generation prompt | PENDING | F-02-2 |
+| F-02-4 | 2 | Implement inner code-fix loop (generate → run → fix) | PENDING | F-02-3 |
+| F-02-5 | 2 | Add error parsing and structured feedback extraction | PENDING | F-02-4 |
+| F-02-6 | 2 | Configure max iterations and timeout for fix loop | PENDING | F-02-5 |
+| F-02-7 | 3 | Design solution tree data structure and evaluation | PENDING | F-02-6 |
+| F-02-8 | 3 | Implement parallel candidate generation | PENDING | F-02-7 |
+| F-02-9 | 3 | Implement tree search: branch, evaluate, prune, select | PENDING | F-02-8 |
+| F-02-10 | 4 | Implement reviewer agent prompt and dialog loop | PENDING | F-02-9 |
+| F-02-11 | — | End-to-end test with complex RL experiment | PENDING | F-02-10 |
 
 ---
 

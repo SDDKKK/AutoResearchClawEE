@@ -169,6 +169,25 @@ class DockerSandboxConfig:
 
 
 @dataclass(frozen=True)
+class CodeAgentConfig:
+    """Configuration for the advanced multi-phase code generation agent."""
+
+    enabled: bool = True
+    # Phase 1: Architecture planning before code generation
+    architecture_planning: bool = True
+    # Phase 2: Execution-in-the-loop (run → parse error → fix)
+    exec_fix_max_iterations: int = 3
+    exec_fix_timeout_sec: int = 60
+    # Phase 3: Solution tree search (off by default — higher cost)
+    tree_search_enabled: bool = False
+    tree_search_candidates: int = 3
+    tree_search_max_depth: int = 2
+    tree_search_eval_timeout_sec: int = 120
+    # Phase 4: Multi-agent review dialog
+    review_max_rounds: int = 2
+
+
+@dataclass(frozen=True)
 class ExperimentConfig:
     mode: str = "simulated"
     time_budget_sec: int = 300
@@ -179,6 +198,7 @@ class ExperimentConfig:
     sandbox: SandboxConfig = field(default_factory=SandboxConfig)
     docker: DockerSandboxConfig = field(default_factory=DockerSandboxConfig)
     ssh_remote: SshRemoteConfig = field(default_factory=SshRemoteConfig)
+    code_agent: CodeAgentConfig = field(default_factory=CodeAgentConfig)
 
 
 @dataclass(frozen=True)
@@ -435,6 +455,25 @@ def _parse_experiment_config(data: dict[str, Any]) -> ExperimentConfig:
                 "remote_workdir", "/tmp/researchclaw_experiments"
             ),
         ),
+        code_agent=_parse_code_agent_config(data.get("code_agent") or {}),
+    )
+
+
+def _parse_code_agent_config(data: dict[str, Any]) -> CodeAgentConfig:
+    if not data:
+        return CodeAgentConfig()
+    return CodeAgentConfig(
+        enabled=bool(data.get("enabled", True)),
+        architecture_planning=bool(data.get("architecture_planning", True)),
+        exec_fix_max_iterations=int(data.get("exec_fix_max_iterations", 3)),
+        exec_fix_timeout_sec=int(data.get("exec_fix_timeout_sec", 60)),
+        tree_search_enabled=bool(data.get("tree_search_enabled", False)),
+        tree_search_candidates=int(data.get("tree_search_candidates", 3)),
+        tree_search_max_depth=int(data.get("tree_search_max_depth", 2)),
+        tree_search_eval_timeout_sec=int(
+            data.get("tree_search_eval_timeout_sec", 120)
+        ),
+        review_max_rounds=int(data.get("review_max_rounds", 2)),
     )
 
 

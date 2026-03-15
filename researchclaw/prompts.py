@@ -961,6 +961,132 @@ _DEFAULT_SUB_PROMPTS: dict[str, dict[str, Any]] = {
             "## All Project Files\n{all_files_ctx}"
         ),
     },
+    # ── Advanced Code Agent sub-prompts ──────────────────────────────────
+    "architecture_planning": {
+        "system": (
+            "You are a software architect who designs the file structure and "
+            "class hierarchy for scientific experiment codebases. Your designs "
+            "are clear, modular, and directly implementable in Python. You "
+            "emphasize separation of concerns: data loading, model definition, "
+            "training loop, and evaluation are distinct components."
+        ),
+        "user": (
+            "Design the architecture for an experiment codebase.\n\n"
+            "## Research Context\n"
+            "TOPIC: {topic}\n"
+            "PRIMARY METRIC: {metric}\n\n"
+            "## Experiment Plan\n{exp_plan}\n\n"
+            "## Requirements\n"
+            "1. `main.py` MUST be the entry point — it runs ALL conditions "
+            "(baseline + ablations) sequentially.\n"
+            "2. Each experimental condition MUST be a separate class inheriting "
+            "from a shared base class, with DISTINCT implementation logic.\n"
+            "3. Data loading and preprocessing MUST be in a separate module or "
+            "function, shared across all conditions.\n"
+            "4. Metric computation MUST be in a utility module.\n"
+            "5. Keep practical: no more than 5 Python files total.\n"
+            "6. Every class listed in the architecture MUST have at least 20 "
+            "lines of effective code (not just pass-through to parent).\n\n"
+            "## Output Format\n"
+            "Output a YAML architecture specification with these sections:\n"
+            "```yaml\n"
+            "files:\n"
+            "  - name: main.py\n"
+            "    purpose: Entry point, runs all conditions\n"
+            "    key_functions: [main, run_condition, aggregate_results]\n"
+            "  - name: models.py\n"
+            "    purpose: Model definitions\n"
+            "    classes:\n"
+            "      - name: BaseMethod\n"
+            "        methods: [__init__, train, evaluate, get_config]\n"
+            "      - name: ProposedMethod(BaseMethod)\n"
+            "        methods: [__init__, train, _custom_loss]\n"
+            "        differentiator: Uses novel loss function X\n"
+            "  # ... more files ...\n"
+            "data_flow:\n"
+            "  - step: Load dataset\n"
+            "    input: raw data path\n"
+            "    output: train/val/test splits\n"
+            "  - step: Train model\n"
+            "    input: train split, hyperparameters\n"
+            "    output: trained model\n"
+            "  # ... more steps ...\n"
+            "dependencies:\n"
+            "  - torch\n"
+            "  - numpy\n"
+            "  # ... more packages ...\n"
+            "```\n\n"
+            "Output ONLY the YAML specification wrapped in ```yaml``` fences."
+        ),
+        "max_tokens": 4096,
+    },
+    "code_exec_fix": {
+        "system": (
+            "You are a debugging expert who fixes runtime errors in Python "
+            "experiment code. You preserve the original experiment design and "
+            "scientific methodology while fixing the specific error. You fix "
+            "the ROOT CAUSE, not just the symptom."
+        ),
+        "user": (
+            "The following experiment code crashed during execution.\n\n"
+            "## Error Output (stderr, last 3000 chars)\n"
+            "```\n{stderr}\n```\n\n"
+            "## Standard Output (last 50 lines)\n"
+            "```\n{stdout_tail}\n```\n\n"
+            "## Return Code: {returncode}\n\n"
+            "## Current Code Files\n{files_context}\n\n"
+            "## Instructions\n"
+            "1. Identify the ROOT CAUSE of the error.\n"
+            "2. Fix it while preserving the experiment design.\n"
+            "3. Check for similar potential issues in ALL files.\n"
+            "4. Do NOT simplify or remove experiment logic — fix the bug.\n"
+            "5. Do NOT add subprocess, os.system, eval, exec, or network calls.\n\n"
+            "Output ALL files in ```filename:xxx.py``` format, including files "
+            "that don't need changes."
+        ),
+        "max_tokens": 16384,
+    },
+    "code_reviewer": {
+        "system": (
+            "You are a meticulous experiment code reviewer focused on "
+            "scientific correctness, statistical rigor, and code quality. "
+            "You catch bugs that static analysis cannot: incorrect algorithm "
+            "implementations, missing controls, wrong metric computation, "
+            "and experimental design flaws."
+        ),
+        "user": (
+            "Review this experiment code for correctness and quality.\n\n"
+            "## Research Context\n"
+            "TOPIC: {topic}\n"
+            "PRIMARY METRIC: {metric}\n\n"
+            "## Experiment Plan\n{exp_plan}\n\n"
+            "## Code Files\n{files_context}\n\n"
+            "## Review Criteria\n"
+            "1. **CORRECTNESS**: Does the code correctly implement the "
+            "experiment plan? Are algorithms implemented properly?\n"
+            "2. **COMPLETENESS**: Are all conditions/ablations implemented "
+            "with DISTINCT logic? (Not just renamed copies of baseline.)\n"
+            "3. **STATISTICAL RIGOR**: Multiple seeds? Results averaged and "
+            "reported with std? Paired comparisons?\n"
+            "4. **METRIC REPORTING**: Is {metric} correctly computed and "
+            "printed in the required format?\n"
+            "5. **ROBUSTNESS**: Shape mismatches? Missing imports? Type "
+            "errors? Division by zero? GPU/CPU device conflicts?\n\n"
+            "## Output Format (JSON)\n"
+            "```json\n"
+            '{{\n'
+            '  "verdict": "APPROVE or REVISE",\n'
+            '  "score": 1-10,\n'
+            '  "critical_issues": ["issue1", "issue2"],\n'
+            '  "suggestions": ["suggestion1", "suggestion2"]\n'
+            '}}\n'
+            "```\n\n"
+            "Only use verdict REVISE if there are critical issues that would "
+            "cause the code to crash or produce scientifically invalid results."
+        ),
+        "json_mode": True,
+        "max_tokens": 4096,
+    },
 }
 
 # -- Stage prompts (one entry per LLM-calling stage) ---------------------

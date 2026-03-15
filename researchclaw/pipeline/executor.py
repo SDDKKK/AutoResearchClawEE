@@ -2222,8 +2222,81 @@ def _execute_code_generation(
                 f"- If possible, use a smaller model (<=7B parameters)\n"
             )
 
-    # --- Initial multi-file generation ---
-    if llm is not None:
+    # --- Code generation: Advanced Code Agent or legacy single-shot ---
+    _code_agent_active = False
+    _code_max_tokens = 8192
+
+    if config.experiment.code_agent.enabled and llm is not None:
+        # ── F-02: Advanced Code Agent path ────────────────────────────────
+        from researchclaw.pipeline.code_agent import CodeAgent as _CodeAgent
+
+        _ca_cfg = config.experiment.code_agent
+        # Ensure we have a proper config object
+        if not hasattr(_ca_cfg, "enabled"):
+            from researchclaw.pipeline.code_agent import (
+                CodeAgentConfig as _CAConfig,
+            )
+            _ca_cfg = _CAConfig()
+
+        # Sandbox factory (only for sandbox/docker modes)
+        _sandbox_factory = None
+        if config.experiment.mode in ("sandbox", "docker"):
+            from researchclaw.experiment.factory import (
+                create_sandbox as _csb,
+            )
+            _sandbox_factory = _csb
+
+        if any(
+            config.llm.primary_model.startswith(p)
+            for p in ("gpt-5", "o3", "o4")
+        ):
+            _code_max_tokens = 16384
+
+        _agent = _CodeAgent(
+            llm=llm,
+            prompts=_pm,
+            config=_ca_cfg,
+            stage_dir=stage_dir,
+            sandbox_factory=_sandbox_factory,
+            experiment_config=config.experiment,
+        )
+        _agent_result = _agent.generate(
+            topic=config.research.topic,
+            exp_plan=exp_plan,
+            metric=metric,
+            pkg_hint=pkg_hint + "\n" + compute_budget + "\n" + extra_guidance,
+            max_tokens=_code_max_tokens,
+        )
+        files = _agent_result.files
+        _code_agent_active = True
+
+        # Write agent artifacts
+        (stage_dir / "code_agent_log.json").write_text(
+            json.dumps(
+                {
+                    "log": _agent_result.validation_log,
+                    "llm_calls": _agent_result.total_llm_calls,
+                    "sandbox_runs": _agent_result.total_sandbox_runs,
+                    "best_score": _agent_result.best_score,
+                    "tree_nodes_explored": _agent_result.tree_nodes_explored,
+                    "review_rounds": _agent_result.review_rounds,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        if _agent_result.architecture_spec:
+            (stage_dir / "architecture_spec.yaml").write_text(
+                _agent_result.architecture_spec, encoding="utf-8",
+            )
+        logger.info(
+            "CodeAgent: %d LLM calls, %d sandbox runs, score=%.2f",
+            _agent_result.total_llm_calls,
+            _agent_result.total_sandbox_runs,
+            _agent_result.best_score,
+        )
+    elif llm is not None:
+        # ── Legacy single-shot generation ─────────────────────────────────
         topic = config.research.topic
         sp = _pm.for_stage(
             "code_generation",
@@ -2438,7 +2511,8 @@ def _execute_code_generation(
         )
 
     # --- P1.4: LLM Code Review (Stage 10.5) ---
-    if llm is not None:
+    # Skip when CodeAgent is active — Phase 4 review already covers this.
+    if llm is not None and not _code_agent_active:
         all_code_review = "\n\n".join(
             f"# --- {fname} ---\n{code}" for fname, code in files.items()
         )
