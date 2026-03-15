@@ -83,7 +83,7 @@ class LLMClient:
 
     def __init__(self, config: LLMConfig) -> None:
         self.config = config
-        self._model_chain = [config.primary_model] + config.fallback_models
+        self._model_chain = [config.primary_model] + list(config.fallback_models)
 
     @classmethod
     def from_rc_config(cls, rc_config: Any) -> LLMClient:

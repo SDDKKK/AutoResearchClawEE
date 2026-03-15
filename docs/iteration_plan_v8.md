@@ -343,9 +343,9 @@ RUN pip install --no-cache-dir llamafactory>=0.9.0
 | 8 | 2026-03-15 | KD Comparison (CIFAR-10) | docker | 5/10 | - | Q13-Q15, 随机水平结果 |
 | 9 | 2026-03-15 | PPO/SAC/TD3+PER | docker | 7/10 | - | Q11, MuJoCo缺失致完全失败 |
 | 10 | 2026-03-15 | Neural ODE Robustness | docker | 7/10 | - | Q12/Q16, CIFAR-10挂载失败 |
-| 11 | TBD | QLoRA Qwen Fine-Tuning | docker | - | - | - |
-| 12 | TBD | VLM Hallucination | docker | - | - | - |
-| 13 | TBD | Offline RL Comparison | docker | - | - | - |
+| 11 | 2026-03-15 | QLoRA Rank Allocation | docker | 4/10 | 7/10 | Q17-Q20, 合成模拟非真实训练 |
+| 12 | 2026-03-15 | VLM Hallucination | docker | 3/10 | TBD | Q21-Q23, KeyError崩溃, 训练/验证数据重叠 |
+| 13 | 2026-03-15 | PPO/SAC/TD3 MuJoCo | docker | 6/10 | TBD | Q24-Q26, 60k步不够收敛, PPO容量不公平 |
 
 ### 问题追踪
 
@@ -367,6 +367,16 @@ RUN pip install --no-cache-dir llamafactory>=0.9.0
 | Q14 | Feature KD 维度不匹配 | P1 | 🟡 P1代码审查会捕获 | - |
 | Q15 | 消融与 baseline 重复 | P1 | 🟡 P1深度验证会捕获 | - |
 | Q16 | 缺少关键实验条件 | P1 | 🟡 P1代码审查会捕获 | - |
+| Q17 | Docker HF缓存重复挂载 | P3 | ✅ 已修复 | (本次) |
+| Q18 | LLM代码审查JSON解析失败 | P3 | ✅ 已修复 | (本次) |
+| Q19 | LLM任务用合成模拟代替真实训练 | P3 | ✅ 已修复(提示) | (本次) |
+| Q20 | ndarray.ptp()等NumPy 2.0移除API | P3 | ✅ 已修复(检测+提示) | (本次) |
+| Q21 | dict[key]无默认值致KeyError | P3 | ✅ 已修复(提示) | (本次) |
+| Q22 | 训练/验证数据集重叠 | P4 | ⬜ 待实施 | - |
+| Q23 | 损失函数方向错误(鼓励而非惩罚) | P4 | ⬜ 待实施 | - |
+| Q24 | RL训练步数不足(60k vs 需1M) | P3 | 🟡 已有epoch指导,需扩展到RL | - |
+| Q25 | 实验条件间模型容量不公平 | P4 | ⬜ 待实施 | - |
+| Q26 | proposed_method_variant与主方法相同 | P1 | 🟡 P1深度验证会捕获 | - |
 
 ---
 
@@ -402,15 +412,41 @@ RUN pip install --no-cache-dir llamafactory>=0.9.0
 
 ## 十、执行计划
 
-### 当前待执行: Phase 0 — 诊断测试
+### 执行进度
 
+#### Phase 0: 诊断测试 ✅ 完成
 1. ✅ 调研热门主题，筛选测试用 idea
-2. ⬜ 为 Run 8/9/10 创建配置文件
-3. ⬜ 并行启动 3 个 Run
-4. ⬜ 监控中间输出，特别关注 Stage 10 (代码生成) 产出
-5. ⬜ 以审稿人视角评审代码 + 论文
-6. ⬜ 汇总发现的问题，更新本文档
-7. ⬜ 确定 Phase 1 优先级
+2. ✅ 为 Run 8/9/10 创建配置文件
+3. ✅ 并行启动 3 个 Run
+4. ✅ 监控中间输出，特别关注 Stage 10 (代码生成) 产出
+5. ✅ 以审稿人视角评审代码 + 论文
+6. ✅ 汇总发现的问题 (Q11-Q16)
+7. ✅ 确定 Phase 1 优先级
+
+#### Phase 1: 代码质量改进 ✅ 完成 (commit cb4af26)
+- P1.1: 深度代码质量检查 (AST分析: 类质量, 变量作用域, API正确性)
+- P1.2: 自动修复循环 (深度验证 → LLM修复 → 重验证)
+- P1.3: 实验设计增加 implementation_spec (伪代码级描述)
+- P1.4: LLM代码审查 (Stage 10.5, 评分1-10, 严重问题触发修复)
+
+#### Phase 2: LLM微调能力 ✅ 完成 (commit e72a818)
+- P2.1: Docker新增transformers/peft/trl/bitsandbytes/datasets
+- P2.2: llm_training_guidance + llm_eval_guidance 提示块
+- P2.3: 自动检测LLM主题注入指导; time_budget警告
+- P2.4: HuggingFace缓存挂载 + HF_TOKEN透传
+
+#### Phase 3: 回归测试 🔄 进行中
+Run 11-13 结果分析:
+- **Run 11 (QLoRA)**: 代码4/10, 论文7/10 — 合成模拟非真实训练, 但论文质量达标
+- **Run 12 (VLM)**: 代码3/10 — KeyError崩溃, 训练/验证重叠, 损失方向错误
+- **Run 13 (RL)**: 代码6/10 — MuJoCo成功! 但60k步不够收敛, PPO容量不公平
+
+Phase 3 修复 (本次commit):
+- Q17: Docker HF缓存重复挂载 → 优先HF_HOME, 避免重复
+- Q18: LLM代码审查JSON解析失败 → 正确提取LLMResponse.content + 去除markdown fence
+- Q19: LLM任务合成模拟 → 添加"CRITICAL — NO SIMULATION"规则
+- Q20: NumPy 2.0移除API → 检测器 + 禁止模式更新
+- Q21: dict[key]无默认值 → 禁止模式更新
 
 ### 注意事项
 - 每次迭代结束后更新本文档

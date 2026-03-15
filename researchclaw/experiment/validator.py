@@ -692,6 +692,7 @@ def check_api_correctness(code: str, fname: str = "main.py") -> list[str]:
     - np.erf() (should be scipy.special.erf)
     - nn.Linear/nn.Conv2d inside forward() (unregistered module)
     - random.seed() without numpy.random.seed() (incomplete seeding)
+    - NumPy 2.0 removed APIs (.ptp(), np.bool, etc.)
     """
     import re as _re
 
@@ -710,9 +711,25 @@ def check_api_correctness(code: str, fname: str = "main.py") -> list[str]:
                 f"scipy.special.erf() or math.erf() instead"
             )
 
+        # NumPy 2.0 removed ndarray methods
+        if _re.search(r"\.ptp\s*\(", stripped):
+            warnings.append(
+                f"[{fname}:{i}] ndarray.ptp() was removed in NumPy 2.0 — "
+                f"use np.ptp(arr) or arr.max() - arr.min() instead"
+            )
+
+        # NumPy 2.0 removed type aliases
+        for old_alias in ("np.bool", "np.int", "np.float", "np.complex",
+                          "np.object", "np.str"):
+            pattern = _re.escape(old_alias) + r"(?![_\w\d])"
+            if _re.search(pattern, stripped):
+                warnings.append(
+                    f"[{fname}:{i}] {old_alias} was removed in NumPy 2.0 — "
+                    f"use {old_alias}_ or Python builtin instead"
+                )
+
         # np.random.RandomState with hardcoded seed in a function called multiple times
         if _re.search(r"RandomState\(\s*\d+\s*\)", stripped) and "def " not in stripped:
-            # Check if this is inside a function that generates data
             warnings.append(
                 f"[{fname}:{i}] Hardcoded RandomState seed inside a loop/function "
                 f"may produce identical results across calls — pass seed as parameter"
