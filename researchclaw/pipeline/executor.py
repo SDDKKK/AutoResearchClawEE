@@ -239,9 +239,16 @@ def _extract_paper_title(md_text: str) -> str:
 
     for line in search_region.splitlines():
         line = line.strip()
-        if line.startswith("# "):
-            heading = line.lstrip("# ").strip()
-            if heading.lower() in _SKIP:
+        # Match H1 or H2 headings
+        hm = _re.match(r"^(#{1,2})\s+(.+)$", line)
+        if hm:
+            heading = hm.group(2).strip()
+            heading_lower = heading.lower()
+            # Handle "## Title Actual Paper Title" pattern
+            if heading_lower.startswith("title ") and len(heading) > 6:
+                heading = heading[6:].strip()
+                heading_lower = heading.lower()
+            if heading_lower in _SKIP:
                 continue
             candidates.append(heading)
         # Bold title line (e.g. **My Paper Title**)
@@ -1945,6 +1952,25 @@ def _execute_experiment_design(
             _dg_block = _pm.block("dataset_guidance")
         except (KeyError, Exception):  # noqa: BLE001
             _dg_block = ""
+        # I-08: Inject RL step guidance for RL topics
+        _rl_kws = ("reinforcement learning", "ppo", "sac", "td3", "ddpg",
+                    "dqn", "mujoco", "continuous control", "actor-critic",
+                    "policy gradient", "exploration bonus")
+        if any(kw in config.research.topic.lower() for kw in _rl_kws):
+            try:
+                _dg_block += _pm.block("rl_step_guidance")
+            except Exception:  # noqa: BLE001
+                pass
+        # F-01: Inject framework docs for experiment design
+        try:
+            from researchclaw.data import detect_frameworks, load_framework_docs
+            _fw_ids = detect_frameworks(config.research.topic, hypotheses)
+            if _fw_ids:
+                _fw_docs = load_framework_docs(_fw_ids, max_chars=4000)
+                if _fw_docs:
+                    _dg_block += _fw_docs
+        except Exception:  # noqa: BLE001
+            pass
         sp = _pm.for_stage(
             "experiment_design",
             preamble=preamble,
@@ -2126,6 +2152,11 @@ def _execute_code_generation(
             extra_guidance += _pm.block("hp_reporting")
         except Exception:  # noqa: BLE001
             pass
+        # I-06: Multi-seed enforcement for all experiments
+        try:
+            extra_guidance += _pm.block("multi_seed_enforcement")
+        except Exception:  # noqa: BLE001
+            pass
 
     # --- P2.2+P2.3: LLM training topic detection and guidance ---
     _llm_keywords = (
@@ -2136,6 +2167,37 @@ def _execute_code_generation(
     )
     topic_lower = config.research.topic.lower()
     is_llm_topic = any(kw in topic_lower for kw in _llm_keywords)
+
+    # --- I-08: RL topic detection and step guidance ---
+    _rl_keywords = (
+        "reinforcement learning", "policy gradient", "ppo", "sac", "td3",
+        "ddpg", "dqn", "a2c", "a3c", "mujoco", "locomotion", "continuous control",
+        "reward shaping", "exploration", "multi-agent rl", "marl", "curriculum rl",
+        "imitation learning", "inverse rl", "offline rl", "model-based rl",
+        "actor-critic", "reinforce", "gym", "gymnasium",
+    )
+    is_rl_topic = any(kw in topic_lower for kw in _rl_keywords)
+    if is_rl_topic:
+        try:
+            extra_guidance += _pm.block("rl_step_guidance")
+        except Exception:  # noqa: BLE001
+            pass
+
+    # --- F-01: Framework API doc injection (auto-detected) ---
+    try:
+        from researchclaw.data import detect_frameworks, load_framework_docs
+        _hypothesis_text = _read_prior_artifact(run_dir, "hypotheses.md") or ""
+        _fw_ids = detect_frameworks(
+            config.research.topic, _hypothesis_text, exp_plan or ""
+        )
+        if _fw_ids:
+            _fw_docs = load_framework_docs(_fw_ids, max_chars=8000)
+            if _fw_docs:
+                extra_guidance += _fw_docs
+                logger.info("F-01: Injected framework docs for: %s", _fw_ids)
+    except Exception:  # noqa: BLE001
+        logger.debug("F-01: Framework doc injection skipped", exc_info=True)
+
     if is_llm_topic and config.experiment.mode == "docker":
         try:
             extra_guidance += _pm.block("llm_training_guidance")
