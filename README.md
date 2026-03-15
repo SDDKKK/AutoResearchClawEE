@@ -41,6 +41,10 @@
 
 ---
 
+> **🧪 We're looking for testers!** Try the pipeline with your own research idea — from any field — and [tell us what you think](docs/TESTER_GUIDE.md). Your feedback directly shapes the next version. **[→ Testing Guide](docs/TESTER_GUIDE.md)** | **[→ 中文测试指南](docs/TESTER_GUIDE_CN.md)**
+
+---
+
 ## ⚡ One Command. One Paper.
 
 ```bash
