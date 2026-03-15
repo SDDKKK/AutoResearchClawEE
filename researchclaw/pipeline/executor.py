@@ -1467,8 +1467,8 @@ def _execute_literature_collect(
         # Expand queries for broader coverage
         expanded_queries = _expand_search_queries(queries, config.research.topic)
         logger.info(
-            "Stage 4: Searching real literature APIs for %d queries "
-            "(expanded from %d) …",
+            "[literature] Searching %d queries (expanded from %d) "
+            "across OpenAlex → S2 → arXiv…",
             len(expanded_queries),
             len(queries),
         )
@@ -1480,15 +1480,22 @@ def _execute_literature_collect(
         )
         if papers:
             real_search_succeeded = True
+            # Count by source
+            src_counts: dict[str, int] = {}
             for p in papers:
+                src_counts[p.source] = src_counts.get(p.source, 0) + 1
                 d = p.to_dict()
                 d["collected_at"] = _utcnow_iso()
                 candidates.append(d)
                 bibtex_entries.append(p.to_bibtex())
-            logger.info("Stage 4: Found %d real papers from APIs", len(papers))
+            src_str = ", ".join(f"{s}: {n}" for s, n in src_counts.items())
+            logger.info(
+                "[literature] Found %d papers (%s)", len(papers), src_str
+            )
     except Exception:  # noqa: BLE001
         logger.warning(
-            "Real literature search failed; falling back to LLM", exc_info=True
+            "[rate-limit] Literature search failed — falling back to LLM",
+            exc_info=True,
         )
 
     # --- Inject foundational/seminal papers ---
@@ -6153,7 +6160,24 @@ def _execute_citation_verify(
         )
 
     s2_api_key = getattr(config.llm, "s2_api_key", "") or ""
+
+    from researchclaw.literature.verify import parse_bibtex_entries
+    _n_entries = len(parse_bibtex_entries(bib_text))
+    logger.info(
+        "[citation-verify] Verifying %d references "
+        "(DOI→CrossRef > OpenAlex > arXiv > S2)…",
+        _n_entries,
+    )
     report = verify_citations(bib_text, s2_api_key=s2_api_key)
+    logger.info(
+        "[citation-verify] Done: %d verified, %d suspicious, "
+        "%d hallucinated, %d skipped (integrity: %.0f%%)",
+        report.verified,
+        report.suspicious,
+        report.hallucinated,
+        report.skipped,
+        report.integrity_score * 100,
+    )
 
     # --- Relevance check: assess topical relevance of verified citations ---
     if llm is not None and report.results:

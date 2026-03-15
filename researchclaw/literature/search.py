@@ -1,8 +1,11 @@
 """Unified literature search with deduplication.
 
-Combines results from Semantic Scholar and arXiv, deduplicates by
-DOI → arXiv ID → fuzzy title match, and returns a merged list sorted
-by citation count (descending).
+Combines results from OpenAlex, Semantic Scholar, and arXiv,
+deduplicates by DOI → arXiv ID → fuzzy title match, and returns
+a merged list sorted by citation count (descending).
+
+Source priority: OpenAlex (most generous limits) → Semantic Scholar → arXiv.
+If any source hits rate limits, remaining sources compensate automatically.
 
 Public API
 ----------
@@ -23,11 +26,14 @@ from typing import cast
 
 from researchclaw.literature.arxiv_client import search_arxiv
 from researchclaw.literature.models import Author, Paper
+from researchclaw.literature.openalex_client import search_openalex
 from researchclaw.literature.semantic_scholar import search_semantic_scholar
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_SOURCES = ("arxiv", "semantic_scholar")
+# OpenAlex first (10K/day), then S2 (1K/5min), then arXiv (1/3s) — least
+# pressure on the most restrictive API.
+_DEFAULT_SOURCES = ("openalex", "semantic_scholar", "arxiv")
 
 
 CacheGet = Callable[[str, str, int], list[dict[str, object]] | None]
@@ -131,13 +137,30 @@ def search_papers(
     cache_put: CachePut
     cache_get, cache_put = _cache_api()
 
+    source_stats: dict[str, int] = {}  # track per-source counts
+    cache_hits = 0
+
     for src in sources:
         src_lower = src.lower().replace("-", "_").replace(" ", "_")
         cache_source = (
             "semantic_scholar" if src_lower in ("semantic_scholar", "s2") else src_lower
         )
         try:
-            if src_lower in ("semantic_scholar", "s2"):
+            if src_lower == "openalex":
+                papers = search_openalex(
+                    query,
+                    limit=limit,
+                    year_min=year_min,
+                )
+                all_papers.extend(papers)
+                cache_put(query, "openalex", limit, _papers_to_dicts(papers))
+                source_stats["openalex"] = len(papers)
+                logger.info(
+                    "OpenAlex returned %d papers for %r", len(papers), query
+                )
+                time.sleep(0.5)
+
+            elif src_lower in ("semantic_scholar", "s2"):
                 papers = search_semantic_scholar(
                     query,
                     limit=limit,
@@ -146,6 +169,7 @@ def search_papers(
                 )
                 all_papers.extend(papers)
                 cache_put(query, "semantic_scholar", limit, _papers_to_dicts(papers))
+                source_stats["semantic_scholar"] = len(papers)
                 logger.info(
                     "Semantic Scholar returned %d papers for %r", len(papers), query
                 )
@@ -156,6 +180,7 @@ def search_papers(
                 papers = search_arxiv(query, limit=limit)
                 all_papers.extend(papers)
                 cache_put(query, "arxiv", limit, _papers_to_dicts(papers))
+                source_stats["arxiv"] = len(papers)
                 logger.info("arXiv returned %d papers for %r", len(papers), query)
 
             else:
@@ -168,14 +193,33 @@ def search_papers(
             urllib.error.HTTPError,
             urllib.error.URLError,
         ):
-            logger.warning("Source %s failed for %r - trying cache", src, query)
+            logger.warning(
+                "[rate-limit] Source %s failed for %r — trying cache", src, query
+            )
             cached = cache_get(query, cache_source, limit)
             if cached:
                 papers = _dicts_to_papers(cached)
                 all_papers.extend(papers)
-                logger.info("Cache hit: %d papers for %s/%r", len(papers), src, query)
+                cache_hits += len(papers)
+                logger.info(
+                    "[cache] HIT: %d papers for %s/%r", len(papers), src, query
+                )
             else:
-                logger.exception("No cache available for %s/%r - skipping", src, query)
+                logger.warning(
+                    "No cache available for %s/%r — skipping", src, query
+                )
+
+    # Summary log
+    total = len(all_papers)
+    parts = [f"{src}: {n}" for src, n in source_stats.items()]
+    if cache_hits:
+        parts.append(f"cache: {cache_hits}")
+    logger.info(
+        "[literature] Found %d papers (%s) for %r",
+        total,
+        ", ".join(parts) if parts else "none",
+        query,
+    )
 
     if deduplicate:
         all_papers = _deduplicate(all_papers)

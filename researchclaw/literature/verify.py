@@ -683,6 +683,12 @@ def verify_citations(
     entries = parse_bibtex_entries(bib_text)
     report = VerificationReport(total=len(entries))
 
+    # Adaptive delays: OpenAlex/CrossRef can be queried much faster than arXiv
+    _DELAY_ARXIV = inter_verify_delay       # arXiv: conservative (1.5s default)
+    _DELAY_CROSSREF = 0.3                   # CrossRef: 50 req/s polite pool
+    _DELAY_OPENALEX = 0.2                   # OpenAlex: 10K/day
+    api_call_count = 0
+
     for i, entry in enumerate(entries):
         key = entry.get("key", f"unknown_{i}")
         title = entry.get("title", "")
@@ -716,30 +722,23 @@ def verify_citations(
                 report.hallucinated += 1
             else:
                 report.skipped += 1
-            logger.info("Cache hit [%s] %r → %s", key, title[:50], cached.status.value)
+            logger.debug("[cache] verify HIT [%s] %r → %s", key, title[:50], cached.status.value)
             continue
 
         result: CitationResult | None = None
 
-        # L1: arXiv ID
-        if arxiv_id:
-            if i > 0:
-                time.sleep(inter_verify_delay)
-            result = verify_by_arxiv_id(arxiv_id, title)
-            if result is not None:
-                logger.info(
-                    "L1 arXiv ID [%s] %s → %s (%.2f)",
-                    key,
-                    arxiv_id,
-                    result.status.value,
-                    result.confidence,
-                )
+        # Verification order optimized to minimize arXiv API pressure:
+        #   DOI → CrossRef (fast, high limit)
+        #   > OpenAlex title search (10K/day)
+        #   > arXiv ID lookup (only if others fail, 1/3s)
+        #   > S2 title search (last resort)
 
-        # L2: DOI
+        # L2 first: DOI verification via CrossRef (fast, generous limits)
         if result is None and doi:
-            if i > 0:
-                time.sleep(inter_verify_delay)
+            if api_call_count > 0:
+                time.sleep(_DELAY_CROSSREF)
             result = verify_by_doi(doi, title)
+            api_call_count += 1
             if result is not None:
                 logger.info(
                     "L2 DOI [%s] %s → %s (%.2f)",
@@ -749,11 +748,12 @@ def verify_citations(
                     result.confidence,
                 )
 
-        # L3: OpenAlex first (higher rate limits), then S2 as fallback
+        # L3a: OpenAlex title search (high rate limits, good coverage)
         if result is None:
-            if i > 0:
-                time.sleep(inter_verify_delay)
+            if api_call_count > 0:
+                time.sleep(_DELAY_OPENALEX)
             result = verify_by_openalex(title)
+            api_call_count += 1
             if result is not None:
                 logger.info(
                     "L3a OpenAlex [%s] %r → %s (%.2f)",
@@ -762,17 +762,34 @@ def verify_citations(
                     result.status.value,
                     result.confidence,
                 )
-            else:
-                # OpenAlex network failure — fall back to S2
-                result = verify_by_title_search(title, s2_api_key=s2_api_key)
-                if result is not None:
-                    logger.info(
-                        "L3b S2 [%s] %r → %s (%.2f)",
-                        key,
-                        title[:50],
-                        result.status.value,
-                        result.confidence,
-                    )
+
+        # L1: arXiv ID — only if DOI and OpenAlex both failed
+        if result is None and arxiv_id:
+            if api_call_count > 0:
+                time.sleep(_DELAY_ARXIV)
+            result = verify_by_arxiv_id(arxiv_id, title)
+            api_call_count += 1
+            if result is not None:
+                logger.info(
+                    "L1 arXiv ID [%s] %s → %s (%.2f)",
+                    key,
+                    arxiv_id,
+                    result.status.value,
+                    result.confidence,
+                )
+
+        # L3b: S2 title search — last resort fallback
+        if result is None:
+            result = verify_by_title_search(title, s2_api_key=s2_api_key)
+            api_call_count += 1
+            if result is not None:
+                logger.info(
+                    "L3b S2 [%s] %r → %s (%.2f)",
+                    key,
+                    title[:50],
+                    result.status.value,
+                    result.confidence,
+                )
 
         # Fallback: all layers failed (network issues)
         if result is None:

@@ -142,18 +142,22 @@ class TestDegradationChain:
         from researchclaw.literature.search import search_papers
 
         with patch(
-            "researchclaw.literature.search.search_semantic_scholar",
+            "researchclaw.literature.search.search_openalex",
             side_effect=RuntimeError("API down"),
         ):
             with patch(
-                "researchclaw.literature.search.search_arxiv",
+                "researchclaw.literature.search.search_semantic_scholar",
                 side_effect=RuntimeError("API down"),
             ):
                 with patch(
-                    "researchclaw.literature.cache._DEFAULT_CACHE_DIR",
-                    tmp_path / "empty-cache",
+                    "researchclaw.literature.search.search_arxiv",
+                    side_effect=RuntimeError("API down"),
                 ):
-                    papers = search_papers("no results query", limit=20)
+                    with patch(
+                        "researchclaw.literature.cache._DEFAULT_CACHE_DIR",
+                        tmp_path / "empty-cache",
+                    ):
+                        papers = search_papers("no results query", limit=20)
 
         assert papers == []
 

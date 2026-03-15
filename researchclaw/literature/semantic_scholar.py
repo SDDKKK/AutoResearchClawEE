@@ -257,6 +257,118 @@ def _request_with_retry(
     return None
 
 
+_BATCH_URL = "https://api.semanticscholar.org/graph/v1/paper/batch"
+_BATCH_MAX = 500  # S2 batch endpoint max
+
+
+def batch_fetch_papers(
+    paper_ids: list[str],
+    *,
+    api_key: str = "",
+    fields: str = _FIELDS,
+) -> list[Paper]:
+    """Batch fetch paper details via POST /graph/v1/paper/batch.
+
+    Accepts S2 paper IDs, arXiv IDs (prefixed ``ARXIV:``), or DOIs.
+    Returns parsed papers; silently skips papers that fail to resolve.
+    """
+    if not paper_ids:
+        return []
+
+    if not _cb_should_allow():
+        return []
+
+    global _last_request_time  # noqa: PLW0603
+    now = time.monotonic()
+    rate = 0.3 if api_key else _RATE_LIMIT_SEC
+    elapsed = now - _last_request_time
+    if elapsed < rate:
+        time.sleep(rate - elapsed)
+
+    all_papers: list[Paper] = []
+
+    # Process in chunks of _BATCH_MAX
+    for i in range(0, len(paper_ids), _BATCH_MAX):
+        chunk = paper_ids[i : i + _BATCH_MAX]
+        url = f"{_BATCH_URL}?fields={fields}"
+
+        headers: dict[str, str] = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        if api_key:
+            headers["x-api-key"] = api_key
+
+        body = json.dumps({"ids": chunk}).encode("utf-8")
+
+        _last_request_time = time.monotonic()
+        result = _post_with_retry(url, headers, body)
+        if result is None:
+            continue
+
+        for item in result:
+            if item is None:
+                continue  # unresolved ID
+            try:
+                all_papers.append(_parse_s2_paper(item))
+            except Exception:  # noqa: BLE001
+                logger.debug("Failed to parse batch S2 paper entry")
+
+        # Delay between chunks
+        if i + _BATCH_MAX < len(paper_ids):
+            time.sleep(rate)
+
+    return all_papers
+
+
+def _post_with_retry(
+    url: str,
+    headers: dict[str, str],
+    body: bytes,
+) -> list[dict[str, Any]] | None:
+    """POST *url* with exponential back-off retries."""
+    if not _cb_should_allow():
+        return None
+
+    for attempt in range(_MAX_RETRIES):
+        try:
+            req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=_TIMEOUT_SEC) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                _cb_on_success()
+                return data if isinstance(data, list) else None
+        except urllib.error.HTTPError as exc:
+            if exc.code == 429:
+                if _cb_on_429():
+                    return None
+                delay = min(2 ** (attempt + 1), _MAX_WAIT_SEC)
+                jitter = random.uniform(0, delay * 0.3)
+                logger.warning(
+                    "S2 batch rate-limited (429). Waiting %.1fs (attempt %d/%d)...",
+                    delay + jitter,
+                    attempt + 1,
+                    _MAX_RETRIES,
+                )
+                time.sleep(delay + jitter)
+                continue
+            logger.warning("S2 batch HTTP %d", exc.code)
+            return None
+        except (urllib.error.URLError, OSError, json.JSONDecodeError) as exc:
+            wait = min(2**attempt, _MAX_WAIT_SEC)
+            jitter = random.uniform(0, wait * 0.2)
+            logger.warning(
+                "S2 batch request failed (%s). Retry %d/%d in %ds…",
+                exc,
+                attempt + 1,
+                _MAX_RETRIES,
+                wait,
+            )
+            time.sleep(wait + jitter)
+
+    logger.error("S2 batch request exhausted retries")
+    return None
+
+
 def _parse_s2_paper(item: dict[str, Any]) -> Paper:
     """Convert a single Semantic Scholar JSON entry to a ``Paper``."""
     ext_ids = item.get("externalIds") or {}
