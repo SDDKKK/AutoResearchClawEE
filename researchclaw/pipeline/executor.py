@@ -2059,7 +2059,13 @@ def _execute_code_generation(
     if config.experiment.mode in ("sandbox", "docker"):
         if config.experiment.mode == "docker":
             pkg_prefix = "docker mode"
-            pkg_extras = ", torchdiffeq, gymnasium, networkx, and pip-installable packages"
+            pkg_extras = (
+                ", torchvision, torchaudio, matplotlib, seaborn, scipy, "
+                "tqdm, torchdiffeq, gymnasium, networkx, PyYAML, Pillow, "
+                "transformers, datasets, accelerate, peft, bitsandbytes, "
+                "timm, einops, torchmetrics, h5py, "
+                "and additional pip-installable packages (auto-detected from imports)"
+            )
         else:
             pkg_prefix = "sandbox mode"
             pkg_extras = ""
@@ -2104,13 +2110,18 @@ def _execute_code_generation(
             f"- Implement a time guard: stop gracefully at 80% of budget\n"
         )
 
-    # --- Dataset guidance + HP reporting (docker/sandbox modes) ---
+    # --- Dataset guidance + setup script + HP reporting (docker/sandbox modes) ---
     extra_guidance = ""
     if config.experiment.mode in ("sandbox", "docker"):
         try:
             extra_guidance += _pm.block("dataset_guidance")
         except Exception:  # noqa: BLE001
             pass
+        if config.experiment.mode == "docker":
+            try:
+                extra_guidance += _pm.block("setup_script_guidance")
+            except Exception:  # noqa: BLE001
+                pass
         try:
             extra_guidance += _pm.block("hp_reporting")
         except Exception:  # noqa: BLE001

@@ -160,7 +160,7 @@ class DockerSandboxConfig:
     gpu_enabled: bool = True
     gpu_device_ids: tuple[int, ...] = ()
     memory_limit_mb: int = 8192
-    network_policy: str = "none"  # none | pip_only | full
+    network_policy: str = "setup_only"  # none | setup_only | pip_only | full
     pip_pre_install: tuple[str, ...] = ()
     auto_install_deps: bool = True
     shm_size_mb: int = 2048
