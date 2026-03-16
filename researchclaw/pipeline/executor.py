@@ -2910,7 +2910,9 @@ def _execute_code_generation(
     # --- P1.2: If critical deep issues found, attempt one repair cycle ---
     critical_deep = [w for w in deep_warnings if any(
         kw in w for kw in ("UnboundLocalError", "unregistered", "does not exist",
-                           "empty or trivial subclass", "does NOT override")
+                           "empty or trivial subclass", "does NOT override",
+                           "Import-usage mismatch", "NameError",
+                           "was removed", "ptp()")
     )]
     if critical_deep and llm is not None:
         logger.info(
@@ -2933,7 +2935,13 @@ def _execute_code_generation(
             f"- Every class must have a real implementation, not just `pass`\n"
             f"- Ablation classes MUST override the parent method that implements "
             f"the component being ablated (e.g., if ablating attention, override "
-            f"the attention method with a simpler alternative like mean pooling)\n\n"
+            f"the attention method with a simpler alternative like mean pooling)\n"
+            f"- IMPORT CONSISTENCY: if you write `from X import Y`, call `Y()` "
+            f"directly — NOT `X.Y()`. Mixing styles causes NameError.\n"
+            f"- NumPy 2.0: ndarray.ptp() was removed — use arr.max()-arr.min()\n"
+            f"- NumPy 2.0: np.bool/np.int/np.float removed — use builtins\n"
+            f"- Pretrained models (EfficientNet, ResNet, ViT) expect 224×224 input "
+            f"— add `transforms.Resize(224)` when using CIFAR (32×32) or similar\n\n"
             f"Current code:\n{all_code_ctx}\n"
         )
         try:
@@ -2954,7 +2962,9 @@ def _execute_code_generation(
                     w for w in deep_warnings_after
                     if any(kw in w for kw in (
                         "UnboundLocalError", "unregistered", "does not exist",
-                        "empty or trivial subclass", "does NOT override"
+                        "empty or trivial subclass", "does NOT override",
+                        "Import-usage mismatch", "NameError",
+                        "was removed", "ptp()"
                     ))
                 ])
                 logger.info(
@@ -3003,6 +3013,10 @@ def _execute_code_generation(
             f"API usage, tensor shape compatibility.\n"
             f"5. Is the code complex enough for a research paper? (Not trivial)\n"
             f"6. Are experimental conditions fairly compared (same seeds, data)?\n"
+            f"7. If using pretrained models (EfficientNet, ResNet, ViT), are input "
+            f"images resized to the model's expected size (e.g., 224x224)? CIFAR "
+            f"images are 32x32 and MUST be resized for pretrained models.\n"
+            f"8. Are imports consistent? `from X import Y` must use `Y()`, not `X.Y()`.\n"
         )
         try:
             review_resp = llm.chat(
@@ -6747,7 +6761,9 @@ def _execute_paper_revision(
     draft_word_count = len(draft.split())
 
     # R4-2: Collect real metrics for anti-fabrication guard in revision
-    raw_metrics_revision = _collect_raw_experiment_metrics(run_dir)
+    # BUG-47: _collect_raw_experiment_metrics returns tuple[str, bool], must unpack
+    _raw_metrics_tuple = _collect_raw_experiment_metrics(run_dir)
+    raw_metrics_revision = _raw_metrics_tuple[0] if isinstance(_raw_metrics_tuple, tuple) else (_raw_metrics_tuple or "")
     data_integrity_revision = ""
     if raw_metrics_revision:
         data_integrity_revision = (
