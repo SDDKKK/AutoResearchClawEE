@@ -18,8 +18,8 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+"></a>
-  <a href="#testing"><img src="https://img.shields.io/badge/Tests-1039%20passed-brightgreen?logo=pytest&logoColor=white" alt="1039 Tests Passed"></a>
-  <a href="https://github.com/Jiaaqiliu/AutoResearchClaw"><img src="https://img.shields.io/badge/GitHub-AutoResearchClaw-181717?logo=github" alt="GitHub"></a>
+  <a href="#testing"><img src="https://img.shields.io/badge/Tests-1183%20passed-brightgreen?logo=pytest&logoColor=white" alt="1183 Tests Passed"></a>
+  <a href="https://github.com/aiming-lab/AutoResearchClaw"><img src="https://img.shields.io/badge/GitHub-AutoResearchClaw-181717?logo=github" alt="GitHub"></a>
   <a href="#openclaw-integration"><img src="https://img.shields.io/badge/OpenClaw-Compatible-ff4444?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==" alt="OpenClaw Compatible"></a>
 </p>
 
@@ -42,6 +42,12 @@
 ---
 
 > **🧪 We're looking for testers!** Try the pipeline with your own research idea — from any field — and [tell us what you think](docs/TESTER_GUIDE.md). Your feedback directly shapes the next version. **[→ Testing Guide](docs/TESTER_GUIDE.md)** | **[→ 中文测试指南](docs/TESTER_GUIDE_CN.md)**
+
+---
+
+## 🔥 News
+- **[03/16/2026]** [v0.2.0](https://github.com/aiming-lab/AutoResearchClaw/releases/tag/v0.2.0) — Three multi-agent subsystems (CodeAgent, BenchmarkAgent, FigureAgent), hardened Docker sandbox with network-policy-aware execution, 4-round paper quality audit (AI-slop detection, 7-dim review scoring, NeurIPS checklist), and 15+ bug fixes from production runs.
+- **[03/15/2026]** [v0.1.0](https://github.com/aiming-lab/AutoResearchClaw/releases/tag/v0.1.0) — We release AutoResearchClaw: a fully autonomous 23-stage research pipeline that turns a single research idea into a conference-ready paper. No human intervention required.
 
 ---
 
@@ -80,7 +86,7 @@ The pipeline runs **end-to-end without human intervention**. When experiments fa
 
 ```bash
 # 1. Clone & install
-git clone https://github.com/Jiaaqiliu/AutoResearchClaw.git
+git clone https://github.com/aiming-lab/AutoResearchClaw.git
 cd AutoResearchClaw
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
@@ -326,8 +332,8 @@ llm:
 
 # === Experiment ===
 experiment:
-  mode: "sandbox"                  # simulated | sandbox | ssh_remote
-  time_budget_sec: 600             # Max execution time per run (default: 600s)
+  mode: "sandbox"                  # simulated | sandbox | docker | ssh_remote
+  time_budget_sec: 300             # Max execution time per run (default: 300s)
   max_iterations: 10               # Max optimization iterations
   metric_key: "val_loss"           # Primary metric name
   metric_direction: "minimize"     # minimize | maximize
@@ -336,6 +342,12 @@ experiment:
     gpu_required: false
     allowed_imports: [math, random, json, csv, numpy, torch, sklearn]
     max_memory_mb: 4096
+  docker:
+    image: "researchclaw/experiment:latest"
+    network_policy: "setup_only"   # none | setup_only | pip_only | full
+    gpu_enabled: true
+    memory_limit_mb: 8192
+    auto_install_deps: true        # Auto-detect imports → requirements.txt
   ssh_remote:
     host: ""                       # GPU server hostname
     gpu_ids: []                    # Available GPU IDs

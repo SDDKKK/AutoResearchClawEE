@@ -1,7 +1,7 @@
 # AutoResearchClaw — Phase 5: Showcase Website & Sample Papers
 
 > Created: 2026-03-15
-> Status: Planning
+> Status: **Website Built** — static site deployed, showcase papers pending generation
 > Prerequisites: Phase 3 regression tests complete, all fixes pushed to origin/main
 
 ---
@@ -256,17 +256,17 @@ Each showcase paper includes a `metadata.json`:
 
 ## 8. Content Checklist
 
-- [ ] Finalize showcase paper topics (Section 2.1)
+- [x] Finalize showcase paper topics (Section 2.1)
 - [ ] Run all showcase experiments
 - [ ] Review and select best 3-4 papers
 - [ ] Compile PDFs from LaTeX
 - [ ] Create paper metadata.json for each
-- [ ] Design pipeline visualization (interactive or static)
-- [ ] Write feature descriptions
-- [ ] Create getting-started guide (adapted from README)
+- [x] Design pipeline visualization (interactive or static) — interactive click-to-expand
+- [x] Write feature descriptions — 16 feature cards + comparison table
+- [x] Create getting-started guide (adapted from README) — 7-step guide
 - [ ] Record demo video/GIF
-- [ ] Build and deploy website
-- [ ] Test on mobile/tablet
+- [x] Build and deploy website — pure HTML/CSS, GitHub Pages via Actions
+- [x] Test on mobile/tablet — responsive CSS with nav toggle
 - [ ] Add analytics (optional, e.g., Plausible)
 
 ---

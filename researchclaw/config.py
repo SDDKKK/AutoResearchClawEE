@@ -160,7 +160,7 @@ class DockerSandboxConfig:
     gpu_enabled: bool = True
     gpu_device_ids: tuple[int, ...] = ()
     memory_limit_mb: int = 8192
-    network_policy: str = "none"  # none | pip_only | full
+    network_policy: str = "setup_only"  # none | setup_only | pip_only | full
     pip_pre_install: tuple[str, ...] = ()
     auto_install_deps: bool = True
     shm_size_mb: int = 2048
@@ -173,13 +173,17 @@ class CodeAgentConfig:
     """Configuration for the advanced multi-phase code generation agent."""
 
     enabled: bool = True
+    # Phase 1: Architecture planning before code generation
     architecture_planning: bool = True
+    # Phase 2: Execution-in-the-loop (run → parse error → fix)
     exec_fix_max_iterations: int = 3
     exec_fix_timeout_sec: int = 60
+    # Phase 3: Solution tree search (off by default — higher cost)
     tree_search_enabled: bool = False
     tree_search_candidates: int = 3
     tree_search_max_depth: int = 2
     tree_search_eval_timeout_sec: int = 120
+    # Phase 4: Multi-agent review dialog
     review_max_rounds: int = 2
 
 
@@ -188,12 +192,15 @@ class BenchmarkAgentConfig:
     """Configuration for the BenchmarkAgent multi-agent system."""
 
     enabled: bool = True
+    # Surveyor
     enable_hf_search: bool = True
     max_hf_results: int = 10
+    # Selector
     tier_limit: int = 2
     min_benchmarks: int = 1
     min_baselines: int = 2
     prefer_cached: bool = True
+    # Orchestrator
     max_iterations: int = 2
 
 
@@ -202,11 +209,16 @@ class FigureAgentConfig:
     """Configuration for the FigureAgent multi-agent system."""
 
     enabled: bool = True
+    # Planner
     min_figures: int = 3
     max_figures: int = 8
-    max_iterations: int = 3
+    # Orchestrator
+    max_iterations: int = 3  # max CodeGen→Renderer→Critic retry loops
+    # Renderer
     render_timeout_sec: int = 30
+    # Critic
     strict_mode: bool = False
+    # Output
     dpi: int = 300
 
 
@@ -509,7 +521,7 @@ def _parse_experiment_config(data: dict[str, Any]) -> ExperimentConfig:
                 int(g) for g in docker_data.get("gpu_device_ids", ())
             ),
             memory_limit_mb=int(docker_data.get("memory_limit_mb", 8192)),
-            network_policy=docker_data.get("network_policy", "none"),
+            network_policy=docker_data.get("network_policy", "setup_only"),
             pip_pre_install=tuple(docker_data.get("pip_pre_install", ())),
             auto_install_deps=bool(docker_data.get("auto_install_deps", True)),
             shm_size_mb=int(docker_data.get("shm_size_mb", 2048)),

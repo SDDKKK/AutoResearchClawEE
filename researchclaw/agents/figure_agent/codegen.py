@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from pathlib import Path
 from typing import Any
 
 from researchclaw.agents.base import BaseAgent, AgentStepResult
@@ -46,13 +47,13 @@ ax.errorbar(x, values, yerr=[yerr_lo, yerr_hi],
 # Value labels
 offset = max(yerr_hi) * 0.08 if yerr_hi and max(yerr_hi) > 0 else max(values) * 0.02
 for i, v in enumerate(values):
-    ax.text(i, v + offset, f"{{v:.4f}}", ha="center", va="bottom", fontsize=8, fontweight="bold")
+    ax.text(i, v + offset, f"{{v:.4f}}", ha="center", va="bottom", fontsize=9, fontweight="bold")
 
 ax.set_xlabel("{x_label}")
 ax.set_ylabel("{y_label}")
 ax.set_title("{title}")
 ax.set_xticks(x)
-ax.set_xticklabels([c.replace("_", " ") for c in conditions], rotation=25, ha="right", fontsize=8)
+ax.set_xticklabels([c.replace("_", " ") for c in conditions], rotation=25, ha="right", fontsize=9)
 ax.grid(True, axis="y", alpha=0.3)
 ax.set_axisbelow(True)
 fig.tight_layout()
@@ -87,7 +88,7 @@ ax.set_xlabel("{x_label}")
 ax.set_ylabel("{y_label}")
 ax.set_title("{title}")
 ax.set_xticks(x)
-ax.set_xticklabels([c.replace("_", " ") for c in conditions], rotation=25, ha="right", fontsize=8)
+ax.set_xticklabels([c.replace("_", " ") for c in conditions], rotation=25, ha="right", fontsize=9)
 ax.legend(framealpha=0.9, edgecolor="gray")
 ax.grid(True, axis="y", alpha=0.3)
 ax.set_axisbelow(True)
@@ -143,19 +144,19 @@ col_labels = {col_labels}
 data = np.array({data_matrix})
 
 fig, ax = plt.subplots(figsize=({width}, {height}))
-im = ax.imshow(data, cmap="YlOrRd", aspect="auto")
+im = ax.imshow(data, cmap="cividis", aspect="auto")
 
 ax.set_xticks(np.arange(len(col_labels)))
 ax.set_yticks(np.arange(len(row_labels)))
-ax.set_xticklabels(col_labels, rotation=45, ha="right", fontsize=8)
-ax.set_yticklabels(row_labels, fontsize=8)
+ax.set_xticklabels(col_labels, rotation=45, ha="right", fontsize=9)
+ax.set_yticklabels(row_labels, fontsize=9)
 
 # Annotate cells
 for i in range(len(row_labels)):
     for j in range(len(col_labels)):
         val = data[i, j]
         color = "white" if val > (data.max() + data.min()) / 2 else "black"
-        ax.text(j, i, f"{{val:.3f}}", ha="center", va="center", color=color, fontsize=7)
+        ax.text(j, i, f"{{val:.3f}}", ha="center", va="center", color=color, fontsize=9)
 
 ax.set_xlabel("{x_label}")
 ax.set_ylabel("{y_label}")
@@ -335,7 +336,8 @@ class CodeGenAgent(BaseAgent):
     ) -> str:
         """Generate a plotting script for a single figure."""
         figure_id = fig_spec.get("figure_id", "figure")
-        output_path = f"{output_dir}/{figure_id}.png"
+        # BUG-20: Use absolute path to avoid CWD-relative savefig errors
+        output_path = str((Path(output_dir) / f"{figure_id}.png").resolve())
         title = fig_spec.get("title", "")
         x_label = fig_spec.get("x_label", "")
         y_label = fig_spec.get("y_label", "")

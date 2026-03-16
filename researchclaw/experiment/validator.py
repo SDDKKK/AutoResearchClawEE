@@ -604,6 +604,92 @@ def check_class_quality(all_files: dict[str, str]) -> list[str]:
                     f"may be copy-paste variants with no real algorithmic difference"
                 )
 
+    # --- Check 5: Ablation subclasses must override with different logic ---
+    # Parse inheritance relationships and compare method ASTs
+    for fname_code, code in all_files.items():
+        if not fname_code.endswith(".py"):
+            continue
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            continue
+
+        # Build {class_name: ClassDef} map for this file
+        file_classes: dict[str, ast.ClassDef] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                file_classes[node.name] = node
+
+        for cls_name, cls_node in file_classes.items():
+            # Check if this class inherits from another class in the same file
+            for base in cls_node.bases:
+                base_name = None
+                if isinstance(base, ast.Name):
+                    base_name = base.id
+                elif isinstance(base, ast.Attribute):
+                    base_name = base.attr
+                if not base_name or base_name not in file_classes:
+                    continue
+
+                parent_node = file_classes[base_name]
+                # Get method bodies as AST dumps for comparison
+                child_methods = {
+                    m.name: ast.dump(m)
+                    for m in cls_node.body
+                    if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and not m.name.startswith("__")
+                }
+                parent_methods = {
+                    m.name: ast.dump(m)
+                    for m in parent_node.body
+                    if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and not m.name.startswith("__")
+                }
+
+                if not child_methods:
+                    # Already caught by Check 1 (empty class)
+                    continue
+
+                # Check if all overridden methods have identical AST to parent
+                identical_count = 0
+                override_count = 0
+                for method_name, method_dump in child_methods.items():
+                    if method_name in parent_methods:
+                        override_count += 1
+                        if method_dump == parent_methods[method_name]:
+                            identical_count += 1
+
+                if override_count > 0 and identical_count == override_count:
+                    warnings.append(
+                        f"[{fname_code}] Class '{cls_name}' inherits from "
+                        f"'{base_name}' and overrides {override_count} method(s), "
+                        f"but ALL overridden methods have identical AST to parent "
+                        f"— this is NOT a real ablation. Methods must differ."
+                    )
+                elif override_count == 0 and len(child_methods) > 0:
+                    # Has methods but none override parent — might be fine
+                    # (new methods that parent doesn't have)
+                    pass
+
+                # --- Check 6: Ablation subclass must override >=1 parent method ---
+                _lname = cls_name.lower()
+                if ("ablation" in _lname or "no_" in _lname or "without" in _lname):
+                    parent_non_dunder = {
+                        m.name
+                        for m in parent_node.body
+                        if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and not m.name.startswith("__")
+                    }
+                    child_overrides = set(child_methods.keys()) & parent_non_dunder
+                    if not child_overrides and parent_non_dunder:
+                        warnings.append(
+                            f"[{fname_code}] Ablation class '{cls_name}' inherits "
+                            f"from '{base_name}' but does NOT override any of its "
+                            f"methods ({', '.join(sorted(parent_non_dunder))}). "
+                            f"An ablation MUST override the method that removes "
+                            f"the ablated component."
+                        )
+
     return warnings
 
 
@@ -683,6 +769,85 @@ def _extract_assign_targets(node: ast.AST) -> list[str]:
         if isinstance(node.target, ast.Name):
             names.append(node.target.id)
     return names
+
+
+def auto_fix_unbound_locals(code: str) -> tuple[str, int]:
+    """Programmatically fix UnboundLocalError patterns.
+
+    For each variable assigned only inside an if-branch but used later,
+    insert ``var = None`` before the if-statement.
+
+    Returns (fixed_code, num_fixes).
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return code, 0
+
+    lines = code.splitlines(keepends=True)
+    insertions: dict[int, list[str]] = {}  # lineno -> lines to insert before
+
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+
+        if_only_vars: dict[str, int] = {}
+        top_level_vars: set[str] = set()
+        if_line_map: dict[str, int] = {}  # var -> if-statement lineno
+
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.If):
+                before: dict[str, int] = {}
+                _collect_if_only_assignments(child, before)
+                for var_name, var_line in before.items():
+                    if_only_vars[var_name] = var_line
+                    if_line_map[var_name] = child.lineno
+            elif isinstance(child, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+                for target in _extract_assign_targets(child):
+                    top_level_vars.add(target)
+
+        for var_name, var_line in if_only_vars.items():
+            if var_name in top_level_vars:
+                continue
+            # Confirm it's actually used later
+            used_later = False
+            for later_node in ast.walk(node):
+                if (
+                    isinstance(later_node, ast.Name)
+                    and later_node.id == var_name
+                    and isinstance(later_node.ctx, ast.Load)
+                    and later_node.lineno > var_line
+                ):
+                    used_later = True
+                    break
+            if not used_later:
+                continue
+
+            if_lineno = if_line_map.get(var_name)
+            if if_lineno is None:
+                continue
+            # Determine indentation of the if-statement
+            if if_lineno <= len(lines):
+                if_line = lines[if_lineno - 1]
+                indent = if_line[: len(if_line) - len(if_line.lstrip())]
+            else:
+                indent = "    "
+            insertions.setdefault(if_lineno, [])
+            fix_line = f"{indent}{var_name} = None\n"
+            if fix_line not in insertions[if_lineno]:
+                insertions[if_lineno].append(fix_line)
+
+    if not insertions:
+        return code, 0
+
+    # Apply insertions in reverse line order to keep line numbers stable
+    num_fixes = sum(len(v) for v in insertions.values())
+    for lineno in sorted(insertions, reverse=True):
+        idx = lineno - 1
+        for fix_line in reversed(insertions[lineno]):
+            lines.insert(idx, fix_line)
+
+    return "".join(lines), num_fixes
 
 
 def check_api_correctness(code: str, fname: str = "main.py") -> list[str]:
