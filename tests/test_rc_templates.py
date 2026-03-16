@@ -365,7 +365,7 @@ class TestTableRendering:
         ]
         result = _render_table(lines)
         assert r"\begin{table}" in result
-        assert r"\begin{tabular}{l l}" in result
+        assert r"\begin{tabular}{ll}" in result
         assert r"\toprule" in result
         assert r"\textbf{Name}" in result
         assert r"\midrule" in result

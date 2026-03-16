@@ -774,7 +774,7 @@ def _render_table(table_lines: list[str], caption: str = "") -> str:
 
     # Determine alignment from separator
     alignments = _parse_alignments(table_lines[1], ncols)
-    col_spec = " ".join(alignments)
+    col_spec = "".join(alignments)
 
     _TABLE_COUNTER += 1
 
@@ -981,7 +981,8 @@ def _render_figure(caption: str, path: str) -> str:
     """Render a markdown image as a LaTeX figure environment."""
     global _FIGURE_COUNTER  # noqa: PLW0603
     _FIGURE_COUNTER += 1
-    # Don't escape underscores inside \includegraphics path
+    # Sanitize path for LaTeX: replace spaces, keep underscores
+    path = path.replace(" ", "_")
     cap_tex = _convert_inline(caption) if caption else f"Figure {_FIGURE_COUNTER}"
     label_key = re.sub(r"[^a-z0-9]+", "_", caption.lower()).strip("_")[:30]
     if not label_key:

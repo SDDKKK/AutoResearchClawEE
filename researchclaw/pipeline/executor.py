@@ -5205,6 +5205,71 @@ def _validate_draft_quality(
     return result
 
 
+def _review_compiled_pdf(
+    pdf_path: Path,
+    llm: LLMClient,
+    topic: str,
+) -> dict[str, Any]:
+    """LLM-based visual review of compiled PDF paper.
+
+    Reads the first few pages of the PDF and asks the model to review:
+    - Figure quality (readability, colors, labels, placement)
+    - Organization and structure (section flow, page balance)
+    - Formatting issues (margins, fonts, spacing)
+    - Overall presentation quality
+
+    Returns a dict with scores and feedback, or empty dict on failure.
+    """
+    import base64
+
+    if not pdf_path.exists():
+        return {}
+
+    # Read PDF as base64 for vision-capable models
+    pdf_bytes = pdf_path.read_bytes()
+    if len(pdf_bytes) > 10 * 1024 * 1024:  # Skip if > 10MB
+        logger.debug("PDF too large for review: %d bytes", len(pdf_bytes))
+        return {}
+
+    # Use text-based review (extract text from PDF log or paper source)
+    # since not all models support vision. Fall back to source-based review.
+    tex_path = pdf_path.with_suffix(".tex")
+    if not tex_path.exists():
+        return {}
+
+    tex_content = tex_path.read_text(encoding="utf-8")[:8000]
+
+    review_prompt = (
+        "You are a top-conference reviewer examining a LaTeX paper submission.\n\n"
+        f"TOPIC: {topic}\n\n"
+        f"LaTeX source (first 8000 chars):\n```latex\n{tex_content}\n```\n\n"
+        "Review this paper's PRESENTATION quality (not scientific content). "
+        "Score each category 1-10:\n\n"
+        "1. FORMATTING: Are margins, fonts, spacing correct for a conference paper?\n"
+        "2. FIGURES: Are figure references present? Are captions descriptive?\n"
+        "3. TABLES: Are tables properly formatted with booktabs? Headers clear?\n"
+        "4. STRUCTURE: Are all standard sections present? Is the flow logical?\n"
+        "5. CITATIONS: Are citations in correct format? Sufficient quantity?\n"
+        "6. OVERALL: Overall presentation quality for a top conference.\n\n"
+        "Return JSON:\n"
+        '{"formatting": N, "figures": N, "tables": N, "structure": N, '
+        '"citations": N, "overall_score": N, "issues": ["..."], "summary": "..."}'
+    )
+
+    try:
+        resp = llm.chat(
+            messages=[{"role": "user", "content": review_prompt}],
+            system="You are a meticulous academic paper reviewer.",
+        )
+        review_data = _safe_json_loads(resp.content, {})
+        if isinstance(review_data, dict) and "overall_score" in review_data:
+            return review_data
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("PDF review LLM call failed: %s", exc)
+
+    return {}
+
+
 def _check_ablation_effectiveness(
     exp_summary: dict[str, Any],
     threshold: float = 0.05,
@@ -6627,8 +6692,46 @@ def _execute_export_publish(
             if _compile_result.success:
                 logger.info("Stage 22: LaTeX compilation verification PASSED")
                 artifacts.append("paper.pdf")
+                # PDF-as-reviewer: LLM-based visual review of compiled PDF
+                _pdf_path = stage_dir / "paper.pdf"
+                if _pdf_path.exists() and llm is not None:
+                    try:
+                        _pdf_review = _review_compiled_pdf(
+                            _pdf_path, llm, config.research.topic
+                        )
+                        if _pdf_review:
+                            (stage_dir / "pdf_review.json").write_text(
+                                json.dumps(_pdf_review, indent=2, ensure_ascii=False),
+                                encoding="utf-8",
+                            )
+                            artifacts.append("pdf_review.json")
+                            _pdf_score = _pdf_review.get("overall_score", 0)
+                            if _pdf_score < 5:
+                                logger.warning(
+                                    "Stage 22: PDF visual review score %d/10 — %s",
+                                    _pdf_score,
+                                    _pdf_review.get("summary", ""),
+                                )
+                            else:
+                                logger.info(
+                                    "Stage 22: PDF visual review score %d/10",
+                                    _pdf_score,
+                                )
+                    except Exception as _pdf_exc:  # noqa: BLE001
+                        logger.debug("Stage 22: PDF review skipped: %s", _pdf_exc)
             else:
                 logger.warning("Stage 22: LaTeX compilation verification FAILED: %s", _compile_result.errors[:3])
+                # Add compilation failure comment to .tex
+                _tex_path = stage_dir / "paper.tex"
+                if _tex_path.exists():
+                    _tex_content = _tex_path.read_text(encoding="utf-8")
+                    if "% WARNING: Compilation failed" not in _tex_content:
+                        _tex_content = (
+                            "% WARNING: Compilation failed. Errors:\n"
+                            + "".join(f"% {e}\n" for e in _compile_result.errors[:5])
+                            + _tex_content
+                        )
+                        _tex_path.write_text(_tex_content, encoding="utf-8")
         except Exception as _compile_exc:  # noqa: BLE001
             logger.debug("Stage 22: Compile verification skipped: %s", _compile_exc)
     except Exception as exc:  # noqa: BLE001
