@@ -570,7 +570,7 @@ This is an **extension point** — you don't need to configure it for basic usag
 
 ## 10. MetaClaw Integration (Cross-Run Learning)
 
-[MetaClaw](https://github.com/Jiaaqiliu/metaclaw) (Memory Cloud) adds **cross-run knowledge transfer** to AutoResearchClaw. When enabled, the pipeline automatically captures lessons from failures and converts them into reusable skills that improve subsequent runs.
+[MetaClaw](https://github.com/aiming-lab/MetaClaw) (Memory Cloud) adds **cross-run knowledge transfer** to AutoResearchClaw. When enabled, the pipeline automatically captures lessons from failures and converts them into reusable skills that improve subsequent runs.
 
 ### Architecture
 
@@ -617,7 +617,7 @@ This is an **extension point** — you don't need to configure it for basic usag
 ```bash
 pip install metaclaw
 # Or clone from source:
-git clone https://github.com/Jiaaqiliu/metaclaw.git
+git clone https://github.com/aiming-lab/MetaClaw.git
 cd metaclaw && pip install -e .
 ```
 

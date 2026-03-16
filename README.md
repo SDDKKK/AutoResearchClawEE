@@ -46,7 +46,7 @@
 ---
 
 ## 🔥 News
-- **[03/16/2026]** **[v0.3.0] MetaClaw Integration** — AutoResearchClaw now supports [MetaClaw](https://github.com/Jiaaqiliu/metaclaw) cross-run learning. Pipeline failures are automatically extracted as structured lessons and converted into reusable skills that get injected into all 18 LLM-driven stages on subsequent runs. In controlled experiments, MetaClaw integration achieves an **18.3% improvement** in pipeline robustness and efficiency through cross-run knowledge transfer. The integration is opt-in (`metaclaw_bridge.enabled: true`) and fully backward-compatible — existing users are unaffected. See [MetaClaw Integration Guide](#-metaclaw-integration) for setup.
+- **[03/16/2026]** **[v0.3.0] MetaClaw Integration** — AutoResearchClaw now supports [MetaClaw](https://github.com/aiming-lab/MetaClaw) cross-run learning. Pipeline failures are automatically extracted as structured lessons and converted into reusable skills that get injected into all 18 LLM-driven stages on subsequent runs. In controlled experiments, MetaClaw integration achieves an **18.3% improvement** in pipeline robustness and efficiency through cross-run knowledge transfer. The integration is opt-in (`metaclaw_bridge.enabled: true`) and fully backward-compatible — existing users are unaffected. See [MetaClaw Integration Guide](#-metaclaw-integration) for setup.
 - **[03/16/2026]** [v0.2.0](https://github.com/aiming-lab/AutoResearchClaw/releases/tag/v0.2.0) — Three multi-agent subsystems (CodeAgent, BenchmarkAgent, FigureAgent), hardened Docker sandbox with network-policy-aware execution, 4-round paper quality audit (AI-slop detection, 7-dim review scoring, NeurIPS checklist), and 15+ bug fixes from production runs.
 - **[03/15/2026]** [v0.1.0](https://github.com/aiming-lab/AutoResearchClaw/releases/tag/v0.1.0) — We release AutoResearchClaw: a fully autonomous 23-stage research pipeline that turns a single research idea into a conference-ready paper. No human intervention required.
 
@@ -295,7 +295,7 @@ Phase D: Experiment Design         Phase H: Finalization
 
 ## 🧠 MetaClaw Integration
 
-**AutoResearchClaw + [MetaClaw](https://github.com/Jiaaqiliu/metaclaw) = A pipeline that learns from every run.**
+**AutoResearchClaw + [MetaClaw](https://github.com/aiming-lab/MetaClaw) = A pipeline that learns from every run.**
 
 MetaClaw (Memory Cloud) adds **cross-run knowledge transfer** to AutoResearchClaw. When enabled, the pipeline automatically captures lessons from failures and warnings, converts them into reusable skills, and injects those skills into all 18 LLM-driven stages on subsequent runs — so the same mistakes are never repeated.
 
