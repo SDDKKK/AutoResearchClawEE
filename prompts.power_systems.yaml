@@ -152,7 +152,7 @@ blocks:
     - Arbitrary voltage limits: standard is 0.95-1.05 pu (ANSI C84.1)
     - Skipping power flow validation: always verify DistFlow equations after solving
     - Fake test systems: 'synthetic 50-bus system' without citing source
-    - Wrong base values: IEEE 33-bus uses 12.66 kV, 100 kVA base
+    - Wrong base values: IEEE 33-bus uses 12.66 kV, 100 MVA base
 
     ### VALIDATION REQUIREMENTS:
     - Verify radial topology: n_branches = n_buses - 1 (for single-feeder systems)

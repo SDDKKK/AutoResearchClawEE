@@ -87,33 +87,42 @@ class Paper:
         key = self.cite_key
         authors_str = " and ".join(a.name for a in self.authors) or "Unknown"
 
-        # Decide entry type
-        if self.venue and any(
-            kw in self.venue.lower()
-            for kw in (
-                "conference",
-                "proc",
-                "workshop",
-                "neurips",
-                "icml",
-                "iclr",
-                "aaai",
-                "cvpr",
-                "acl",
-                # IEEE power systems venues
-                "ieee",
-                "transactions",
-                "power systems",
-                "smart grid",
-                "power delivery",
-                "pes",
-                "general meeting",
-                "powertech",
-                "isgt",
-                "cired",
-                "pesgm",
-            )
-        ):
+        # Decide entry type — journals vs conferences
+        venue_lower = self.venue.lower() if self.venue else ""
+
+        # IEEE Transactions and other journals → @article with journal field
+        _JOURNAL_KEYWORDS = (
+            "transactions",
+            "journal",
+            "power systems",
+            "smart grid",
+            "power delivery",
+            "electric power systems research",
+            "applied energy",
+        )
+        # Conference proceedings → @inproceedings with booktitle field
+        _CONFERENCE_KEYWORDS = (
+            "conference",
+            "proc",
+            "workshop",
+            "neurips",
+            "icml",
+            "iclr",
+            "aaai",
+            "cvpr",
+            "acl",
+            # IEEE power systems conferences
+            "general meeting",
+            "powertech",
+            "isgt",
+            "cired",
+            "pesgm",
+        )
+
+        if venue_lower and any(kw in venue_lower for kw in _JOURNAL_KEYWORDS):
+            entry_type = "article"
+            venue_field = f"  journal = {{{self.venue}}},"
+        elif venue_lower and any(kw in venue_lower for kw in _CONFERENCE_KEYWORDS):
             entry_type = "inproceedings"
             venue_field = f"  booktitle = {{{self.venue}}},"
         elif self.arxiv_id and not self.venue:
