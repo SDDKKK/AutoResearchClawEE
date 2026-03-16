@@ -1881,13 +1881,13 @@ def _execute_hypothesis_gen(
     synthesis = _read_prior_artifact(run_dir, "synthesis.md") or ""
     if llm is not None:
         _pm = prompts or PromptManager()
-        from researchclaw.prompts import DEBATE_ROLES_HYPOTHESIS  # noqa: PLC0415
+        debate_roles = _pm.debate_roles("hypothesis")
 
         # --- Multi-perspective debate ---
         perspectives_dir = stage_dir / "perspectives"
         variables = {"topic": config.research.topic, "synthesis": synthesis}
         perspectives = _multi_perspective_generate(
-            llm, DEBATE_ROLES_HYPOTHESIS, variables, perspectives_dir
+            llm, debate_roles, variables, perspectives_dir
         )
         # --- Synthesize into final hypotheses ---
         hypotheses_md = _synthesize_perspectives(
@@ -4136,7 +4136,7 @@ def _execute_result_analysis(
 
     if llm is not None:
         _pm = prompts or PromptManager()
-        from researchclaw.prompts import DEBATE_ROLES_ANALYSIS  # noqa: PLC0415
+        debate_roles = _pm.debate_roles("analysis")
 
         # --- Multi-perspective debate ---
         perspectives_dir = stage_dir / "perspectives"
@@ -4146,7 +4146,7 @@ def _execute_result_analysis(
             "context": context,
         }
         perspectives = _multi_perspective_generate(
-            llm, DEBATE_ROLES_ANALYSIS, variables, perspectives_dir
+            llm, debate_roles, variables, perspectives_dir
         )
         # --- Synthesize into unified analysis ---
         analysis = _synthesize_perspectives(

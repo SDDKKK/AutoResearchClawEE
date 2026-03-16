@@ -22,7 +22,7 @@ RUN python3 -m pip install \
         torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 \
     && python3 -m pip install \
         numpy scipy scikit-learn pandas matplotlib seaborn \
-        tqdm gymnasium networkx torchdiffeq PyYAML \
+        tqdm gymnasium networkx torchdiffeq PyYAML gurobipy \
     && python3 -m pip install "gymnasium[mujoco]" mujoco
 
 # Extended ML ecosystem — vision, metrics, utilities

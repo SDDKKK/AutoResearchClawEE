@@ -49,6 +49,8 @@ _BUILTIN_PACKAGES = {
     "transformers", "datasets", "accelerate", "peft", "trl",
     "bitsandbytes", "sentencepiece", "protobuf", "tokenizers",
     "safetensors", "evaluate",
+    # Optimization solvers
+    "gurobipy",
     # Other pre-installed
     "yaml", "PIL", "mujoco",
     # Python stdlib
@@ -389,25 +391,19 @@ class DockerSandbox:
         if hf_token:
             cmd.extend(["-e", f"HF_TOKEN={hf_token}"])
 
-        # Mount HuggingFace model cache (read-write for downloading)
-        hf_mounted = False
-        hf_home_env = os.environ.get("HF_HOME", "").strip()
-        if hf_home_env:
-            xdg_hf = Path(hf_home_env).resolve()
-            if xdg_hf.is_dir():
-                cmd.extend(["-v", f"{xdg_hf}:/home/researcher/.cache/huggingface"])
-                cmd.extend(["-e", "HF_HOME=/home/researcher/.cache/huggingface"])
-                hf_mounted = True
-        if not hf_mounted:
-            hf_cache_host = Path.home() / ".cache" / "huggingface"
-            if hf_cache_host.is_dir():
-                cmd.extend(["-v", f"{hf_cache_host}:/home/researcher/.cache/huggingface"])
-                cmd.extend(["-e", "HF_HOME=/home/researcher/.cache/huggingface"])
-
-        # Pass HF token if available (for gated model downloads)
-        hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-        if hf_token:
-            cmd.extend(["-e", f"HF_TOKEN={hf_token}"])
+        # Pass Gurobi license credentials if available in host environment
+        grb_lic = os.environ.get("GRB_LICENSE_FILE", "").strip()
+        if grb_lic:
+            lic_path = Path(grb_lic).resolve()
+            if lic_path.is_file():
+                cmd.extend(["-v", f"{lic_path}:/opt/gurobi/gurobi.lic:ro"])
+                cmd.extend(["-e", "GRB_LICENSE_FILE=/opt/gurobi/gurobi.lic"])
+            else:
+                logger.warning("GRB_LICENSE_FILE=%s not found, skipping mount", grb_lic)
+        for gurobi_var in ("WLSACCESSID", "WLSSECRET", "WLSTOKEN"):
+            val = os.environ.get(gurobi_var, "")
+            if val:
+                cmd.extend(["-e", f"{gurobi_var}={val}"])
 
         # GPU passthrough
         if cfg.gpu_enabled:

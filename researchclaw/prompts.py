@@ -96,6 +96,11 @@ class PromptManager:
         self._sub_prompts: dict[str, dict[str, Any]] = {
             k: dict(v) for k, v in _DEFAULT_SUB_PROMPTS.items()
         }
+        # Initialize debate roles storage with defaults (2-level deep copy)
+        self._debate_roles: dict[str, dict[str, dict[str, str]]] = {
+            "hypothesis": {k: dict(v) for k, v in DEBATE_ROLES_HYPOTHESIS.items()},
+            "analysis": {k: dict(v) for k, v in DEBATE_ROLES_ANALYSIS.items()},
+        }
         if overrides_path:
             self._load_overrides(Path(overrides_path))
 
@@ -124,6 +129,11 @@ class PromptManager:
         for sub_name, sub_data in (data.get("sub_prompts") or {}).items():
             if sub_name in self._sub_prompts and isinstance(sub_data, dict):
                 self._sub_prompts[sub_name].update(sub_data)
+
+        # Load debate_roles overrides
+        for role_set_name, roles in data.get("debate_roles", {}).items():
+            if role_set_name in self._debate_roles:
+                self._debate_roles[role_set_name] = roles
 
         logger.info("Loaded prompt overrides from %s", path)
 
@@ -190,6 +200,12 @@ class PromptManager:
             user=_render(entry["user"], kw),
         )
 
+    # -- debate roles -----------------------------------------------------
+
+    def debate_roles(self, role_set: str) -> dict[str, dict[str, str]]:
+        """Return debate roles for the given set ('hypothesis' or 'analysis')."""
+        return self._debate_roles[role_set]
+
     # -- introspection ----------------------------------------------------
 
     def stage_names(self) -> list[str]:
@@ -205,6 +221,7 @@ class PromptManager:
             "blocks": dict(self._blocks),
             "stages": {k: dict(v) for k, v in self._stages.items()},
             "sub_prompts": {k: dict(v) for k, v in self._sub_prompts.items()},
+            "debate_roles": {k: dict(v) for k, v in self._debate_roles.items()},
         }
         path.write_text(
             yaml.dump(data, default_flow_style=False, allow_unicode=True, width=120),

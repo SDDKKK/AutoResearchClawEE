@@ -108,6 +108,12 @@ experiment:
     auto_install_deps: true
     shm_size_mb: 2048
     keep_containers: false
+    # Gurobi license: set GRB_LICENSE_FILE, WLSACCESSID, WLSSECRET, WLSTOKEN
+    # in host environment. They are automatically passed to the container.
+    # For WLS free tier (2000 var limit): register at gurobi.com/downloads/
+    # For academic license: use GRB_LICENSE_FILE=/path/to/gurobi.lic
+    # Note: WLS requires network access; use network_policy: "full" or ensure
+    # token is cached before experiment phase.
 
 prompts:
   custom_file: ""
