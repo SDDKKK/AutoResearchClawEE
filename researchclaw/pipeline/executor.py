@@ -333,6 +333,49 @@ def _chat_with_prompt(
     raise last_exc  # type: ignore[misc]  # unreachable but satisfies type checker
 
 
+def _generate_neurips_checklist(
+    has_experiments: bool = True,
+    has_theory: bool = False,
+    has_code: bool = True,
+) -> str:
+    """Generate a NeurIPS-style paper checklist appendix in markdown.
+
+    This checklist is based on the NeurIPS 2025 submission requirements.
+    It is appended to the paper before LaTeX conversion.
+    """
+    items = [
+        ("Claims", "Do the main claims accurately reflect the paper's contributions and scope?", "Yes"),
+        ("Limitations", "Does the paper discuss limitations of the work?", "Yes"),
+    ]
+    if has_theory:
+        items.append(
+            ("Theory", "Are all assumptions stated and proofs included?", "Yes")
+        )
+    items.extend([
+        ("Experiments reproducibility", "Does the paper fully disclose experimental settings?", "Yes" if has_experiments else "NA"),
+        ("Code and data", "Is code or data provided for reproducibility?", "Yes" if has_code else "No"),
+        ("Experimental details", "Are training details and hyperparameters specified?", "Yes" if has_experiments else "NA"),
+        ("Error bars", "Are error bars or confidence intervals reported?", "Yes" if has_experiments else "NA"),
+        ("Compute resources", "Are compute requirements documented?", "Yes" if has_experiments else "NA"),
+        ("Code of ethics", "Does the work comply with the code of ethics?", "Yes"),
+        ("Broader impacts", "Are potential negative societal impacts discussed?", "Yes"),
+        ("Licenses", "Are licenses for used assets respected?", "Yes"),
+        ("New assets", "Are newly released assets documented?", "NA"),
+        ("Human subjects", "Were IRB approvals obtained if applicable?", "NA"),
+    ])
+
+    lines = [
+        "## NeurIPS Paper Checklist",
+        "",
+    ]
+    for label, question, answer in items:
+        lines.append(f"**{label}**: {question}")
+        lines.append(f"Answer: [{answer}]")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def _extract_paper_title(md_text: str) -> str:
     """Extract paper title from markdown text for LaTeX generation.
 
@@ -5185,6 +5228,35 @@ def _validate_draft_quality(
                 f"({recency_ratio:.0%}) from last 3 years (target: >=30%%)"
             )
 
+    # --- Writing quality lint ---
+    _weasel_words = re.compile(
+        r"\b(various|many|several|quite|fairly|really|very|rather|"
+        r"somewhat|relatively|arguably|interestingly|importantly|"
+        r"it is well known that|it is obvious that|clearly)\b",
+        re.IGNORECASE,
+    )
+    _duplicate_words = re.compile(r"\b(\w+)\s+\1\b", re.IGNORECASE)
+    weasel_count = len(_weasel_words.findall(draft))
+    dup_matches = _duplicate_words.findall(draft)
+    dup_count = len([d for d in dup_matches if d.lower() not in ("that", "had")])
+    if weasel_count > 20:
+        overall_warnings.append(
+            f"High weasel-word count: {weasel_count} instances "
+            f"(consider replacing vague words with precise language)"
+        )
+        revision_directives.append(
+            "Replace vague hedging words (various, several, quite, fairly, "
+            "rather, somewhat) with precise quantities or remove them."
+        )
+    if dup_count > 0:
+        overall_warnings.append(
+            f"Duplicate adjacent words found: {dup_count} instance(s) "
+            f"(e.g., 'the the', 'is is')"
+        )
+        revision_directives.append(
+            "Fix duplicate adjacent words (likely typos)."
+        )
+
     result: dict[str, Any] = {
         "section_analysis": section_analysis,
         "overall_warnings": overall_warnings,
@@ -6667,6 +6739,16 @@ def _execute_export_publish(
         tpl = get_template(config.export.target_conference)
         # Use the latex-citation-processed version if available
         tex_source = locals().get("final_paper_latex", final_paper)
+        # Append NeurIPS-style checklist if target is a ML conference
+        if tpl.name in ("neurips_2024", "neurips_2025", "icml_2025", "icml_2026",
+                         "iclr_2025", "iclr_2026"):
+            _has_exp = bool(_read_prior_artifact(run_dir, "experiment_summary.json"))
+            _checklist = _generate_neurips_checklist(
+                has_experiments=_has_exp,
+                has_code=True,
+            )
+            if "NeurIPS Paper Checklist" not in tex_source:
+                tex_source = tex_source.rstrip() + "\n\n" + _checklist
         tex_content = markdown_to_latex(
             tex_source,
             tpl,
@@ -6719,6 +6801,30 @@ def _execute_export_publish(
                                 )
                     except Exception as _pdf_exc:  # noqa: BLE001
                         logger.debug("Stage 22: PDF review skipped: %s", _pdf_exc)
+                # Post-compilation quality checks
+                try:
+                    from researchclaw.templates.compiler import check_compiled_quality
+                    _qc = check_compiled_quality(stage_dir / "paper.tex")
+                    if _qc.warnings_summary:
+                        logger.warning(
+                            "Stage 22: Quality checks: %s",
+                            "; ".join(_qc.warnings_summary),
+                        )
+                    (stage_dir / "compilation_quality.json").write_text(
+                        json.dumps({
+                            "page_count": _qc.page_count,
+                            "unresolved_refs": _qc.unresolved_refs,
+                            "unresolved_cites": _qc.unresolved_cites,
+                            "overfull_hboxes": len(_qc.overfull_hboxes),
+                            "orphan_figures": _qc.orphan_figures,
+                            "orphan_labels": _qc.orphan_labels,
+                            "warnings": _qc.warnings_summary,
+                        }, indent=2),
+                        encoding="utf-8",
+                    )
+                    artifacts.append("compilation_quality.json")
+                except Exception as _qc_exc:  # noqa: BLE001
+                    logger.debug("Stage 22: Quality checks skipped: %s", _qc_exc)
             else:
                 logger.warning("Stage 22: LaTeX compilation verification FAILED: %s", _compile_result.errors[:3])
                 # Add compilation failure comment to .tex
