@@ -38,15 +38,15 @@ CONTRACTS: dict[Stage, StageContract] = {
     Stage.PROBLEM_DECOMPOSE: StageContract(
         stage=Stage.PROBLEM_DECOMPOSE,
         input_files=("goal.md",),
-        output_files=("problem_tree.md", "queries.json"),
+        output_files=("problem_tree.md",),
         dod=">=3 prioritized sub-questions identified",
         error_code="E02_DECOMP_FAIL",
     ),
     # Phase B: Literature Discovery
     Stage.SEARCH_STRATEGY: StageContract(
         stage=Stage.SEARCH_STRATEGY,
-        input_files=("problem_tree.md", "queries.json"),
-        output_files=("search_plan.yaml", "sources.json"),
+        input_files=("problem_tree.md",),
+        output_files=("search_plan.yaml", "sources.json", "queries.json"),
         dod=">=2 search strategies defined with verified data sources",
         error_code="E03_STRATEGY_BAD",
     ),
