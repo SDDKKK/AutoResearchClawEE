@@ -721,4 +721,4 @@ A: Not recommended — the pipeline builds on prior stages' outputs. Start a new
 
 ---
 
-*Last updated: March 2026 · AutoResearchClaw v0.5.0*
+*Last updated: March 2026 · AutoResearchClaw v0.2.0*
