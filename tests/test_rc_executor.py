@@ -3151,15 +3151,39 @@ def _make_bullets(word_count: int) -> str:
     return line * (word_count // words_per + 1)
 
 
+def _make_comparative_prose(word_count: int) -> str:
+    """Generate related-work style prose with comparative language."""
+    sentence = (
+        "Unlike prior work that focuses on simple baselines, "
+        "our approach differs by incorporating novel techniques. "
+        "In contrast to existing methods, we address key limitations. "
+        "However, while previous approaches rely on heuristics, "
+        "our method provides theoretical guarantees. "
+    )
+    words_per = len(sentence.split())
+    return sentence * (word_count // words_per + 1)
+
+
+def _make_results_prose(word_count: int) -> str:
+    """Generate results prose with statistical measures."""
+    sentence = (
+        "Our method achieves 85.3 ± 1.2 accuracy averaged over 5 seeds. "
+        "The baseline comparison yields a p-value of 0.003, confirming "
+        "statistical significance with 95% confidence interval. "
+    )
+    words_per = len(sentence.split())
+    return sentence * (word_count // words_per + 1)
+
+
 def _build_draft(**section_overrides: str) -> str:
     """Build a paper draft with default prose sections."""
     defaults = {
         "Abstract": _make_prose(200),
         "Introduction": _make_prose(900),
-        "Related Work": _make_prose(700),
+        "Related Work": _make_comparative_prose(700),
         "Method": _make_prose(1200),
         "Experiments": _make_prose(1000),
-        "Results": _make_prose(700),
+        "Results": _make_results_prose(700),
         "Discussion": _make_prose(500),
         "Limitations": _make_prose(250),
         "Conclusion": _make_prose(250),

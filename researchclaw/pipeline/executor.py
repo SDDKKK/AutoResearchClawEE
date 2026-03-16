@@ -5257,6 +5257,107 @@ def _validate_draft_quality(
             "Fix duplicate adjacent words (likely typos)."
         )
 
+    # --- AI-slop / boilerplate detection ---
+    _BOILERPLATE_PHRASES = [
+        "delves into", "delve into", "it is worth noting",
+        "it should be noted", "it is important to note",
+        "leverage the power of", "leverages the power of",
+        "in this paper, we propose", "in this work, we propose",
+        "to the best of our knowledge",
+        "in the realm of", "in the landscape of",
+        "plays a crucial role", "plays a pivotal role",
+        "groundbreaking", "cutting-edge", "state-of-the-art",
+        "game-changing", "paradigm shift",
+        "a myriad of", "a plethora of",
+        "aims to bridge the gap", "bridge the gap",
+        "shed light on", "sheds light on",
+        "pave the way", "paves the way",
+        "the advent of", "with the advent of",
+        "in recent years", "in recent times",
+        "has gained significant attention",
+        "has attracted considerable interest",
+        "has emerged as a promising",
+        "a comprehensive overview",
+        "a holistic approach", "holistic understanding",
+        "showcasing the efficacy", "demonstrate the efficacy",
+        "multifaceted", "underscores the importance",
+        "navigate the complexities",
+        "harness the potential", "harnessing the power",
+        "it is imperative to", "it is crucial to",
+        "a nuanced understanding", "nuanced approach",
+        "robust and scalable", "seamlessly integrates",
+        "the intricacies of", "intricate interplay",
+        "facilitate a deeper understanding",
+        "a testament to",
+    ]
+    draft_lower = draft.lower()
+    boilerplate_hits: list[str] = []
+    for phrase in _BOILERPLATE_PHRASES:
+        count = draft_lower.count(phrase)
+        if count > 0:
+            boilerplate_hits.extend([phrase] * count)
+    if len(boilerplate_hits) > 5:
+        unique_phrases = sorted(set(boilerplate_hits))[:5]
+        overall_warnings.append(
+            f"AI boilerplate detected: {len(boilerplate_hits)} instances "
+            f"of generic LLM phrases (e.g., {', '.join(repr(p) for p in unique_phrases[:3])})"
+        )
+        revision_directives.append(
+            "REWRITE sentences containing AI-generated boilerplate phrases. "
+            "Replace generic language (e.g., 'delves into', 'it is worth noting', "
+            "'leverages the power of', 'plays a crucial role', 'paves the way') "
+            "with precise, specific academic language."
+        )
+
+    # --- Related work depth check ---
+    _rw_headings = {"related work", "related works", "background", "literature review"}
+    rw_body = ""
+    for sec in sections_data:
+        if sec["heading_lower"] in _rw_headings and sec["level"] <= 2:
+            rw_body = sec["body"]
+            break
+    if rw_body and len(rw_body.split()) > 50:
+        _comparative_pats = re.compile(
+            r"\b(unlike|in contrast|whereas|while .+ focus|"
+            r"however|differ(?:s|ent)|our (?:method|approach) .+ instead|"
+            r"we (?:instead|differ)|compared to|as opposed to|"
+            r"goes beyond|extends|improves upon|addresses the limitation)\b",
+            re.IGNORECASE,
+        )
+        sentences = [s.strip() for s in re.split(r"[.!?]+", rw_body) if s.strip()]
+        comparative_sents = sum(1 for s in sentences if _comparative_pats.search(s))
+        ratio = comparative_sents / len(sentences) if sentences else 0.0
+        if ratio < 0.15 and len(sentences) >= 5:
+            overall_warnings.append(
+                f"Related Work is purely descriptive: only {comparative_sents}/{len(sentences)} "
+                f"sentences ({ratio:.0%}) contain comparative language (target: >=15%)"
+            )
+            revision_directives.append(
+                "REWRITE Related Work to critically compare with prior methods. "
+                "Use phrases like 'unlike X, our approach...', 'in contrast to...', "
+                "'while X focuses on... we address...' for at least 20% of sentences."
+            )
+
+    # --- Statistical rigor check (result sections) ---
+    _results_headings = {"results", "experiments", "experimental results", "evaluation"}
+    results_body = ""
+    for sec in sections_data:
+        if sec["heading_lower"] in _results_headings and sec["level"] <= 2:
+            results_body += sec["body"] + "\n"
+    if results_body and len(results_body.split()) > 100:
+        has_std = bool(re.search(r"±|\\pm|\bstd\b|\\std\b|standard deviation", results_body, re.IGNORECASE))
+        has_ci = bool(re.search(r"confidence interval|\bCI\b|95%|p-value|p\s*<", results_body, re.IGNORECASE))
+        has_seeds = bool(re.search(r"(?:seed|run|trial)s?\s*[:=]\s*\d|averaged?\s+over\s+\d+\s+(?:seed|run|trial)", results_body, re.IGNORECASE))
+        if not has_std and not has_ci and not has_seeds:
+            overall_warnings.append(
+                "No statistical measures found in results (no std, CI, p-values, or multi-seed reporting)"
+            )
+            revision_directives.append(
+                "ADD error bars (±std), confidence intervals, or note the number of "
+                "random seeds used. Single-run results without variance reporting "
+                "are insufficient for top venues."
+            )
+
     result: dict[str, Any] = {
         "section_analysis": section_analysis,
         "overall_warnings": overall_warnings,
@@ -5282,59 +5383,98 @@ def _review_compiled_pdf(
     llm: LLMClient,
     topic: str,
 ) -> dict[str, Any]:
-    """LLM-based visual review of compiled PDF paper.
+    """Multi-dimensional LLM review of compiled paper (AI-Scientist style).
 
-    Reads the first few pages of the PDF and asks the model to review:
-    - Figure quality (readability, colors, labels, placement)
-    - Organization and structure (section flow, page balance)
-    - Formatting issues (margins, fonts, spacing)
-    - Overall presentation quality
+    Scores the paper on 7 academic review dimensions (1-10 each),
+    identifies specific strengths/weaknesses, and provides an overall
+    accept/reject recommendation with confidence.
 
-    Returns a dict with scores and feedback, or empty dict on failure.
+    Returns a dict with dimensional scores, issues, and decision.
     """
-    import base64
-
     if not pdf_path.exists():
         return {}
 
-    # Read PDF as base64 for vision-capable models
-    pdf_bytes = pdf_path.read_bytes()
-    if len(pdf_bytes) > 10 * 1024 * 1024:  # Skip if > 10MB
-        logger.debug("PDF too large for review: %d bytes", len(pdf_bytes))
-        return {}
-
-    # Use text-based review (extract text from PDF log or paper source)
-    # since not all models support vision. Fall back to source-based review.
+    # Use source-based review since not all models support vision
     tex_path = pdf_path.with_suffix(".tex")
     if not tex_path.exists():
         return {}
 
-    tex_content = tex_path.read_text(encoding="utf-8")[:8000]
+    tex_content = tex_path.read_text(encoding="utf-8")[:12000]
 
     review_prompt = (
-        "You are a top-conference reviewer examining a LaTeX paper submission.\n\n"
-        f"TOPIC: {topic}\n\n"
-        f"LaTeX source (first 8000 chars):\n```latex\n{tex_content}\n```\n\n"
-        "Review this paper's PRESENTATION quality (not scientific content). "
-        "Score each category 1-10:\n\n"
-        "1. FORMATTING: Are margins, fonts, spacing correct for a conference paper?\n"
-        "2. FIGURES: Are figure references present? Are captions descriptive?\n"
-        "3. TABLES: Are tables properly formatted with booktabs? Headers clear?\n"
-        "4. STRUCTURE: Are all standard sections present? Is the flow logical?\n"
-        "5. CITATIONS: Are citations in correct format? Sufficient quantity?\n"
-        "6. OVERALL: Overall presentation quality for a top conference.\n\n"
-        "Return JSON:\n"
-        '{"formatting": N, "figures": N, "tables": N, "structure": N, '
-        '"citations": N, "overall_score": N, "issues": ["..."], "summary": "..."}'
+        "You are a senior Area Chair at a top AI conference (NeurIPS/ICML/ICLR) "
+        "reviewing a paper submission. Provide a rigorous, structured review.\n\n"
+        f"PAPER TOPIC: {topic}\n\n"
+        f"LaTeX source:\n```latex\n{tex_content}\n```\n\n"
+        "REVIEW INSTRUCTIONS:\n"
+        "Score each dimension 1-10 (1=unacceptable, 5=borderline, 8=strong accept, "
+        "10=best paper candidate). Be critical but fair.\n\n"
+        "DIMENSIONS:\n"
+        "1. SOUNDNESS: Are claims well-supported? Is methodology correct? "
+        "Are there logical gaps or unsupported claims?\n"
+        "2. PRESENTATION: Is the writing clear, flowing, and professional? "
+        "Are there grammar errors, bullet lists in prose sections, or "
+        "boilerplate phrases? Is it free of AI-generated slop?\n"
+        "3. CONTRIBUTION: Is the contribution significant? Does it advance "
+        "the field beyond incremental improvement?\n"
+        "4. ORIGINALITY: Is the approach novel? Does it differentiate clearly "
+        "from prior work?\n"
+        "5. CLARITY: Are the method and results easy to understand? Are figures "
+        "and tables well-designed with descriptive captions?\n"
+        "6. SIGNIFICANCE: Would the community benefit from this work? Does it "
+        "open new research directions?\n"
+        "7. REPRODUCIBILITY: Are experimental details sufficient to reproduce "
+        "results? Are hyperparameters, datasets, and metrics clearly stated?\n\n"
+        "Also evaluate:\n"
+        "- Are all figures referenced in the text?\n"
+        "- Are tables properly formatted (booktabs style, no vertical rules)?\n"
+        "- Does the related work critically compare, not just list papers?\n"
+        "- Are statistical measures (std, CI, multiple seeds) reported?\n"
+        "- Is there a clear limitations section?\n\n"
+        "Return a JSON object:\n"
+        "{\n"
+        '  "soundness": N,\n'
+        '  "presentation": N,\n'
+        '  "contribution": N,\n'
+        '  "originality": N,\n'
+        '  "clarity": N,\n'
+        '  "significance": N,\n'
+        '  "reproducibility": N,\n'
+        '  "overall_score": N,\n'
+        '  "confidence": N,\n'
+        '  "decision": "accept" or "reject",\n'
+        '  "strengths": ["strength1", "strength2", ...],\n'
+        '  "weaknesses": ["weakness1", "weakness2", ...],\n'
+        '  "critical_issues": ["issue requiring revision", ...],\n'
+        '  "minor_issues": ["formatting/typo issues", ...],\n'
+        '  "summary": "2-3 sentence overall assessment"\n'
+        "}\n"
     )
 
     try:
         resp = llm.chat(
             messages=[{"role": "user", "content": review_prompt}],
-            system="You are a meticulous academic paper reviewer.",
+            system=(
+                "You are a meticulous, critical academic reviewer. "
+                "You have reviewed 100+ papers at top venues. "
+                "Score honestly — most papers deserve 4-6, not 7-9. "
+                "Flag any sign of AI-generated boilerplate."
+            ),
         )
         review_data = _safe_json_loads(resp.content, {})
         if isinstance(review_data, dict) and "overall_score" in review_data:
+            # Compute weighted aggregate if individual scores present
+            dim_scores = {
+                k: review_data.get(k, 0)
+                for k in (
+                    "soundness", "presentation", "contribution",
+                    "originality", "clarity", "significance",
+                    "reproducibility",
+                )
+            }
+            valid = {k: v for k, v in dim_scores.items() if isinstance(v, (int, float)) and v > 0}
+            if valid:
+                review_data["mean_score"] = round(sum(valid.values()) / len(valid), 2)
             return review_data
     except Exception as exc:  # noqa: BLE001
         logger.debug("PDF review LLM call failed: %s", exc)

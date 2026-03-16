@@ -1008,7 +1008,7 @@ _INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 _LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
 # Characters that need escaping in LaTeX (but NOT inside math or \cite)
-_LATEX_SPECIAL = re.compile(r"([#%&_])")
+_LATEX_SPECIAL = re.compile(r"([#%&_{}])")
 _LATEX_TILDE = re.compile(r"~")
 _LATEX_CARET = re.compile(r"\^")
 _LATEX_DOLLAR = re.compile(r"(?<!\\)\$")
@@ -1082,7 +1082,7 @@ def _convert_inline(text: str) -> str:
 
     # Fallback: convert any remaining [cite_key] patterns to \cite{key}
     # This catches citations that were not converted upstream.
-    _CITE_KEY_PAT = r"[a-zA-Z][a-zA-Z0-9_-]*\d{4}[a-zA-Z0-9]*"
+    _CITE_KEY_PAT = r"[a-zA-Z][a-zA-Z0-9_-]*\d{4}[a-zA-Z]?"
     text = re.sub(
         rf"\[({_CITE_KEY_PAT}(?:\s*,\s*{_CITE_KEY_PAT})*)\]",
         r"\\cite{\1}",
