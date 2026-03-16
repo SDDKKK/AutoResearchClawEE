@@ -2108,6 +2108,11 @@ _DEFAULT_STAGES: dict[str, dict[str, Any]] = {
             "{topic_constraint}"
             "{exp_metrics_instruction}"
             "{citation_instruction}"
+            "All experimental results MUST be presented in LaTeX tables or inline prose. "
+            "Raw metric path formats like 'method/env/step/metric: value' are FORBIDDEN "
+            "in the paper text. Convert all data to clean, formatted presentation.\n"
+            "The paper MUST fit within 10 pages (excluding references and appendix). "
+            "Aim for 8-9 pages of main content. Be concise.\n"
             "Outline:\n{outline}"
         ),
         "max_tokens": 16384,
@@ -2183,6 +2188,8 @@ _DEFAULT_STAGES: dict[str, dict[str, Any]] = {
             "- Consolidate ALL hedging/caveats into Limitations section only.\n"
             "- The final paper body MUST be <= 6,500 words (standard 9-page conference limit).\n"
             "  If the current draft exceeds this, compress by removing redundant restatements.\n"
+            "- If the paper exceeds 10 pages, aggressively cut redundant content, "
+            "merge similar sections, and tighten prose. Target 8-9 pages of main content.\n"
             "{writing_structure}\n"
             "{topic_constraint}"
             "Draft:\n{draft}\n\nReviews:\n{reviews}"

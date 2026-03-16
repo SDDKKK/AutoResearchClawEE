@@ -85,9 +85,7 @@ def markdown_to_latex(
         _logger = logging.getLogger(__name__)
         for warning in completeness_warnings:
             _logger.warning("LaTeX completeness check: %s", warning)
-        # Insert warnings as LaTeX comments
-        warning_block = "\n".join(f"% WARNING: {w}" for w in completeness_warnings)
-        body = warning_block + "\n\n" + body
+        # BUG-28: Log warnings only — don't inject comments into LaTeX body
 
     preamble = template.render_preamble(
         title=_escape_latex(title),

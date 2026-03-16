@@ -2219,7 +2219,65 @@ def _execute_experiment_design(
                 resp.content[:200],
                 raw_yaml[:200] if raw_yaml else "<empty>",
             )
+            # BUG-12: Retry with a stricter, shorter prompt
+            if llm is not None:
+                logger.info("Stage 09: Retrying with strict YAML-only prompt...")
+                _retry_prompt = (
+                    "Output ONLY valid YAML. No prose, no markdown fences, no explanation.\n"
+                    f"Topic: {config.research.topic}\n"
+                    "Required keys: baselines, proposed_methods, ablations, "
+                    "datasets, metrics, objectives, risks, compute_budget.\n"
+                    "Each key maps to a list of strings."
+                )
+                _retry_resp = _chat_with_prompt(
+                    llm,
+                    "You output ONLY valid YAML. Nothing else.",
+                    _retry_prompt,
+                    max_tokens=4096,
+                )
+                try:
+                    _retry_parsed = yaml.safe_load(_retry_resp.content)
+                    if isinstance(_retry_parsed, dict):
+                        plan = _retry_parsed
+                        logger.info("Stage 09: Strict YAML retry succeeded.")
+                except yaml.YAMLError:
+                    pass
+
+    # BUG-12: Fallback 4 — extract method/baseline names from Stage 8 hypotheses
     if plan is None:
+        _hyp_text = _read_prior_artifact(run_dir, "hypotheses.md") or ""
+        if _hyp_text:
+            import re as _re_hyp
+            # Extract method-like names from hypothesis text
+            _method_candidates = _re_hyp.findall(
+                r"(?:proposed|our|novel|new)\s+(?:method|approach|algorithm|framework|model)[:\s]+[\"']?([A-Za-z][\w-]+)",
+                _hyp_text, _re_hyp.IGNORECASE,
+            )
+            _baseline_candidates = _re_hyp.findall(
+                r"(?:baseline|compare|existing|standard|traditional)\s+(?:method|approach|model)?[:\s]+[\"']?([A-Za-z][\w-]+)",
+                _hyp_text, _re_hyp.IGNORECASE,
+            )
+            if _method_candidates or _baseline_candidates:
+                logger.info(
+                    "Stage 09: Extracted names from hypotheses: methods=%s, baselines=%s",
+                    _method_candidates[:3], _baseline_candidates[:3],
+                )
+                plan = {
+                    "topic": config.research.topic,
+                    "generated": _utcnow_iso(),
+                    "objectives": ["Evaluate hypotheses with controlled experiments"],
+                    "datasets": ["primary_dataset"],
+                    "baselines": _baseline_candidates[:3] or ["baseline_1", "baseline_2"],
+                    "proposed_methods": _method_candidates[:3] or ["proposed_method"],
+                    "ablations": ["without_key_component", "simplified_version"],
+                    "metrics": [config.experiment.metric_key, "secondary_metric"],
+                    "risks": ["validity threats", "confounding variables"],
+                    "compute_budget": {"max_gpu": 1, "max_hours": 4},
+                }
+
+    if plan is None:
+        # BUG-12: Use domain-aware names instead of fully generic placeholders
+        _topic_prefix = config.research.topic.split()[0] if config.research.topic else "method"
         logger.warning(
             "Stage 09: LLM failed to produce valid experiment plan YAML. "
             "Using topic-derived fallback."
@@ -2229,8 +2287,8 @@ def _execute_experiment_design(
             "generated": _utcnow_iso(),
             "objectives": ["Evaluate hypotheses with controlled experiments"],
             "datasets": ["primary_dataset", "secondary_dataset"],
-            "baselines": ["established_method_1", "established_method_2"],
-            "proposed_methods": ["proposed_approach", "proposed_variant"],
+            "baselines": [f"{_topic_prefix}_baseline_1", f"{_topic_prefix}_baseline_2"],
+            "proposed_methods": [f"{_topic_prefix}_proposed", f"{_topic_prefix}_variant"],
             "ablations": ["without_key_component", "simplified_version"],
             "metrics": [config.experiment.metric_key, "secondary_metric"],
             "risks": ["validity threats", "confounding variables"],
@@ -2343,7 +2401,7 @@ def _execute_code_generation(
 ) -> StageResult:
     exp_plan = _read_prior_artifact(run_dir, "exp_plan.yaml") or ""
     metric = config.experiment.metric_key
-    max_repair = 3
+    max_repair = 5  # BUG-14: Increased from 3 to give more chances for critical bugs
     files: dict[str, str] = {}
     validation_log: list[str] = []
 
@@ -2747,6 +2805,40 @@ def _execute_code_generation(
             validation = validate_code(files[fname])
         if not validation.ok:
             all_valid = False
+            # BUG-14: Log remaining issues prominently
+            logger.warning(
+                "Code validation FAILED for %s after %d repair attempts: %s",
+                fname, max_repair, validation.summary(),
+            )
+
+    # BUG-14: Block on critical validation failures (syntax/import errors)
+    if not all_valid:
+        _has_critical = False
+        for fname, code in files.items():
+            _v = validate_code(code)
+            if not _v.ok:
+                for issue in _v.issues:
+                    if issue.severity == "error" and issue.category in (
+                        "syntax", "import",
+                    ):
+                        _has_critical = True
+        if _has_critical:
+            logger.error(
+                "Stage 10: CRITICAL validation issues remain after %d repair "
+                "attempts. Blocking stage.", max_repair,
+            )
+            (stage_dir / "validation_report.md").write_text(
+                "# Code Validation Report\n\n"
+                f"**Status**: BLOCKED — critical issues remain after {max_repair} repairs\n\n"
+                + "\n".join(f"- {e}" for e in validation_log),
+                encoding="utf-8",
+            )
+            return StageResult(
+                stage=Stage.CODE_GENERATION,
+                status=StageStatus.FAILED,
+                artifacts=("validation_report.md",),
+                evidence_refs=(),
+            )
 
     # --- Write experiment directory ---
     exp_dir = stage_dir / "experiment"
@@ -4818,13 +4910,16 @@ def _execute_paper_outline(
     )
 
 
-def _collect_raw_experiment_metrics(run_dir: Path) -> str:
+def _collect_raw_experiment_metrics(run_dir: Path) -> tuple[str, bool]:
     """Collect raw experiment metric lines from stdout for paper writing.
 
-    Returns a formatted block that constrains the LLM to use only real numbers.
+    Returns a tuple of (formatted block, has_parsed_metrics).
+    ``has_parsed_metrics`` is True when at least one run had a non-empty
+    ``metrics`` dict in its JSON payload — a reliable signal of real data.
     """
     metric_lines: list[str] = []
     run_count = 0
+    has_parsed_metrics = False
 
     for stage_subdir in sorted(run_dir.glob("stage-*/runs")):
         for run_file in sorted(stage_subdir.glob("*.json")):
@@ -4846,10 +4941,18 @@ def _collect_raw_experiment_metrics(run_dir: Path) -> str:
             # Extract from parsed metrics (check both 'metrics' and 'key_metrics')
             metrics = payload.get("metrics", {}) or payload.get("key_metrics", {})
             if isinstance(metrics, dict) and metrics:
+                has_parsed_metrics = True
                 for k, v in metrics.items():
                     metric_lines.append(f"  {k}: {v}")
 
             # Also extract from stdout for full detail
+            # BUG-23: Filter out infrastructure lines that are NOT experiment results
+            _INFRA_KEYS = {
+                "SEED_COUNT", "TIME_ESTIMATE", "TRAINING_STEPS",
+                "REGISTERED_CONDITIONS", "METRIC_DEF", "GPU_MEMORY",
+                "BATCH_SIZE", "NUM_WORKERS", "TOTAL_PARAMS",
+                "time_budget_sec", "max_epochs", "num_seeds",
+            }
             stdout = payload.get("stdout", "")
             if stdout:
                 for line in stdout.splitlines():
@@ -4858,6 +4961,9 @@ def _collect_raw_experiment_metrics(run_dir: Path) -> str:
                         parts = line.rsplit(":", 1)
                         try:
                             float(parts[1].strip())
+                            key_part = parts[0].strip().split("/")[-1]  # last segment
+                            if key_part in _INFRA_KEYS:
+                                continue  # skip infrastructure lines
                             metric_lines.append(f"  {line}")
                         except (ValueError, TypeError, IndexError):
                             pass
@@ -4917,7 +5023,7 @@ def _collect_raw_experiment_metrics(run_dir: Path) -> str:
                     metric_lines.append(f"  {_line}")
 
     if not metric_lines:
-        return ""
+        return "", has_parsed_metrics
 
     # Deduplicate while preserving order
     seen: set[str] = set()
@@ -4927,16 +5033,40 @@ def _collect_raw_experiment_metrics(run_dir: Path) -> str:
             seen.add(line)
             unique.append(line)
 
-    # R19-5: Increase cap to 200 lines — rich experiments easily exceed 100
+    # BUG-29: Reformat raw metric lines into human-readable condition summaries
+    # to prevent LLM from pasting raw path-style lines into the paper
+    _grouped: dict[str, list[str]] = {}
+    _ungrouped: list[str] = []
+    for line in unique[:200]:
+        stripped = line.strip()
+        # Match pattern: condition/env/step/metric: value
+        parts = stripped.split("/")
+        if len(parts) >= 3 and ":" in parts[-1]:
+            cond = parts[0]
+            detail = "/".join(parts[1:])
+            _grouped.setdefault(cond, []).append(f"  - {detail}")
+        else:
+            _ungrouped.append(stripped)
+
+    formatted_lines: list[str] = []
+    if _grouped:
+        for cond, details in sorted(_grouped.items()):
+            formatted_lines.append(f"## Condition: {cond}")
+            formatted_lines.extend(details[:30])
+    if _ungrouped:
+        formatted_lines.extend(_ungrouped)
+
     return (
         f"\n\nACTUAL EXPERIMENT DATA (from {run_count} run(s) — use ONLY these numbers):\n"
         "```\n"
-        + "\n".join(unique[:200])
+        + "\n".join(formatted_lines[:200])
         + "\n```\n"
         "CRITICAL: Every number in the Results table MUST come from the data above. "
         "Do NOT round excessively, do NOT invent numbers, do NOT change values. "
         f"The experiment ran {run_count} time(s) — state this accurately in the methodology.\n"
-    )
+        "NEVER paste raw metric paths (like 'condition/env/step/metric: value') "
+        "into the paper. Always convert to formatted LaTeX tables or inline prose.\n"
+    ), has_parsed_metrics
 
 
 def _write_paper_sections(
@@ -5205,12 +5335,26 @@ def _validate_draft_quality(
     _bullet_re = re.compile(r"^\s*[-*]\s+", re.MULTILINE)
     _numbered_re = re.compile(r"^\s*\d+\.\s+", re.MULTILINE)
 
+    # BUG-24: Accumulate subsection (H3+) word counts into parent H2 sections
+    _subsection_words: dict[str, int] = {}
+    _current_parent = ""
+    for sec in sections_data:
+        if sec["level"] <= 2:
+            _current_parent = sec["heading_lower"]
+            _subsection_words.setdefault(_current_parent, 0)
+        else:
+            # Add subsection words to parent
+            _subsection_words[_current_parent] = (
+                _subsection_words.get(_current_parent, 0) + len(sec["body"].split())
+            )
+
     for sec in sections_data:
         if sec["level"] > 2:
             continue
         heading_lower: str = sec["heading_lower"]
         body: str = sec["body"]
-        word_count = len(body.split())
+        # BUG-24: Include subsection words in the parent's word count
+        word_count = len(body.split()) + _subsection_words.get(heading_lower, 0)
         canon = heading_lower
         if canon not in SECTION_WORD_TARGETS:
             canon = _SECTION_TARGET_ALIASES.get(heading_lower, "")
@@ -5819,9 +5963,16 @@ def _execute_paper_draft(
             )
 
     # Collect raw experiment stdout metrics as hard constraint for the paper
-    raw_metrics_block = _collect_raw_experiment_metrics(run_dir)
+    raw_metrics_block, _has_parsed_metrics = _collect_raw_experiment_metrics(run_dir)
     if raw_metrics_block:
-        has_real_metrics = True
+        # BUG-23: Raw stdout alone is not sufficient — require either
+        # metrics_summary data, parsed metrics from run JSONs,
+        # OR at least 3 condition= patterns in raw block
+        _has_condition_pattern = len(re.findall(
+            r"condition[=:]", raw_metrics_block, re.IGNORECASE
+        )) >= 3
+        if has_real_metrics or _has_parsed_metrics or _has_condition_pattern:
+            has_real_metrics = True
         exp_metrics_instruction += raw_metrics_block
 
     # R18-1 + R19-6: Inject paired statistical comparisons AND condition summaries
@@ -6088,6 +6239,15 @@ def _execute_paper_draft(
             _quality_warnings.append(
                 f"Analysis rated experiment quality {_analysis_rating}/10"
             )
+        # BUG-23: If quality rating is ≤ 2, force has_real_metrics = False
+        # to prevent fabricated results even if stdout had stray numbers
+        if _analysis_rating <= 2 and has_real_metrics:
+            logger.warning(
+                "BUG-23 guard: Analysis quality %d/10 ≤ 2 — "
+                "overriding has_real_metrics to False (experiment likely failed)",
+                _analysis_rating,
+            )
+            has_real_metrics = False
 
     # Check 2: Are baselines missing?
     _analysis_lower = analysis_text.lower()
@@ -6726,15 +6886,53 @@ def _execute_quality_gate(
 ) -> StageResult:
     revised = _read_prior_artifact(run_dir, "paper_revised.md") or ""
     report: dict[str, Any] | None = None
+
+    # BUG-25: Load experiment summary for cross-checking
+    _exp_summary_text = _read_prior_artifact(run_dir, "experiment_summary.json") or ""
+    _exp_summary = _safe_json_loads(_exp_summary_text, {}) if _exp_summary_text else {}
+    _exp_failed = False
+    if isinstance(_exp_summary, dict):
+        _best_run = _exp_summary.get("best_run", {})
+        if isinstance(_best_run, dict):
+            _exp_failed = (
+                _best_run.get("status") == "failed"
+                and not _best_run.get("metrics")
+            )
+        # Also check if metrics_summary is empty
+        if not _exp_summary.get("metrics_summary"):
+            _exp_failed = True
+
     if llm is not None:
         _pm = prompts or PromptManager()
         # IMP-33: Evaluate the full paper instead of truncating to 12K chars.
         # Split into chunks if very long, but prefer sending the full text.
         paper_for_eval = revised[:40000] if len(revised) > 40000 else revised
+
+        # BUG-25: Inject experiment status into quality gate prompt
+        _exp_context = ""
+        if _exp_summary and isinstance(_exp_summary, dict):
+            _exp_status_keys = {
+                k: _exp_summary.get(k) for k in (
+                    "total_conditions", "total_metric_keys",
+                    "metrics_summary",
+                ) if _exp_summary.get(k) is not None
+            }
+            if _best_run := _exp_summary.get("best_run"):
+                _exp_status_keys["best_run_status"] = (
+                    _best_run.get("status") if isinstance(_best_run, dict) else str(_best_run)
+                )
+            _exp_context = (
+                "\n\nExperiment summary (for cross-checking reported numbers):\n"
+                + json.dumps(_exp_status_keys, indent=2, default=str)[:4000]
+                + "\n\nCross-check: If the experiment status is 'failed' with "
+                "empty metrics, any numerical results in tables constitute "
+                "fabrication. Penalize severely.\n"
+            )
+
         sp = _pm.for_stage(
             "quality_gate",
             quality_threshold=str(config.research.quality_threshold),
-            revised=paper_for_eval,
+            revised=paper_for_eval + _exp_context,
         )
         resp = _chat_with_prompt(
             llm,
@@ -6746,6 +6944,19 @@ def _execute_quality_gate(
         parsed = _safe_json_loads(resp.content, {})
         if isinstance(parsed, dict):
             report = parsed
+    # BUG-25: If experiment failed with no metrics, cap the quality score
+    if report is not None and _exp_failed:
+        _orig_score = report.get("score_1_to_10", 5)
+        if isinstance(_orig_score, (int, float)) and _orig_score > 3:
+            report["score_1_to_10"] = min(_orig_score, 3.0)
+            report.setdefault("weaknesses", []).append(
+                "Experiment failed with no metrics — any reported numerical "
+                "results are unsupported and likely fabricated."
+            )
+            logger.warning(
+                "BUG-25: Experiment failed — capping quality score from %.1f to 3.0",
+                _orig_score,
+            )
     if report is None:
         report = _default_quality_report(config.research.quality_threshold)
     report.setdefault("generated", _utcnow_iso())
@@ -7131,6 +7342,14 @@ def _execute_export_publish(
                         encoding="utf-8",
                     )
                     artifacts.append("compilation_quality.json")
+                    # BUG-27: Warn if page count exceeds limit
+                    _page_limit = 10
+                    if _qc.page_count and _qc.page_count > _page_limit:
+                        logger.warning(
+                            "BUG-27: Paper is %d pages (limit %d). "
+                            "Consider tightening content in revision.",
+                            _qc.page_count, _page_limit,
+                        )
                 except Exception as _qc_exc:  # noqa: BLE001
                     logger.debug("Stage 22: Quality checks skipped: %s", _qc_exc)
             else:
@@ -7578,6 +7797,18 @@ def _execute_citation_verify(
     # Remove low-relevance entries from BibTeX
     if low_relevance_keys:
         verified_bib = _remove_bibtex_entries(verified_bib, low_relevance_keys)
+
+    # BUG-26: If verification stripped >50% of entries (e.g. due to rate limiting),
+    # fall back to the original bib to avoid breaking the paper's references
+    original_count = len(re.findall(r"@\w+\{", bib_text))
+    verified_count = len(re.findall(r"@\w+\{", verified_bib))
+    if original_count > 0 and verified_count < original_count * 0.5:
+        logger.warning(
+            "Stage 23: Verification stripped %d→%d entries (>50%% loss). "
+            "Keeping original bib to avoid breaking references.",
+            original_count, verified_count,
+        )
+        verified_bib = bib_text
 
     # IMP-1: Also prune uncited entries from verified bib
     if paper_text.strip():

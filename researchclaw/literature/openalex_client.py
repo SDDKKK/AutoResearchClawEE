@@ -148,6 +148,14 @@ def _request_with_retry(
                         wait = 2 ** (attempt + 1)
                 else:
                     wait = 2 ** (attempt + 1)
+                # BUG-22: If Retry-After is absurdly long (>300s), skip immediately
+                if wait > 300:
+                    logger.warning(
+                        "[rate-limit] OpenAlex Retry-After=%s (>300s). "
+                        "Skipping request instead of waiting.",
+                        retry_after,
+                    )
+                    return None
                 wait = min(wait, _MAX_WAIT_SEC)
                 jitter = random.uniform(0, wait * 0.2)
                 logger.warning(

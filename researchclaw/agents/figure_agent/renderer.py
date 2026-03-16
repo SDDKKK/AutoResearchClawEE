@@ -130,7 +130,8 @@ class RendererAgent(BaseAgent):
                 capture_output=True,
                 text=True,
                 timeout=self._timeout,
-                cwd=str(output_dir.resolve().parent),
+                # BUG-20: Use output_dir itself as CWD so relative paths resolve correctly
+                cwd=str(output_dir.resolve()),
             )
         except subprocess.TimeoutExpired:
             result["error"] = f"Script timed out after {self._timeout}s"

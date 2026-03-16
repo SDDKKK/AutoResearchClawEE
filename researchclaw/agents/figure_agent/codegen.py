@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from pathlib import Path
 from typing import Any
 
 from researchclaw.agents.base import BaseAgent, AgentStepResult
@@ -335,7 +336,8 @@ class CodeGenAgent(BaseAgent):
     ) -> str:
         """Generate a plotting script for a single figure."""
         figure_id = fig_spec.get("figure_id", "figure")
-        output_path = f"{output_dir}/{figure_id}.png"
+        # BUG-20: Use absolute path to avoid CWD-relative savefig errors
+        output_path = str((Path(output_dir) / f"{figure_id}.png").resolve())
         title = fig_spec.get("title", "")
         x_label = fig_spec.get("x_label", "")
         y_label = fig_spec.get("y_label", "")
