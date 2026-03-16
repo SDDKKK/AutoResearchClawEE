@@ -2161,6 +2161,8 @@ def _execute_experiment_design(
             hypotheses=hypotheses,
             dataset_guidance=_dg_block,
             time_budget_sec=config.experiment.time_budget_sec,
+            metric_key=config.experiment.metric_key,
+            metric_direction=config.experiment.metric_direction,
         )
         resp = _chat_with_prompt(
             llm,
@@ -2628,12 +2630,18 @@ def _execute_code_generation(
     elif llm is not None:
         # ── Legacy single-shot generation ─────────────────────────────────
         topic = config.research.topic
+        _md = config.experiment.metric_direction
+        _md_hint = (
+            f"`{_md}` — use direction={'lower' if _md == 'minimize' else 'higher'} "
+            f"in METRIC_DEF. You MUST NOT use the opposite direction."
+        )
         sp = _pm.for_stage(
             "code_generation",
             topic=topic,
             metric=metric,
             pkg_hint=pkg_hint + "\n" + compute_budget + "\n" + extra_guidance,
             exp_plan=exp_plan,
+            metric_direction_hint=_md_hint,
         )
         # R13-3: Use higher max_tokens for reasoning models (they consume tokens
         # for internal chain-of-thought). Retry once with even higher limit on empty.
@@ -3474,12 +3482,12 @@ def _execute_iterative_refine(
     metric_key = config.experiment.metric_key
     metric_direction = config.experiment.metric_direction
 
-    # P9: Auto-detect metric direction from experiment code's METRIC_DEF output.
+    # P9: Detect metric direction mismatch between config and experiment code.
     # The code-gen stage instructs experiments to print a line like:
     #   METRIC_DEF: primary_metric | direction=higher | desc=...
-    # If we find this in prior run stdout, override the config's metric_direction
-    # to prevent the common mismatch where config says "minimize" but the
-    # experiment actually produces an accuracy/return metric (higher is better).
+    # Log a warning if mismatch is detected, but trust the config value
+    # (BUG-06 fix: no longer auto-override, since Stage 9 and 12 now
+    # explicitly enforce config.metric_direction in prompts).
     _runs_dir_detect = _read_prior_artifact(run_dir, "runs/")
     if _runs_dir_detect and Path(_runs_dir_detect).is_dir():
         import re as _re_detect
@@ -3498,12 +3506,12 @@ def _execute_iterative_refine(
                         logger.warning(
                             "P9: Metric direction mismatch — config says '%s' but "
                             "experiment code declares 'direction=%s'. "
-                            "Auto-correcting to '%s'.",
+                            "Keeping config value '%s'. Code will be "
+                            "corrected in next refinement cycle.",
                             metric_direction,
                             _detected,
-                            _detected_dir,
+                            metric_direction,
                         )
-                        metric_direction = _detected_dir
                     break
             except OSError:
                 pass
@@ -4170,6 +4178,37 @@ def _execute_result_analysis(
             except (ValueError, TypeError):
                 pass
 
+    # BUG-09 fix: If no condition summaries were built (metrics don't use
+    # condition/metric format), try to extract from metrics_summary or
+    # structured_results so FigureAgent has data to work with.
+    if not _condition_summaries and _ms:
+        # Try to parse condition data from metrics_summary keys
+        for _mk, _mv in _ms.items():
+            parts = _mk.split("/")
+            if len(parts) >= 2:
+                cond = parts[0]
+                metric_name = parts[-1]
+                if cond not in _condition_summaries:
+                    _condition_summaries[cond] = {"metrics": {}}
+                try:
+                    _val = float(_mv) if not isinstance(_mv, dict) else None
+                    if _val is not None:
+                        _condition_summaries[cond]["metrics"][metric_name] = _val
+                except (ValueError, TypeError):
+                    pass
+    if not _condition_summaries:
+        # Last resort: build from structured_results condition keys
+        _sr = exp_data.get("structured_results", {})
+        if isinstance(_sr, dict):
+            for _sk, _sv in _sr.items():
+                if isinstance(_sv, dict) and _sk not in ("metadata", "config"):
+                    _condition_summaries[_sk] = {"metrics": {}}
+                    for _smk, _smv in _sv.items():
+                        try:
+                            _condition_summaries[_sk]["metrics"][_smk] = float(_smv)
+                        except (ValueError, TypeError):
+                            pass
+
     # R33: Build per-seed data structure (needed for CIs and paired tests below)
     _seed_data: dict[str, dict[int, float]] = {}  # {condition: {seed: value}}
     for _mk, _mv in _best_metrics.items():
@@ -4493,8 +4532,14 @@ Generated: {_utcnow_iso()}
             # Build conditions list from condition_summaries
             _fa_conditions = list(_condition_summaries.keys()) if _condition_summaries else []
 
+            # BUG-09 fix: pass best_run metrics as fallback data if
+            # structured_results is empty, so Planner has some data to chart
+            _fa_exp_results = exp_data.get("structured_results", {})
+            if not _fa_exp_results and _best_metrics:
+                _fa_exp_results = {"best_run_metrics": _best_metrics}
+
             _fa_plan = _fa.orchestrate({
-                "experiment_results": exp_data.get("structured_results", {}),
+                "experiment_results": _fa_exp_results,
                 "condition_summaries": _condition_summaries,
                 "metrics_summary": exp_data.get("metrics_summary", {}),
                 "metric_key": config.experiment.metric_key,
@@ -7323,40 +7368,48 @@ def _check_citation_relevance(
     """Use LLM to assess relevance of each citation to the research topic.
 
     Returns a dict mapping cite_key → relevance score (0.0–1.0).
+    Processes citations in batches of 30 to handle large bibliographies.
     """
-    # Build a batch prompt for efficiency
     citation_lines = []
     for cr in results:
         citation_lines.append(f"- [{cr.cite_key}] \"{cr.title}\"")
     if not citation_lines:
         return {}
 
-    citations_text = "\n".join(citation_lines[:30])  # Cap at 30
+    all_scores: dict[str, float] = {}
+    _BATCH_SIZE = 30
 
-    prompt = (
-        f"Research topic: {topic}\n\n"
-        f"Rate the relevance of each citation to the research topic on a scale of 0.0 to 1.0.\n"
-        f"Return ONLY a JSON object mapping cite_key to relevance score.\n"
-        f"Example: {{\"smith2020\": 0.9, \"jones2019\": 0.2}}\n\n"
-        f"Citations:\n{citations_text}"
-    )
+    for batch_start in range(0, len(citation_lines), _BATCH_SIZE):
+        batch = citation_lines[batch_start:batch_start + _BATCH_SIZE]
+        citations_text = "\n".join(batch)
 
-    try:
-        resp = llm.chat(
-            [{"role": "user", "content": prompt}],
-            system="You assess citation relevance. Return only valid JSON.",
-            json_mode=True,
+        prompt = (
+            f"Research topic: {topic}\n\n"
+            f"Rate the relevance of each citation to the research topic "
+            f"on a scale of 0.0 to 1.0.\n"
+            f"Return ONLY a JSON object mapping cite_key to relevance score.\n"
+            f"Example: {{\"smith2020\": 0.9, \"jones2019\": 0.2}}\n\n"
+            f"Citations:\n{citations_text}"
         )
-        parsed = _safe_json_loads(resp.content, {})
-        if isinstance(parsed, dict):
-            return {
-                k: max(0.0, min(1.0, float(v)))
-                for k, v in parsed.items()
-                if isinstance(v, (int, float))
-            }
-    except Exception:  # noqa: BLE001
-        logger.debug("Citation relevance check failed, skipping")
-    return {}
+
+        try:
+            resp = llm.chat(
+                [{"role": "user", "content": prompt}],
+                system="You assess citation relevance. Return only valid JSON.",
+                json_mode=True,
+            )
+            parsed = _safe_json_loads(resp.content, {})
+            if isinstance(parsed, dict):
+                for k, v in parsed.items():
+                    if isinstance(v, (int, float)):
+                        all_scores[k] = max(0.0, min(1.0, float(v)))
+        except Exception:  # noqa: BLE001
+            logger.debug(
+                "Citation relevance check failed for batch %d–%d, skipping",
+                batch_start, batch_start + len(batch),
+            )
+
+    return all_scores
 
 
 def _remove_bibtex_entries(bib_text: str, keys_to_remove: set[str]) -> str:
@@ -7487,13 +7540,19 @@ def _execute_citation_verify(
             low_relevance_keys.add(cr.cite_key)
 
     # Hard cap: if still above MAX_CITATIONS after relevance filter, drop lowest
+    # BUG-07 fix: Unscored citations (relevance_score=None) default to 0.7
+    # because they passed API verification and are likely relevant.
+    # Previously they defaulted to 0.0 which caused mass-deletion.
+    _DEFAULT_RELEVANCE = 0.7
     remaining = [
         cr for cr in report.results
         if cr.cite_key not in low_relevance_keys
         and cr.status != VerifyStatus.HALLUCINATED
     ]
     if len(remaining) > MAX_CITATIONS:
-        remaining.sort(key=lambda c: c.relevance_score or 0.0)
+        remaining.sort(
+            key=lambda c: c.relevance_score if c.relevance_score is not None else _DEFAULT_RELEVANCE,
+        )
         overflow = remaining[:len(remaining) - MAX_CITATIONS]
         for cr in overflow:
             low_relevance_keys.add(cr.cite_key)
