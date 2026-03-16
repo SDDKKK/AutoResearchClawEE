@@ -1189,6 +1189,18 @@ def check_paper_completeness(sections: list[_Section]) -> list[str]:
     """
     warnings: list[str] = []
 
+    # Check for valid title — look for any H1/H2 heading that could be a title
+    _has_title = any(
+        sec.level in (1, 2) and sec.heading_lower not in ("abstract", "introduction",
+            "related work", "method", "methods", "methodology", "experiments",
+            "results", "discussion", "conclusion", "limitations", "references")
+        for sec in sections
+    )
+    if not _has_title:
+        warnings.append(
+            "No valid title found in paper. The output may lack proper heading structure."
+        )
+
     found_sections: set[str] = set()
     section_headings: list[str] = []
     for sec in sections:
@@ -1249,9 +1261,9 @@ def check_paper_completeness(sections: list[_Section]) -> list[str]:
                 f"Abstract is {word_count} words (conference limit: 150-250). "
                 f"Must be shortened."
             )
-        elif word_count < 80:
+        elif word_count < 150:
             warnings.append(
-                f"Abstract is only {word_count} words (expected ≥150)."
+                f"Abstract is only {word_count} words (expected 150-250 for conferences)."
             )
         # Detect raw variable names / metric key dumps
         raw_vars = re.findall(r"\b\w+_\w+/\w+(?:_\w+)*\s*=", abstract_text)

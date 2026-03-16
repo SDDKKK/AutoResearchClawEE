@@ -5585,7 +5585,7 @@ def _execute_quality_gate(
             status=StageStatus.FAILED,
             artifacts=("quality_report.json",),
             evidence_refs=("stage-20/quality_report.json",),
-            notes=f"Quality score {score:.1f}/10 below threshold {threshold:.1f}. "
+            error=f"Quality score {score:.1f}/10 below threshold {threshold:.1f}. "
                   f"Paper needs revision before export.",
         )
 

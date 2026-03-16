@@ -138,8 +138,7 @@ class Paper:
         lines = [f"@{entry_type}{{{key},"]
         lines.append(f"  title = {{{self.title}}},")
         lines.append(f"  author = {{{authors_str}}},")
-        if self.year:
-            lines.append(f"  year = {{{self.year}}},")
+        lines.append(f"  year = {{{self.year or 'Unknown'}}},")
         if venue_field:
             lines.append(venue_field)
         if self.doi:
