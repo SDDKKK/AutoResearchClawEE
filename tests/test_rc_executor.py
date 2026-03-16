@@ -2576,12 +2576,12 @@ class TestNoImproveStreakFix:
             stage_dir, run_dir, cfg, adapters, llm=llm
         )
 
-        # Should complete all 4 iterations, not stop at 2
+        # Should abort after 3 consecutive no-metrics iterations
         log_path = stage_dir / "refinement_log.json"
         log_data = json.loads(log_path.read_text())
-        # With empty metrics, no_improve_streak stays at 0 → all iterations should run
-        assert len(log_data["iterations"]) == 4
-        assert log_data["stop_reason"] == "max_iterations_reached"
+        # consecutive_no_metrics triggers early abort after 3 iterations
+        assert len(log_data["iterations"]) == 3
+        assert log_data.get("stop_reason") == "consecutive_no_metrics"
 
 
 class TestStdoutFailureDetection:

@@ -294,7 +294,11 @@ def _safe_filename(name: str) -> str:
     return name[:100] or "unnamed"
 
 
-def _collect_experiment_results(run_dir: Path) -> dict[str, Any]:
+def _collect_experiment_results(
+    run_dir: Path,
+    metric_key: str = "",
+    metric_direction: str = "maximize",
+) -> dict[str, Any]:
     """Aggregate experiment metrics from runs/ directory across prior stages.
 
     Returns a dict with ``runs``, ``metrics_summary``, ``best_run``,
@@ -360,13 +364,20 @@ def _collect_experiment_results(run_dir: Path) -> dict[str, Any]:
                 "count": len(values),
             }
 
-    # Find best run (by first metric)
+    # Find best run using metric_key and metric_direction
     best_run: dict[str, Any] | None = None
     if runs_data:
 
         def _primary_metric(r: dict[str, Any]) -> float:
             m = r.get("metrics") or {}
             if isinstance(m, dict):
+                # Try specific metric_key first
+                if metric_key and metric_key in m:
+                    try:
+                        return float(m[metric_key])
+                    except (ValueError, TypeError):
+                        pass
+                # Fallback to first metric
                 for v in m.values():
                     try:
                         return float(v)
@@ -374,7 +385,8 @@ def _collect_experiment_results(run_dir: Path) -> dict[str, Any]:
                         pass
             return 0.0
 
-        best_run = max(runs_data, key=_primary_metric)
+        _cmp = min if metric_direction == "minimize" else max
+        best_run = _cmp(runs_data, key=_primary_metric)
 
     # Build LaTeX table
     latex_lines = [
@@ -648,13 +660,14 @@ def _detect_runtime_issues(sandbox_result: Any) -> str:
         except (TypeError, ValueError):
             pass
 
-    # Check stdout for NaN values
+    # Check stdout for NaN values (word boundary to avoid matching "Nanotechnology" etc.)
     stdout = getattr(sandbox_result, "stdout", "") or ""
-    if "nan" in stdout.lower():
+    _nan_re = re.compile(r"\bnan\b", re.IGNORECASE)
+    if _nan_re.search(stdout):
         nan_lines = [
             line.strip()
             for line in stdout.splitlines()
-            if "nan" in line.lower()
+            if _nan_re.search(line)
         ]
         if nan_lines:
             issues.append(
@@ -985,9 +998,10 @@ Generated: {_utcnow_iso()}
 
 
 def _default_quality_report(threshold: float) -> dict[str, Any]:
-    score = float(threshold) if threshold > 0 else 7.5
+    # When LLM fails, return below-threshold score to force revision
+    score = max(1.0, float(threshold) - 2.0) if threshold > 0 else 5.0
     score = max(1.0, min(10.0, score))
-    verdict = "proceed" if score >= 7.0 else "pivot"
+    verdict = "revise"
     return {
         "score_1_to_10": round(score, 2),
         "verdict": verdict,
@@ -1568,7 +1582,9 @@ def _execute_literature_collect(
             candidates = [row for row in payload["candidates"] if isinstance(row, dict)]
 
     # --- Ultimate fallback: placeholder data ---
+    real_search_succeeded = bool(candidates)
     if not candidates:
+        logger.warning("Stage 4: All literature searches failed — using placeholder papers")
         candidates = [
             {
                 "id": f"candidate-{idx + 1}",
@@ -1578,6 +1594,7 @@ def _execute_literature_collect(
                 "year": 2024,
                 "abstract": f"This candidate investigates {topic} and reports preliminary findings.",
                 "collected_at": _utcnow_iso(),
+                "is_placeholder": True,
             }
             for idx in range(max(20, config.research.daily_paper_count or 20))
         ]
@@ -1807,6 +1824,7 @@ def _execute_synthesis(
         resp = llm.chat(
             [{"role": "user", "content": sp.user}],
             system=sp.system,
+            max_tokens=sp.max_tokens or 8192,
         )
         synthesis_md = resp.content
     else:
@@ -1855,17 +1873,22 @@ def _multi_perspective_generate(
     perspectives_dir.mkdir(parents=True, exist_ok=True)
     results: dict[str, str] = {}
     for role_name, role_prompts in roles.items():
-        system = _render(role_prompts["system"], variables)
-        user = _render(role_prompts["user"], variables)
-        resp = llm.chat(
-            [{"role": "user", "content": user}],
-            system=system,
-        )
-        results[role_name] = resp.content
-        (perspectives_dir / f"{role_name}.md").write_text(
-            resp.content, encoding="utf-8"
-        )
-        logger.info("Debate perspective '%s' generated (%d chars)", role_name, len(resp.content))
+        try:
+            system = _render(role_prompts["system"], variables)
+            user = _render(role_prompts["user"], variables)
+            resp = llm.chat(
+                [{"role": "user", "content": user}],
+                system=system,
+            )
+            results[role_name] = resp.content
+            (perspectives_dir / f"{role_name}.md").write_text(
+                resp.content, encoding="utf-8"
+            )
+            logger.info("Debate perspective '%s' generated (%d chars)", role_name, len(resp.content))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Debate perspective '%s' failed: %s", role_name, exc)
+    if len(results) < 2:
+        logger.error("Multi-perspective debate: only %d/%d roles succeeded", len(results), len(roles))
     return results
 
 
@@ -1927,6 +1950,7 @@ def _execute_hypothesis_gen(
             topic=config.research.topic,
             hypotheses_text=hypotheses_md,
             papers_already_seen=papers_seen,
+            s2_api_key=getattr(config.llm, "s2_api_key", ""),
         )
         (stage_dir / "novelty_report.json").write_text(
             json.dumps(novelty_report, indent=2, ensure_ascii=False),
@@ -2182,30 +2206,18 @@ def _execute_code_generation(
         if config.experiment.mode == "docker":
             pkg_prefix = "docker mode"
             _net_policy = config.experiment.docker.network_policy
+            _base_pkgs = (
+                ", torchvision, torchaudio, matplotlib, seaborn, scipy, "
+                "tqdm, torchdiffeq, gymnasium, networkx, PyYAML, Pillow, "
+                "transformers, datasets, accelerate, peft, bitsandbytes, "
+                "timm, einops, torchmetrics, h5py"
+            )
             if _net_policy == "none":
-                pkg_extras = (
-                    ", torchvision, torchaudio, matplotlib, seaborn, scipy, "
-                    "tqdm, torchdiffeq, gymnasium, networkx, PyYAML, Pillow, "
-                    "transformers, datasets, accelerate, peft, bitsandbytes, "
-                    "timm, einops, torchmetrics, h5py "
-                    "(ONLY pre-installed packages — NO pip install available)"
-                )
-            elif _net_policy == "full":
-                pkg_extras = (
-                    ", torchvision, torchaudio, matplotlib, seaborn, scipy, "
-                    "tqdm, torchdiffeq, gymnasium, networkx, PyYAML, Pillow, "
-                    "transformers, datasets, accelerate, peft, bitsandbytes, "
-                    "timm, einops, torchmetrics, h5py, "
-                    "and additional pip-installable packages (auto-detected from imports)"
-                )
-            else:  # setup_only, pip_only
-                pkg_extras = (
-                    ", torchvision, torchaudio, matplotlib, seaborn, scipy, "
-                    "tqdm, torchdiffeq, gymnasium, networkx, PyYAML, Pillow, "
-                    "transformers, datasets, accelerate, peft, bitsandbytes, "
-                    "timm, einops, torchmetrics, h5py, "
-                    "and additional pip-installable packages via requirements.txt"
-                )
+                pkg_extras = _base_pkgs + " (ONLY pre-installed packages — NO pip install available)"
+            elif _net_policy in ("setup_only", "pip_only"):
+                pkg_extras = _base_pkgs + ", and additional pip-installable packages via requirements.txt"
+            else:
+                pkg_extras = _base_pkgs + ", and additional pip-installable packages (auto-detected from imports)"
         else:
             pkg_prefix = "sandbox mode"
             pkg_extras = ""
@@ -2252,6 +2264,7 @@ def _execute_code_generation(
 
     # --- Dataset guidance + setup script + HP reporting (docker/sandbox modes) ---
     extra_guidance = ""
+    _net_policy = getattr(getattr(config, "docker", None), "network_policy", "setup_only")
     if config.experiment.mode in ("sandbox", "docker"):
         _net_policy = (
             config.experiment.docker.network_policy
@@ -2259,23 +2272,19 @@ def _execute_code_generation(
             else "none"  # sandbox mode has no network
         )
         if _net_policy == "none":
-            # No network at all — only pre-cached datasets, no setup.py
+            # Network disabled: inject strict offline-only guidance
             try:
                 extra_guidance += _pm.block("network_disabled_guidance")
             except Exception:  # noqa: BLE001
                 pass
         elif _net_policy == "full":
-            # Full network — datasets + full network note
             try:
                 extra_guidance += _pm.block("dataset_guidance")
-            except Exception:  # noqa: BLE001
-                pass
-            try:
                 extra_guidance += _pm.block("network_full_guidance")
             except Exception:  # noqa: BLE001
                 pass
         else:
-            # setup_only / pip_only — datasets + setup script (existing behavior)
+            # setup_only or pip_only — existing behavior
             try:
                 extra_guidance += _pm.block("dataset_guidance")
             except Exception:  # noqa: BLE001
@@ -2823,7 +2832,7 @@ def _execute_code_generation(
                 user=align_prompt,
                 max_tokens=1024,
             )
-            align_data = _safe_json_loads(align_resp, {})
+            align_data = _safe_json_loads(align_resp.content, {})
             if isinstance(align_data, dict) and not align_data.get("aligned", True):
                 alignment_ok = False
                 alignment_note = align_data.get("reason", "Misaligned")
@@ -2852,7 +2861,7 @@ def _execute_code_generation(
                     user=regen_prompt,
                     max_tokens=_code_max_tokens,
                 )
-                regen_files = _extract_multi_file_blocks(regen_resp)
+                regen_files = _extract_multi_file_blocks(regen_resp.content)
                 if regen_files and "main.py" in regen_files:
                     files = regen_files
                     for fname, code in files.items():
@@ -2879,7 +2888,7 @@ def _execute_code_generation(
                 user=ablation_prompt,
                 max_tokens=512,
             )
-            abl_data = _safe_json_loads(abl_resp, {})
+            abl_data = _safe_json_loads(abl_resp.content, {})
             if isinstance(abl_data, dict) and abl_data.get("has_duplicates"):
                 logger.warning(
                     "Stage 10: Duplicate ablation conditions detected: %s",
@@ -3447,6 +3456,7 @@ def _execute_iterative_refine(
     best_metric = baseline_metric
     best_version = "experiment/"
     no_improve_streak = 0
+    consecutive_no_metrics = 0
 
     log: dict[str, Any] = {
         "generated": _utcnow_iso(),
@@ -3549,10 +3559,16 @@ def _execute_iterative_refine(
         if len(_valid_metrics) >= 2:
             _last_two = _valid_metrics[-2:]
             _saturated = False
+            # Use relative change rate instead of hard-coded thresholds
+            _change_rate = abs(_last_two[-1] - _last_two[-2]) / max(abs(_last_two[-2]), 1e-8)
             if metric_direction == "minimize":
-                _saturated = all(m <= 0.001 for m in _last_two)
+                _saturated = all(m <= 0.001 for m in _last_two) or (
+                    _change_rate < 0.001 and _last_two[-1] < 0.01
+                )
             else:
-                _saturated = all(m >= 0.999 for m in _last_two)
+                _saturated = all(m >= 0.999 for m in _last_two) or (
+                    _change_rate < 0.001 and _last_two[-1] > 0.99
+                )
             if _saturated:
                 _saturation_hint = (
                     "\n\nWARNING — BENCHMARK SATURATION DETECTED:\n"
@@ -3755,6 +3771,7 @@ def _execute_iterative_refine(
                     iter_record["runtime_repaired"] = True
 
             if metric_val is not None:
+                consecutive_no_metrics = 0
                 # R6-1: Only count toward no_improve_streak when we have real metrics
                 if _is_better(metric_val, best_metric):
                     best_metric = metric_val
@@ -3764,7 +3781,8 @@ def _execute_iterative_refine(
                     no_improve_streak = 0
                 else:
                     no_improve_streak += 1
-            # else: metric_val is None (no data) — don't count as "no improvement"
+            else:
+                consecutive_no_metrics += 1
         elif validation.ok and best_version == "experiment/":
             best_files = dict(candidate_files)
             best_version = f"experiment_v{iteration}/"
@@ -3773,6 +3791,11 @@ def _execute_iterative_refine(
         _metrics_history.append(metric_val)
 
         log["iterations"].append(iter_record)
+
+        if consecutive_no_metrics >= 3:
+            log["stop_reason"] = "consecutive_no_metrics"
+            logger.warning("Stage 13: Aborting after %d consecutive iterations without metrics", consecutive_no_metrics)
+            break
 
         if no_improve_streak >= 2:
             log["converged"] = True
@@ -3857,10 +3880,7 @@ def _execute_result_analysis(
                 _refine_metrics = _sbx.get("metrics", {})
                 if _refine_metrics and (
                     not exp_data["metrics_summary"]
-                    or len(_refine_metrics) > sum(
-                        s.get("count", 0)
-                        for s in exp_data["metrics_summary"].values()
-                    )
+                    or len(_refine_metrics) > len(exp_data["metrics_summary"])
                 ):
                     # Refinement has richer data — rebuild metrics_summary from it
                     _new_summary: dict[str, dict[str, float | None]] = {}
@@ -4058,9 +4078,16 @@ def _execute_result_analysis(
                     _mean_d = statistics.mean(_diffs)
                     _std_d = statistics.stdev(_diffs) if _n > 1 else 0.0
                     _t = (_mean_d / (_std_d / (_n ** 0.5))) if _std_d > 0 else 0.0
-                    # Two-tailed p-value approximation (normal for large n)
+                    _df = _n - 1
+                    # Two-tailed p-value using t-distribution
                     import math
-                    _p = 2 * (1 - 0.5 * (1 + math.erf(abs(_t) / (2 ** 0.5))))
+                    try:
+                        from scipy.stats import t as _t_dist
+                        _p = float(2 * _t_dist.sf(abs(_t), _df))
+                    except ImportError:
+                        _p = 2 * (1 - 0.5 * (1 + math.erf(abs(_t) / (2 ** 0.5))))
+                        if _df < 30:
+                            _p = min(1.0, _p * (1 + 2.5 / max(_df, 1)))
                     _pipeline_paired.append({
                         "method": _other_cond,
                         "baseline": _baseline_cond,
@@ -4125,6 +4152,15 @@ def _execute_result_analysis(
         _primary_vals = []
         for _cs in _condition_summaries.values():
             if isinstance(_cs, dict):
+                # Try 'metrics' dict first (actual structure), then 'primary_metric' fallback
+                _metrics = _cs.get("metrics", {})
+                if isinstance(_metrics, dict) and _metrics:
+                    _pv_candidate = next(iter(_metrics.values()), None)
+                    if isinstance(_pv_candidate, dict):
+                        _pv_candidate = _pv_candidate.get("mean")
+                    if isinstance(_pv_candidate, (int, float)):
+                        _primary_vals.append(_pv_candidate)
+                        continue
                 _pm = _cs.get("primary_metric", {})
                 _pv = _pm.get("mean") if isinstance(_pm, dict) else _pm
                 if isinstance(_pv, (int, float)):
@@ -6073,14 +6109,13 @@ def _execute_paper_revision(
                     else revised
                 )
                 if revision_summary.strip():
-                    revised = draft + "\n\n## Appendix: Revision Notes (Auto-generated)\n\n" + revision_summary
-                else:
-                    revised = draft
+                    # Save revision notes to internal file, not paper body
+                    (stage_dir / "revision_notes_internal.md").write_text(
+                        revision_summary, encoding="utf-8"
+                    )
+                revised = draft
     else:
-        revised = (
-            draft
-            + "\n\n## Revision Notes\n- Addressed reviewer concerns in experiments and limitations.\n"
-        )
+        revised = draft
     (stage_dir / "paper_revised.md").write_text(revised, encoding="utf-8")
     return StageResult(
         stage=Stage.PAPER_REVISION,
@@ -6155,7 +6190,7 @@ def _execute_knowledge_archive(
             preamble=preamble,
             decision=decision,
             analysis=analysis,
-            revised=revised[:5000],
+            revised=revised[:15000],
         )
         resp = _chat_with_prompt(
             llm,
@@ -6226,6 +6261,13 @@ def _execute_export_publish(
             max_tokens=sp.max_tokens,
         )
         final_paper = resp.content
+        # Content guard: reject LLM output that truncates the paper
+        if revised and len(final_paper) < 0.6 * len(revised):
+            logger.warning(
+                "Stage 22: LLM output is %.0f%% of input length — using original",
+                100 * len(final_paper) / max(len(revised), 1),
+            )
+            final_paper = revised
     else:
         final_paper = revised
     if not final_paper.strip():
@@ -6331,7 +6373,7 @@ def _execute_export_publish(
                 artifacts.append("invalid_citations.json")
 
         if valid_keys:
-            _CITE_KEY_PAT = r"[a-z]+\d{4}[a-z]*"
+            _CITE_KEY_PAT = r"[a-zA-Z][a-zA-Z0-9_-]*\d{4}[a-zA-Z0-9]*"
 
             # Step 1: Convert multi-key brackets [key1, key2] → \cite{key1, key2}
             def _replace_multi_cite(m: _re.Match[str]) -> str:
@@ -6429,6 +6471,21 @@ def _execute_export_publish(
             tpl.display_name,
             len(tex_content),
         )
+        # Copy bundled style files alongside paper.tex
+        for sf in tpl.get_style_files():
+            import shutil as _shutil_sty
+            _shutil_sty.copy2(sf, stage_dir / sf.name)
+        # Compile verification
+        try:
+            from researchclaw.templates.compiler import compile_latex
+            _compile_result = compile_latex(stage_dir / "paper.tex", max_attempts=2)
+            if _compile_result.success:
+                logger.info("Stage 22: LaTeX compilation verification PASSED")
+                artifacts.append("paper.pdf")
+            else:
+                logger.warning("Stage 22: LaTeX compilation verification FAILED: %s", _compile_result.errors[:3])
+        except Exception as _compile_exc:  # noqa: BLE001
+            logger.debug("Stage 22: Compile verification skipped: %s", _compile_exc)
     except Exception as exc:  # noqa: BLE001
         logger.warning("LaTeX generation skipped: %s", exc)
 

@@ -98,16 +98,17 @@ def compile_latex(
 
         if proc.returncode == 0:
             result.success = True
-            # Run bibtex + second pdflatex pass for bibliography
+            # Run bibtex + two more pdflatex passes for bibliography & cross-refs
             bib_stem = tex_name.rsplit(".", 1)[0]
             _run_bibtex(work_dir, bib_stem, timeout=60)
-            subprocess.run(
-                ["pdflatex", "-interaction=nonstopmode", tex_name],
-                cwd=work_dir,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
+            for _pass in range(2):
+                subprocess.run(
+                    ["pdflatex", "-interaction=nonstopmode", tex_name],
+                    cwd=work_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
             logger.info("IMP-18: LaTeX compiled successfully on attempt %d", attempt)
             break
 

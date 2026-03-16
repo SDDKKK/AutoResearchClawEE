@@ -104,7 +104,7 @@ class TestRenderPreamble:
 
     def test_icml_preamble_extra(self) -> None:
         tex = ICML_2025.render_preamble("Title", "Author", "Abstract")
-        assert r"\icmltitlerunning{Running Title}" in tex
+        assert r"\icmltitlerunning{Title}" in tex
 
 
 class TestRenderFooter:

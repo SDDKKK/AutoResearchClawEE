@@ -829,11 +829,22 @@ def _auto_table_caption(header: list[str], table_num: int) -> str:
     """IMP-32: Generate a descriptive caption from table header columns."""
     if len(header) <= 1:
         return f"Table {table_num}"
-    # Use header columns to build a description
     cols = [c.strip() for c in header if c.strip()]
-    if len(cols) >= 2:
-        return f"Comparison of {_convert_inline(cols[0])} across {', '.join(_convert_inline(c) for c in cols[1:min(4, len(cols))])}"
-    return f"Table {table_num}"
+    if len(cols) < 2:
+        return f"Table {table_num}"
+    col0 = cols[0].lower()
+    rest = [_convert_inline(c) for c in cols[1:min(5, len(cols))]]
+    # Detect common table types by first-column header
+    _HP_HINTS = {"hyperparameter", "parameter", "param", "hp", "setting", "config"}
+    _ABL_HINTS = {"component", "variant", "ablation", "configuration", "module"}
+    _MODEL_HINTS = {"model", "method", "approach", "algorithm", "baseline"}
+    if any(h in col0 for h in _HP_HINTS):
+        return f"Hyperparameter settings"
+    if any(h in col0 for h in _ABL_HINTS):
+        return f"Ablation study results across {', '.join(rest)}"
+    if any(h in col0 for h in _MODEL_HINTS):
+        return f"Performance comparison of different methods on {', '.join(rest)}"
+    return f"Comparison of {_convert_inline(cols[0])} across {', '.join(rest)}"
 
 
 def _parse_table_row(line: str) -> list[str]:
@@ -933,7 +944,20 @@ def _render_code_block(lang: str, code: str) -> str:
         if algo_lines and algo_lines[0].strip().startswith("//"):
             caption = algo_lines[0].strip().lstrip("/ ").strip()
             algo_lines = algo_lines[1:]
-        body = "\n".join(algo_lines)
+        # Wrap raw lines in \STATE unless they already use algorithmic commands
+        _algo_cmds = {"\\STATE", "\\IF", "\\ELSE", "\\ELSIF", "\\ENDIF",
+                       "\\FOR", "\\ENDFOR", "\\WHILE", "\\ENDWHILE",
+                       "\\REPEAT", "\\UNTIL", "\\RETURN", "\\REQUIRE", "\\ENSURE"}
+        wrapped_lines = []
+        for al in algo_lines:
+            stripped = al.strip()
+            if not stripped:
+                continue
+            if any(stripped.startswith(cmd) for cmd in _algo_cmds):
+                wrapped_lines.append(stripped)
+            else:
+                wrapped_lines.append(f"\\STATE {stripped}")
+        body = "\n".join(wrapped_lines)
         return (
             "\\begin{algorithm}[ht]\n"
             f"\\caption{{{_convert_inline(caption)}}}\n"
@@ -965,7 +989,7 @@ def _render_figure(caption: str, path: str) -> str:
     return (
         "\\begin{figure}[ht]\n"
         "\\centering\n"
-        f"\\includegraphics[width=0.9\\textwidth]{{{path}}}\n"
+        f"\\includegraphics[width=0.9\\columnwidth]{{{path}}}\n"
         f"\\caption{{{cap_tex}}}\n"
         f"\\label{{fig:{label_key}}}\n"
         "\\end{figure}"
@@ -984,6 +1008,9 @@ _LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
 # Characters that need escaping in LaTeX (but NOT inside math or \cite)
 _LATEX_SPECIAL = re.compile(r"([#%&_])")
+_LATEX_TILDE = re.compile(r"~")
+_LATEX_CARET = re.compile(r"\^")
+_LATEX_DOLLAR = re.compile(r"(?<!\\)\$")
 
 
 def _convert_inline(text: str) -> str:
@@ -1032,6 +1059,9 @@ def _convert_inline(text: str) -> str:
 
     # Escape special LaTeX characters
     text = _LATEX_SPECIAL.sub(r"\\\1", text)
+    text = _LATEX_TILDE.sub(r"\\textasciitilde{}", text)
+    text = _LATEX_CARET.sub(r"\\textasciicircum{}", text)
+    text = _LATEX_DOLLAR.sub(r"\\$", text)
 
     # Convert bold **text** → \textbf{text}
     text = _BOLD_RE.sub(r"\\textbf{\1}", text)
@@ -1051,7 +1081,7 @@ def _convert_inline(text: str) -> str:
 
     # Fallback: convert any remaining [cite_key] patterns to \cite{key}
     # This catches citations that were not converted upstream.
-    _CITE_KEY_PAT = r"[a-z]+\d{4}[a-z]*"
+    _CITE_KEY_PAT = r"[a-zA-Z][a-zA-Z0-9_-]*\d{4}[a-zA-Z0-9]*"
     text = re.sub(
         rf"\[({_CITE_KEY_PAT}(?:\s*,\s*{_CITE_KEY_PAT})*)\]",
         r"\\cite{\1}",
@@ -1075,6 +1105,7 @@ _EXPECTED_SECTIONS = {
     "method",
     "experiment",
     "result",
+    "discussion",
     "conclusion",
 }
 
@@ -1089,7 +1120,7 @@ _SECTION_ALIASES: dict[str, str] = {
     "results": "result",
     "results and discussion": "result",
     "results and analysis": "result",
-    "discussion": "result",
+    "discussion and results": "result",
     "conclusions": "conclusion",
     "conclusion and future work": "conclusion",
     "summary": "conclusion",
