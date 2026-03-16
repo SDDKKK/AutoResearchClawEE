@@ -1156,6 +1156,58 @@ def check_paper_completeness(sections: list[_Section]) -> list[str]:
             f"Content may be severely truncated."
         )
 
+
+    # Per-section word count check (safety net during LaTeX conversion)
+    from researchclaw.prompts import SECTION_WORD_TARGETS, _SECTION_TARGET_ALIASES
+
+    for sec in sections:
+        if sec.level not in (1, 2) or not sec.heading:
+            continue
+        canon = sec.heading_lower
+        if canon not in SECTION_WORD_TARGETS:
+            canon = _SECTION_TARGET_ALIASES.get(sec.heading_lower, "")
+        if not canon or canon not in SECTION_WORD_TARGETS:
+            continue
+        lo, hi = SECTION_WORD_TARGETS[canon]
+        wc = len(sec.body.split())
+        if wc < int(lo * 0.6):
+            warnings.append(
+                f"Section '{sec.heading}' is only {wc} words "
+                f"(expected {lo}-{hi}). Content may be severely truncated."
+            )
+        elif wc > int(hi * 1.5):
+            warnings.append(
+                f"Section '{sec.heading}' is {wc} words "
+                f"(expected {lo}-{hi}). Consider trimming."
+            )
+
+    # Bullet density check for body sections
+    _bullet_re_cc = re.compile(r"^\s*[-*]\s+", re.MULTILINE)
+    _numbered_re_cc = re.compile(r"^\s*\d+\.\s+", re.MULTILINE)
+    _bullet_ok_sections = {"introduction", "limitations", "limitation", "abstract"}
+    for sec in sections:
+        if sec.level not in (1, 2) or not sec.heading:
+            continue
+        hl = sec.heading_lower
+        if hl in _bullet_ok_sections:
+            continue
+        if not sec.body:
+            continue
+        total_lines = len([ln for ln in sec.body.splitlines() if ln.strip()])
+        if total_lines < 4:
+            continue
+        bullet_count = (
+            len(_bullet_re_cc.findall(sec.body))
+            + len(_numbered_re_cc.findall(sec.body))
+        )
+        density = bullet_count / total_lines
+        if density > 0.30:
+            warnings.append(
+                f"Section '{sec.heading}' has high bullet-point density "
+                f"({bullet_count}/{total_lines} lines = {density:.0%}). "
+                f"Conference papers should use flowing prose."
+            )
+
     return warnings
 
 

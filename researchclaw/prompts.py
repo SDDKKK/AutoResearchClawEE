@@ -216,6 +216,41 @@ class PromptManager:
 # DEFAULT PROMPTS — edit prompts.yaml to override; do NOT edit these.
 # ========================================================================
 
+# -- Canonical section word-count targets ----------------------------------
+# Single source of truth for per-section word-count ranges.
+# Used by executor._validate_draft_quality() and converter.check_paper_completeness().
+SECTION_WORD_TARGETS: dict[str, tuple[int, int]] = {
+    "abstract": (180, 220),
+    "introduction": (800, 1000),
+    "related work": (600, 800),
+    "method": (1000, 1500),
+    "experiments": (800, 1200),
+    "results": (600, 800),
+    "discussion": (400, 600),
+    "limitations": (200, 300),
+    "conclusion": (200, 300),
+}
+
+# Aliases mapping heading variants to canonical names in SECTION_WORD_TARGETS.
+_SECTION_TARGET_ALIASES: dict[str, str] = {
+    "methods": "method",
+    "methodology": "method",
+    "proposed method": "method",
+    "approach": "method",
+    "experimental setup": "experiments",
+    "experimental results": "results",
+    "results and discussion": "results",
+    "results and analysis": "results",
+    "conclusions": "conclusion",
+    "conclusion and future work": "conclusion",
+    "summary": "conclusion",
+    "background": "related work",
+    "literature review": "related work",
+    "prior work": "related work",
+    "limitation": "limitations",
+    "limitations and future work": "limitations",
+}
+
 # -- Reusable blocks -----------------------------------------------------
 
 _DEFAULT_BLOCKS: dict[str, str] = {
@@ -506,35 +541,35 @@ _DEFAULT_BLOCKS: dict[str, str] = {
     ),
     "writing_structure": (
         "\n## Paper Section Writing Rules\n"
-        "ABSTRACT (150-200 words, 5-sentence structure):\n"
+        "ABSTRACT (5-sentence structure):\n"
         "- (1) Problem and significance (2) Prior approaches and gaps\n"
         "- (3) Your approach and novelty (4) Key results with 2-3 specific numbers\n"
         "- (5) Implication/takeaway\n"
         "- Do NOT list per-seed ranges (e.g., '0.71-0.73 across seeds') — use mean +/- std\n"
         "- Do NOT repeat numbers that appear in the Results section — pick the 2-3 most impactful\n\n"
-        "INTRODUCTION (800-1200 words):\n"
+        "INTRODUCTION (4 paragraphs):\n"
         "- Paragraph 1: Problem motivation (why this matters)\n"
         "- Paragraph 2: What exists and why it falls short\n"
         "- Paragraph 3: Your approach and key insight\n"
         "- Paragraph 4: Contributions (2-3 bullet points)\n\n"
-        "RELATED WORK (600-900 words):\n"
+        "RELATED WORK:\n"
         "- Organize by sub-topic, not chronologically\n"
         "- End each paragraph with how your work differs\n"
         "- Cite at least 15 references, all directly relevant\n\n"
-        "METHOD (800-1200 words):\n"
+        "METHOD:\n"
         "- Full algorithm description (pseudocode or step-by-step)\n"
         "- All hyperparameters with values and justification\n"
         "- Architecture details sufficient for reproduction\n\n"
-        "RESULTS (800-1200 words):\n"
+        "RESULTS:\n"
         "- Do NOT repeat the same number more than twice across the paper\n"
         "- Each number in a table should be discussed AT MOST once in text\n"
         "- Tables: mean +/- std with 95%% CI in parentheses\n"
         "- Bold the best result in each column\n"
         "- Every comparison claim must cite a p-value\n\n"
-        "LIMITATIONS (200-400 words, 3-5 points):\n"
+        "LIMITATIONS (3-5 points):\n"
         "- State each limitation ONCE, here only — not scattered throughout\n"
         "- No disclaimers like 'due to computational constraints'\n\n"
-        "CONCLUSION (200-300 words):\n"
+        "CONCLUSION:\n"
         "- Summarize findings (match actual results, no aspirational claims)\n"
         "- 2-3 sentences of future work\n"
     ),
@@ -673,7 +708,7 @@ _DEFAULT_BLOCKS: dict[str, str] = {
         "  - Compare findings with prior work (cite papers here!)\n"
         "  - Explain surprising results; broader implications\n\n"
         "LIMITATIONS (200-300 words): 3-5 specific, concrete limitations. ALL caveats go HERE.\n\n"
-        "CONCLUSION (200-300 words): Summarize in 2-3 sentences, future work in 2-3 sentences.\n\n"
+        "CONCLUSION: Summarize in 2-3 sentences, future work in 2-3 sentences.\n\n"
         "### Writing Quality Rules\n"
         "- Write as FLOWING PROSE, not bullet points or enumerated lists\n"
         "- Each paragraph: topic sentence, evidence, analysis, transition\n"

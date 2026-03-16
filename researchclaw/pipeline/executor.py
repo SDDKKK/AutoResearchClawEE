@@ -143,6 +143,25 @@ def _read_prior_artifact(run_dir: Path, filename: str) -> str | None:
     return None
 
 
+def _find_prior_file(run_dir: Path, filename: str) -> Path | None:
+    """Like ``_read_prior_artifact`` but returns the *Path* instead of content."""
+    def _stage_sort_key(p: Path) -> tuple[str, int]:
+        name = p.name
+        if "_v" in name:
+            base, _, ver = name.rpartition("_v")
+            try:
+                return (base, -int(ver))
+            except ValueError:
+                return (name, -999)
+        return (name, 0)
+
+    for stage_subdir in sorted(run_dir.glob("stage-*"), key=_stage_sort_key, reverse=True):
+        candidate = stage_subdir / filename
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def _load_hardware_profile(run_dir: Path) -> dict[str, Any] | None:
     """Load hardware_profile.json from a prior stage (usually stage-01)."""
     raw = _read_prior_artifact(run_dir, "hardware_profile.json")
@@ -4810,6 +4829,172 @@ def _write_paper_sections(
     return draft
 
 
+# ---------------------------------------------------------------------------
+# Draft quality validation (section balance + bullet-point density)
+# ---------------------------------------------------------------------------
+
+# Sections where bullets/numbered lists are acceptable.
+_BULLET_LENIENT_SECTIONS = frozenset({
+    "introduction", "limitations", "limitation",
+    "limitations and future work", "abstract",
+})
+
+# Main body sections used for balance ratio check.
+_BALANCE_SECTIONS = frozenset({
+    "introduction", "related work", "method", "experiments", "results",
+    "discussion",
+})
+
+
+def _validate_draft_quality(
+    draft: str,
+    stage_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Validate a paper draft for section balance and prose quality.
+
+    Checks:
+    1. Per-section word count vs ``SECTION_WORD_TARGETS``.
+    2. Bullet-point / numbered-list density per section.
+    3. Largest-to-smallest main-section word-count ratio.
+
+    Returns a dict with ``section_analysis``, ``overall_warnings``, and
+    ``revision_directives``.  Optionally writes ``draft_quality.json`` to
+    *stage_dir*.
+    """
+    from researchclaw.prompts import SECTION_WORD_TARGETS, _SECTION_TARGET_ALIASES
+
+    _heading_re = re.compile(r"^(#{1,4})\s+(.+)$", re.MULTILINE)
+    matches = list(_heading_re.finditer(draft))
+
+    sections_data: list[dict[str, Any]] = []
+    for i, m in enumerate(matches):
+        level = len(m.group(1))
+        heading = m.group(2).strip()
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(draft)
+        body = draft[start:end].strip()
+        sections_data.append({
+            "heading": heading,
+            "heading_lower": heading.strip().lower(),
+            "level": level,
+            "body": body,
+        })
+
+    section_analysis: list[dict[str, Any]] = []
+    overall_warnings: list[str] = []
+    revision_directives: list[str] = []
+    main_section_words: dict[str, int] = {}
+
+    _bullet_re = re.compile(r"^\s*[-*]\s+", re.MULTILINE)
+    _numbered_re = re.compile(r"^\s*\d+\.\s+", re.MULTILINE)
+
+    for sec in sections_data:
+        if sec["level"] > 2:
+            continue
+        heading_lower: str = sec["heading_lower"]
+        body: str = sec["body"]
+        word_count = len(body.split())
+        canon = heading_lower
+        if canon not in SECTION_WORD_TARGETS:
+            canon = _SECTION_TARGET_ALIASES.get(heading_lower, "")
+        entry: dict[str, Any] = {
+            "heading": sec["heading"],
+            "word_count": word_count,
+            "canonical": canon,
+        }
+        if canon and canon in SECTION_WORD_TARGETS:
+            lo, hi = SECTION_WORD_TARGETS[canon]
+            entry["target"] = [lo, hi]
+            if word_count < int(lo * 0.7):
+                overall_warnings.append(
+                    f"{sec['heading']} is severely under target "
+                    f"({word_count} words, target {lo}-{hi})"
+                )
+                revision_directives.append(
+                    f"EXPAND {sec['heading']} from {word_count} to {lo}+ words. "
+                    f"Add substantive content \u2014 do NOT pad with filler."
+                )
+                entry["status"] = "severely_short"
+            elif word_count < lo:
+                overall_warnings.append(
+                    f"{sec['heading']} is under target "
+                    f"({word_count} words, target {lo}-{hi})"
+                )
+                revision_directives.append(
+                    f"Expand {sec['heading']} from {word_count} to {lo}+ words."
+                )
+                entry["status"] = "short"
+            elif word_count > int(hi * 1.3):
+                overall_warnings.append(
+                    f"{sec['heading']} exceeds target "
+                    f"({word_count} words, target {lo}-{hi})"
+                )
+                revision_directives.append(
+                    f"Compress {sec['heading']} from {word_count} to {hi} words or fewer."
+                )
+                entry["status"] = "long"
+            else:
+                entry["status"] = "ok"
+        if body:
+            total_lines = len([ln for ln in body.splitlines() if ln.strip()])
+            bullet_lines = len(_bullet_re.findall(body)) + len(_numbered_re.findall(body))
+            density = bullet_lines / total_lines if total_lines > 0 else 0.0
+            entry["bullet_density"] = round(density, 2)
+            threshold = 0.50 if heading_lower in _BULLET_LENIENT_SECTIONS else 0.25
+            if density > threshold and total_lines >= 4:
+                overall_warnings.append(
+                    f"{sec['heading']} has {bullet_lines}/{total_lines} "
+                    f"bullet/numbered lines ({density:.0%} density, "
+                    f"threshold {threshold:.0%})"
+                )
+                revision_directives.append(
+                    f"REWRITE {sec['heading']} as flowing academic prose. "
+                    f"Convert bullet points to narrative paragraphs."
+                )
+                entry["bullet_status"] = "high"
+            else:
+                entry["bullet_status"] = "ok"
+        canon_balance = canon or heading_lower
+        if canon_balance in _BALANCE_SECTIONS:
+            main_section_words[canon_balance] = word_count
+        section_analysis.append(entry)
+
+    if len(main_section_words) >= 2:
+        wc_values = list(main_section_words.values())
+        max_wc = max(wc_values)
+        min_wc = min(wc_values)
+        if min_wc > 0 and max_wc / min_wc > 3.0:
+            largest = max(main_section_words, key=main_section_words.get)  # type: ignore[arg-type]
+            smallest = min(main_section_words, key=main_section_words.get)  # type: ignore[arg-type]
+            overall_warnings.append(
+                f"Section imbalance: {largest} ({max_wc} words) vs "
+                f"{smallest} ({min_wc} words) \u2014 ratio {max_wc / min_wc:.1f}x"
+            )
+            revision_directives.append(
+                f"Rebalance sections: expand {smallest} and/or compress {largest} "
+                f"to achieve more even section lengths."
+            )
+
+    result: dict[str, Any] = {
+        "section_analysis": section_analysis,
+        "overall_warnings": overall_warnings,
+        "revision_directives": revision_directives,
+    }
+    if stage_dir is not None:
+        (stage_dir / "draft_quality.json").write_text(
+            json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        if overall_warnings:
+            logger.warning(
+                "Draft quality: %d warning(s) \u2014 %s",
+                len(overall_warnings),
+                "; ".join(overall_warnings[:3]),
+            )
+        else:
+            logger.info("Draft quality: all checks passed")
+    return result
+
+
 def _check_ablation_effectiveness(
     exp_summary: dict[str, Any],
     threshold: float = 0.05,
@@ -5563,6 +5748,10 @@ Template references.
 Generated: {_utcnow_iso()}
 """
     (stage_dir / "paper_draft.md").write_text(draft, encoding="utf-8")
+
+    # Validate draft quality (section balance + bullet density)
+    _validate_draft_quality(draft, stage_dir=stage_dir)
+
     return StageResult(
         stage=Stage.PAPER_DRAFT,
         status=StageStatus.DONE,
@@ -5652,6 +5841,23 @@ def _execute_peer_review(
 ) -> StageResult:
     draft = _read_prior_artifact(run_dir, "paper_draft.md") or ""
     experiment_evidence = _collect_experiment_evidence(run_dir)
+
+    # Load draft quality warnings from Stage 17 (if available)
+    _quality_suffix = ""
+    _quality_json_path = _find_prior_file(run_dir, "draft_quality.json")
+    if _quality_json_path and _quality_json_path.exists():
+        try:
+            _dq = json.loads(_quality_json_path.read_text(encoding="utf-8"))
+            _dq_warnings = _dq.get("overall_warnings", [])
+            if _dq_warnings:
+                _quality_suffix = (
+                    "\n\nAUTOMATED QUALITY ISSUES (flag these in your review):\n"
+                    + "\n".join(f"- {w}" for w in _dq_warnings)
+                    + "\n"
+                )
+        except Exception:  # noqa: BLE001
+            pass
+
     if llm is not None:
         _pm = prompts or PromptManager()
         sp = _pm.for_stage(
@@ -5660,10 +5866,11 @@ def _execute_peer_review(
             draft=draft,
             experiment_evidence=experiment_evidence,
         )
+        _review_user = sp.user + _quality_suffix
         resp = _chat_with_prompt(
             llm,
             sp.system,
-            sp.user,
+            _review_user,
             json_mode=sp.json_mode,
             max_tokens=sp.max_tokens,
         )
@@ -5729,12 +5936,28 @@ def _execute_paper_revision(
                 _rev_blocks[_bname] = _pm.block(_bname)
             except (KeyError, Exception):  # noqa: BLE001
                 _rev_blocks[_bname] = ""
+        # Load draft quality directives from Stage 17
+        _quality_prefix = ""
+        _quality_json_path = _find_prior_file(run_dir, "draft_quality.json")
+        if _quality_json_path and _quality_json_path.exists():
+            try:
+                _dq = json.loads(_quality_json_path.read_text(encoding="utf-8"))
+                _dq_directives = _dq.get("revision_directives", [])
+                if _dq_directives:
+                    _quality_prefix = (
+                        "MANDATORY QUALITY FIXES (address ALL of these):\n"
+                        + "\n".join(f"- {d}" for d in _dq_directives)
+                        + "\n\n"
+                    )
+            except Exception:  # noqa: BLE001
+                pass
+
         sp = _pm.for_stage(
             "paper_revision",
             topic_constraint=_pm.block("topic_constraint", topic=config.research.topic),
             writing_structure=_ws_revision,
             draft=draft,
-            reviews=reviews + data_integrity_revision,
+            reviews=_quality_prefix + reviews + data_integrity_revision,
             **_rev_blocks,
         )
         # R10-Fix2: Ensure max_tokens is sufficient for full paper revision

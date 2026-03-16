@@ -3127,3 +3127,99 @@ class TestRefineTopicAlignment:
         assert "TOPIC-CODE ALIGNMENT" in sp.user
         assert "multi-agent diversity scaling" in sp.user
         assert "REWRITE" in sp.user or "rewrite" in sp.user
+
+
+# =====================================================================
+# _validate_draft_quality tests
+# =====================================================================
+
+
+def _make_prose(word_count: int) -> str:  # noqa: E302
+    """Generate flowing prose text of approximately *word_count* words."""
+    sentence = (
+        "This is a flowing academic prose sentence "
+        "that demonstrates our research findings. "
+    )
+    words_per = len(sentence.split())
+    return sentence * (word_count // words_per + 1)
+
+
+def _make_bullets(word_count: int) -> str:
+    """Generate bullet-point text of approximately *word_count* words."""
+    line = "- This is a bullet point about a research finding\n"
+    words_per = len(line.split())
+    return line * (word_count // words_per + 1)
+
+
+def _build_draft(**section_overrides: str) -> str:
+    """Build a paper draft with default prose sections."""
+    defaults = {
+        "Abstract": _make_prose(200),
+        "Introduction": _make_prose(900),
+        "Related Work": _make_prose(700),
+        "Method": _make_prose(1200),
+        "Experiments": _make_prose(1000),
+        "Results": _make_prose(700),
+        "Discussion": _make_prose(500),
+        "Limitations": _make_prose(250),
+        "Conclusion": _make_prose(250),
+    }
+    defaults.update(section_overrides)
+    parts = ["# My Research Title\n"]
+    for heading, body in defaults.items():
+        parts.append(f"# {heading}\n{body}\n")
+    return "\n".join(parts)
+
+
+class TestValidateDraftQuality:
+    """Tests for _validate_draft_quality()."""
+
+    def test_short_section_triggers_warning(self) -> None:
+        """Short Method section triggers expand warning."""
+        draft = _build_draft(Method=_make_prose(200))
+        result = rc_executor._validate_draft_quality(draft)
+        assert any("Method" in w for w in result["overall_warnings"])
+        assert any("EXPAND" in d or "Expand" in d
+                    for d in result["revision_directives"])
+
+    def test_bullet_density_triggers_warning(self) -> None:
+        """Bullet-heavy Method section triggers rewrite warning."""
+        draft = _build_draft(Method=_make_bullets(1200))
+        result = rc_executor._validate_draft_quality(draft)
+        assert any(
+            "bullet" in w.lower() or "density" in w.lower()
+            for w in result["overall_warnings"]
+        )
+        assert any("REWRITE" in d for d in result["revision_directives"])
+
+    def test_clean_draft_no_warnings(self) -> None:
+        """Balanced prose draft produces zero warnings."""
+        draft = _build_draft()
+        result = rc_executor._validate_draft_quality(draft)
+        assert len(result["overall_warnings"]) == 0
+        assert len(result["revision_directives"]) == 0
+
+    def test_balance_warning(self) -> None:
+        """Large imbalance between sections triggers balance warning."""
+        draft = _build_draft(
+            Introduction=_make_prose(1500),
+            Results=_make_prose(100),
+        )
+        result = rc_executor._validate_draft_quality(draft)
+        bal = [w for w in result["overall_warnings"]
+               if "imbalance" in w.lower()]
+        assert len(bal) >= 1, (
+            f"Expected balance warning, got: {result['overall_warnings']}"
+        )
+
+    def test_writes_json_to_stage_dir(self, tmp_path: Path) -> None:
+        """Quality report is written as draft_quality.json."""
+        draft = _build_draft(Method=_make_prose(200))
+        rc_executor._validate_draft_quality(draft, stage_dir=tmp_path)
+        assert (tmp_path / "draft_quality.json").exists()
+        data = json.loads(
+            (tmp_path / "draft_quality.json").read_text()
+        )
+        assert "section_analysis" in data
+        assert "overall_warnings" in data
+        assert "revision_directives" in data
