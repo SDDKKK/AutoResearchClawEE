@@ -2345,11 +2345,18 @@ def _execute_experiment_design(
                 plan["datasets"] = [
                     b["name"] for b in _benchmark_plan.selected_benchmarks
                 ]
-                # Normalize existing baselines to list (LLM may emit dict)
+                # Normalize existing baselines to list of strings
+                # BUG-35: LLM may emit baselines as dict, list of dicts,
+                # or list of strings — normalize all to list[str].
                 _baselines_from_plan = plan.get("baselines", [])
                 if isinstance(_baselines_from_plan, dict):
                     _baselines_from_plan = list(_baselines_from_plan.keys())
-                elif not isinstance(_baselines_from_plan, list):
+                elif isinstance(_baselines_from_plan, list):
+                    _baselines_from_plan = [
+                        item["name"] if isinstance(item, dict) else str(item)
+                        for item in _baselines_from_plan
+                    ]
+                else:
                     _baselines_from_plan = []
                 plan["baselines"] = [
                     bl["name"] for bl in _benchmark_plan.selected_baselines
@@ -6463,7 +6470,9 @@ def _execute_paper_draft(
                 if isinstance(row.get("authors"), list) and row["authors"]:
                     first_author = row["authors"][0]
                     if isinstance(first_author, dict):
-                        authors_info = first_author.get("name", "")
+                        # BUG-38: name may be non-str (tuple/list) — force str
+                        _name = first_author.get("name", "")
+                        authors_info = _name if isinstance(_name, str) else str(_name)
                     elif isinstance(first_author, str):
                         authors_info = first_author
                     if len(row["authors"]) > 1:

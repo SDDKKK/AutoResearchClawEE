@@ -284,7 +284,14 @@ class FigureOrchestrator(AgentOrchestrator):
             ]
 
             # Only retry figures that failed
-            failed_ids = {r["figure_id"] for r in critic_feedback}
+            # BUG-37: figure_id may be non-hashable (list) — force str
+            failed_ids = set()
+            for r in critic_feedback:
+                _fid = r.get("figure_id")
+                if isinstance(_fid, str):
+                    failed_ids.add(_fid)
+                elif isinstance(_fid, list) and _fid:
+                    failed_ids.add(str(_fid[0]))
             figures = [f for f in figures if f.get("figure_id") in failed_ids]
 
             self.logger.warning(

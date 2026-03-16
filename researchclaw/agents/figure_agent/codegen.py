@@ -281,6 +281,10 @@ class CodeGenAgent(BaseAgent):
             scripts: list[dict[str, Any]] = []
 
             for fig_spec in figures:
+                # BUG-36: skip non-dict entries (LLM may return strings)
+                if not isinstance(fig_spec, dict):
+                    self.logger.warning("Skipping non-dict fig_spec: %s", type(fig_spec))
+                    continue
                 figure_id = fig_spec.get("figure_id", "unknown")
                 chart_type = fig_spec.get("chart_type", "bar_comparison")
 
@@ -419,10 +423,20 @@ class CodeGenAgent(BaseAgent):
             )
 
         if chart_type == "grouped_bar" and source_type == "multi_metric":
+            # BUG-37: LLM may return nested lists in metrics — flatten to list[str]
+            _raw_metrics = data_source.get("metrics", [])
+            _flat_metrics: list[str] = []
+            for _mi in (_raw_metrics if isinstance(_raw_metrics, list) else []):
+                if isinstance(_mi, str):
+                    _flat_metrics.append(_mi)
+                elif isinstance(_mi, list):
+                    _flat_metrics.extend(str(x) for x in _mi)
+                else:
+                    _flat_metrics.append(str(_mi))
             return self._fill_grouped_bar_template(
                 template=template,
                 condition_summaries=condition_summaries,
-                metrics=data_source.get("metrics", []),
+                metrics=_flat_metrics,
                 output_path=output_path,
                 title=title,
                 x_label=x_label,
