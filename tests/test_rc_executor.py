@@ -3123,10 +3123,11 @@ class TestRefineTopicAlignment:
             run_summaries="{}",
             condition_coverage_hint="",
             topic="multi-agent diversity scaling",
+            exp_plan_anchor="",
         )
-        assert "TOPIC-CODE ALIGNMENT" in sp.user
+        assert "EXPERIMENT PLAN ANCHOR" in sp.user
         assert "multi-agent diversity scaling" in sp.user
-        assert "REWRITE" in sp.user or "rewrite" in sp.user
+        assert "NEVER rename" in sp.user
 
 
 # =====================================================================

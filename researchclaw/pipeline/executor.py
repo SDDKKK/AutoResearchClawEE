@@ -3762,6 +3762,14 @@ def _execute_iterative_refine(
                 logger.warning("Stage 13: metric saturation detected, injecting difficulty upgrade hint")
 
         files_context = _files_to_context(best_files)
+        # BUG-10 fix: anchor refinement to original experiment plan
+        _exp_plan_anchor = ""
+        if _exp_plan_text.strip():
+            _exp_plan_anchor = (
+                "Original experiment plan (exp_plan.yaml):\n"
+                "```yaml\n" + _exp_plan_text[:4000] + "\n```\n"
+                "You MUST preserve ALL condition names from this plan.\n\n"
+            )
         ip = _pm.sub_prompt(
             "iterative_improve",
             metric_key=metric_key,
@@ -3770,6 +3778,7 @@ def _execute_iterative_refine(
             run_summaries=chr(10).join(run_summaries[:20]),
             condition_coverage_hint=_condition_coverage_hint,
             topic=config.research.topic,
+            exp_plan_anchor=_exp_plan_anchor,
         )
 
         # --- Timeout-aware prompt injection ---
