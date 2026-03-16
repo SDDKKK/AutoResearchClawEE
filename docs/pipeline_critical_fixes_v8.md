@@ -78,8 +78,8 @@
 ### T3.1 RESEARCH_DECISION 质量验证
 - **问题**: _parse_decision() 仅提取关键词，不验证最低标准（≥2 baselines, ≥3 seeds 等）
 - **文件**: `researchclaw/pipeline/executor.py`
-- **修复**: 从 decision LLM 输出中提取结构化字段并程序化验证
-- **状态**: ⬜ 待修复
+- **修复**: 在 decision 提取后增加质量检查，验证决策文本是否提及 baselines/seeds/metrics，警告缺失项并写入 decision_structured.json
+- **状态**: ✅ 已修复
 
 ### T3.2 FigureAgent 合并到当前分支
 - **问题**: FigureAgent 代码在 main 分支但不在 feat/metaclaw-integration
@@ -89,8 +89,8 @@
 ### T3.3 负面结果处理
 - **问题**: 当方法表现不如 baseline 时，论文仍写成 positive contribution
 - **文件**: `researchclaw/pipeline/executor.py` + `researchclaw/prompts.py`
-- **修复**: _detect_result_contradictions() 输出注入 paper_draft prompt，指导写成 negative result / analysis paper
-- **状态**: ⬜ 待修复
+- **修复**: `_detect_result_contradictions()` 已实现 NULL/NEGATIVE 结果检测，advisories 注入 paper_draft prompt 上下文；prompts 中 `hypothesis_gen`、`paper_draft`、`paper_revision` 均已包含 negative result 处理指导
+- **状态**: ✅ 已修复（已有实现）
 
 ### T3.4 Citation Verify 改为阻断性
 - **问题**: CITATION_VERIFY 在 NONCRITICAL_STAGES 中，失败不阻断导出
@@ -101,8 +101,8 @@
 ### T3.5 论文分段写作容错
 - **问题**: 3 次 LLM 调用中任一超时，对应章节丢失
 - **文件**: `researchclaw/pipeline/executor.py`
-- **修复**: 每次调用失败时重试 1 次，仍然失败则用 placeholder 标记缺失章节
-- **状态**: ⬜ 待修复
+- **修复**: `_write_paper_sections()` 三次 LLM 调用均增加 `retries=1`（自动重试 1 次），仍失败则用 `[PLACEHOLDER]` 标记缺失章节，确保后续流程不中断
+- **状态**: ✅ 已修复
 
 ---
 
@@ -132,6 +132,8 @@
 | 2026-03-15 | T3.2 FigureAgent 合并 | ✅ |
 | 2026-03-15 | T3.4 Citation Verify 阻断性 | ✅ |
 | 2026-03-15 | T-extra.1 Agent Config | ✅ |
+| 2026-03-15 | T3.1 Decision 质量验证 | ✅ |
+| 2026-03-15 | T3.3 负面结果处理 | ✅ (已有) |
+| 2026-03-15 | T3.5 分段写作容错 | ✅ |
 
-**已完成**: 12/15 (80%)
-**待修复**: T3.1, T3.3, T3.5
+**已完成**: 15/15 (100%)

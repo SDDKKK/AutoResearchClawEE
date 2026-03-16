@@ -4069,9 +4069,23 @@ Generated: {_utcnow_iso()}
 
     # --- Extract structured decision ---
     decision = _parse_decision(decision_md)
+
+    # T3.1: Validate decision quality — check for minimum experiment rigor
+    _quality_warnings: list[str] = []
+    _dec_lower = decision_md.lower()
+    if "baseline" not in _dec_lower and "control" not in _dec_lower:
+        _quality_warnings.append("Decision text does not mention baselines")
+    if "seed" not in _dec_lower and "replicat" not in _dec_lower and "run" not in _dec_lower:
+        _quality_warnings.append("Decision text does not mention multi-seed/replicate runs")
+    if "metric" not in _dec_lower and "accuracy" not in _dec_lower and "loss" not in _dec_lower:
+        _quality_warnings.append("Decision text does not mention evaluation metrics")
+    if _quality_warnings:
+        logger.warning("T3.1: Decision quality warnings: %s", _quality_warnings)
+
     decision_payload = {
         "decision": decision,
         "raw_text_excerpt": decision_md[:500],
+        "quality_warnings": _quality_warnings,
         "generated": _utcnow_iso(),
     }
     (stage_dir / "decision_structured.json").write_text(
@@ -4393,8 +4407,19 @@ def _write_paper_sections(
     if any(model_name.startswith(p) for p in ("gpt-5", "o3", "o4")):
         _paper_max_tokens = 24000
 
-    resp1 = _chat_with_prompt(llm, system, call1_user, max_tokens=_paper_max_tokens)
-    part1 = resp1.content.strip()
+    # T3.5: Retry once on failure, use placeholder if still fails
+    try:
+        resp1 = _chat_with_prompt(llm, system, call1_user, max_tokens=_paper_max_tokens, retries=1)
+        part1 = resp1.content.strip()
+    except Exception:  # noqa: BLE001
+        logger.error("Stage 17: Part 1 LLM call failed after retry — using placeholder")
+        part1 = (
+            "## Title\n[PLACEHOLDER — LLM call failed]\n\n"
+            "## Abstract\n[This section could not be generated due to an LLM error. "
+            "Please regenerate this stage.]\n\n"
+            "## Introduction\n[PLACEHOLDER]\n\n"
+            "## Related Work\n[PLACEHOLDER]"
+        )
     sections.append(part1)
     logger.info("Stage 17: Part 1 (Title+Abstract+Intro+Related Work) — %d chars", len(part1))
 
@@ -4426,8 +4451,15 @@ def _write_paper_sections(
         f"Outline:\n{outline}\n\n"
         "Output markdown with ## headers. Continue from where Part 1 ended."
     )
-    resp2 = _chat_with_prompt(llm, system, call2_user, max_tokens=_paper_max_tokens)
-    part2 = resp2.content.strip()
+    try:
+        resp2 = _chat_with_prompt(llm, system, call2_user, max_tokens=_paper_max_tokens, retries=1)
+        part2 = resp2.content.strip()
+    except Exception:  # noqa: BLE001
+        logger.error("Stage 17: Part 2 LLM call failed after retry — using placeholder")
+        part2 = (
+            "## Method\n[PLACEHOLDER — LLM call failed. Please regenerate this stage.]\n\n"
+            "## Experiments\n[PLACEHOLDER]"
+        )
     sections.append(part2)
     logger.info("Stage 17: Part 2 (Method+Experiments) — %d chars", len(part2))
 
@@ -4466,8 +4498,17 @@ def _write_paper_sections(
         "Results), main findings, concrete future work with specific research directions.\n\n"
         "Output markdown with ## headers. Do NOT include a References section."
     )
-    resp3 = _chat_with_prompt(llm, system, call3_user, max_tokens=_paper_max_tokens)
-    part3 = resp3.content.strip()
+    try:
+        resp3 = _chat_with_prompt(llm, system, call3_user, max_tokens=_paper_max_tokens, retries=1)
+        part3 = resp3.content.strip()
+    except Exception:  # noqa: BLE001
+        logger.error("Stage 17: Part 3 LLM call failed after retry — using placeholder")
+        part3 = (
+            "## Results\n[PLACEHOLDER — LLM call failed. Please regenerate this stage.]\n\n"
+            "## Discussion\n[PLACEHOLDER]\n\n"
+            "## Limitations\n[PLACEHOLDER]\n\n"
+            "## Conclusion\n[PLACEHOLDER]"
+        )
     sections.append(part3)
     logger.info("Stage 17: Part 3 (Results+Discussion+Limitations+Conclusion) — %d chars", len(part3))
 
