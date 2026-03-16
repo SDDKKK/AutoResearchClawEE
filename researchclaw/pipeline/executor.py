@@ -286,6 +286,30 @@ def _safe_json_loads(text: str, default: Any) -> Any:
         return default
 
 
+_METACLAW_SKILLS_DIR = str(Path.home() / ".metaclaw" / "skills")
+
+
+def _get_evolution_overlay(run_dir: Path | None, stage_name: str) -> str:
+    """Load evolution lessons + MetaClaw skills for prompt injection.
+
+    Combines intra-run lessons (from current run's evolution dir) with
+    cross-run arc-* skills (from ~/.metaclaw/skills/).
+
+    Returns empty string if no relevant lessons/skills exist or on any error.
+    """
+    if run_dir is None:
+        return ""
+    try:
+        from researchclaw.evolution import EvolutionStore
+
+        store = EvolutionStore(run_dir / "evolution")
+        return store.build_overlay(
+            stage_name, max_lessons=5, skills_dir=_METACLAW_SKILLS_DIR
+        )
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _chat_with_prompt(
     llm: LLMClient,
     system: str,
@@ -1180,8 +1204,10 @@ def _execute_topic_init(
     )
     if llm is not None:
         _pm = prompts or PromptManager()
+        _overlay = _get_evolution_overlay(run_dir, "topic_init")
         sp = _pm.for_stage(
             "topic_init",
+            evolution_overlay=_overlay,
             topic=topic,
             domains=domains,
             project_name=config.project.name,
@@ -1262,8 +1288,10 @@ def _execute_problem_decompose(
     goal_text = _read_prior_artifact(run_dir, "goal.md") or ""
     if llm is not None:
         _pm = prompts or PromptManager()
+        _overlay = _get_evolution_overlay(run_dir, "problem_decompose")
         sp = _pm.for_stage(
             "problem_decompose",
+            evolution_overlay=_overlay,
             topic=config.research.topic,
             goal_text=goal_text,
         )
@@ -1363,7 +1391,8 @@ def _execute_search_strategy(
     sources: list[dict[str, Any]] | None = None
     if llm is not None:
         _pm = prompts or PromptManager()
-        sp = _pm.for_stage("search_strategy", topic=topic, problem_tree=problem_tree)
+        _overlay = _get_evolution_overlay(run_dir, "search_strategy")
+        sp = _pm.for_stage("search_strategy", evolution_overlay=_overlay, topic=topic, problem_tree=problem_tree)
         resp = _chat_with_prompt(
             llm,
             sp.system,
@@ -1710,7 +1739,8 @@ def _execute_literature_collect(
     if not candidates and llm is not None:
         plan_text = _read_prior_artifact(run_dir, "search_plan.yaml") or ""
         _pm = prompts or PromptManager()
-        sp = _pm.for_stage("literature_collect", topic=topic, plan_text=plan_text)
+        _overlay = _get_evolution_overlay(run_dir, "literature_collect")
+        sp = _pm.for_stage("literature_collect", evolution_overlay=_overlay, topic=topic, plan_text=plan_text)
         resp = _chat_with_prompt(
             llm,
             sp.system,
@@ -1831,8 +1861,10 @@ def _execute_literature_screen(
     shortlist: list[dict[str, Any]] = []
     if llm is not None:
         _pm = prompts or PromptManager()
+        _overlay = _get_evolution_overlay(run_dir, "literature_screen")
         sp = _pm.for_stage(
             "literature_screen",
+            evolution_overlay=_overlay,
             topic=config.research.topic,
             domains=", ".join(config.research.domains)
             if config.research.domains
@@ -1907,7 +1939,8 @@ def _execute_knowledge_extract(
     cards: list[dict[str, Any]] = []
     if llm is not None:
         _pm = prompts or PromptManager()
-        sp = _pm.for_stage("knowledge_extract", shortlist=shortlist)
+        _overlay = _get_evolution_overlay(run_dir, "knowledge_extract")
+        sp = _pm.for_stage("knowledge_extract", evolution_overlay=_overlay, shortlist=shortlist)
         resp = _chat_with_prompt(
             llm,
             sp.system,
@@ -1979,8 +2012,10 @@ def _execute_synthesis(
         cards_context = "\n\n".join(snippets)
     if llm is not None:
         _pm = prompts or PromptManager()
+        _overlay = _get_evolution_overlay(run_dir, "synthesis")
         sp = _pm.for_stage(
             "synthesis",
+            evolution_overlay=_overlay,
             topic=config.research.topic,
             cards_context=cards_context,
         )
@@ -2177,8 +2212,10 @@ def _execute_experiment_design(
                     _dg_block += _fw_docs
         except Exception:  # noqa: BLE001
             pass
+        _overlay = _get_evolution_overlay(run_dir, "experiment_design")
         sp = _pm.for_stage(
             "experiment_design",
+            evolution_overlay=_overlay,
             preamble=preamble,
             hypotheses=hypotheses,
             dataset_guidance=_dg_block,
@@ -2715,8 +2752,10 @@ def _execute_code_generation(
             f"`{_md}` — use direction={'lower' if _md == 'minimize' else 'higher'} "
             f"in METRIC_DEF. You MUST NOT use the opposite direction."
         )
+        _overlay = _get_evolution_overlay(run_dir, "code_generation")
         sp = _pm.for_stage(
             "code_generation",
+            evolution_overlay=_overlay,
             topic=topic,
             metric=metric,
             pkg_hint=pkg_hint + "\n" + compute_budget + "\n" + extra_guidance,
@@ -3257,7 +3296,8 @@ def _execute_resource_planning(
     schedule: dict[str, Any] | None = None
     if llm is not None:
         _pm = prompts or PromptManager()
-        sp = _pm.for_stage("resource_planning", exp_plan=exp_plan)
+        _overlay = _get_evolution_overlay(run_dir, "resource_planning")
+        sp = _pm.for_stage("resource_planning", evolution_overlay=_overlay, exp_plan=exp_plan)
         resp = _chat_with_prompt(
             llm,
             sp.system,
@@ -4801,7 +4841,8 @@ def _execute_research_decision(
 
     if llm is not None:
         _pm = prompts or PromptManager()
-        sp = _pm.for_stage("research_decision", analysis=analysis)
+        _overlay = _get_evolution_overlay(run_dir, "research_decision")
+        sp = _pm.for_stage("research_decision", evolution_overlay=_overlay, analysis=analysis)
         _user = sp.user + _degenerate_hint
         resp = llm.chat(
             [{"role": "user", "content": _user}],
@@ -4905,8 +4946,10 @@ def _execute_paper_outline(
             _asg = _pm.block("academic_style_guide")
         except (KeyError, Exception):
             _asg = ""
+        _overlay = _get_evolution_overlay(run_dir, "paper_outline")
         sp = _pm.for_stage(
             "paper_outline",
+            evolution_overlay=_overlay,
             preamble=preamble,
             topic_constraint=_pm.block("topic_constraint", topic=config.research.topic),
             feedback=feedback,
@@ -5110,6 +5153,7 @@ def _write_paper_sections(
     *,
     llm: LLMClient,
     pm: PromptManager,
+    run_dir: Path | None = None,
     preamble: str,
     topic_constraint: str,
     exp_metrics_instruction: str,
@@ -5131,8 +5175,10 @@ def _write_paper_sections(
     except (KeyError, Exception):  # noqa: BLE001
         _writing_structure = ""
 
+    _overlay = _get_evolution_overlay(run_dir, "paper_draft")
     system = pm.for_stage(
         "paper_draft",
+        evolution_overlay=_overlay,
         preamble=preamble,
         topic_constraint=topic_constraint,
         exp_metrics_instruction=exp_metrics_instruction,
@@ -6575,6 +6621,7 @@ def _execute_paper_draft(
         draft = _write_paper_sections(
             llm=llm,
             pm=_pm,
+            run_dir=run_dir,
             preamble=preamble,
             topic_constraint=topic_constraint,
             exp_metrics_instruction=exp_metrics_instruction,
@@ -6751,8 +6798,10 @@ def _execute_peer_review(
 
     if llm is not None:
         _pm = prompts or PromptManager()
+        _overlay = _get_evolution_overlay(run_dir, "peer_review")
         sp = _pm.for_stage(
             "peer_review",
+            evolution_overlay=_overlay,
             topic=config.research.topic,
             draft=draft,
             experiment_evidence=experiment_evidence,
@@ -6843,8 +6892,10 @@ def _execute_paper_revision(
             except Exception:  # noqa: BLE001
                 pass
 
+        _overlay = _get_evolution_overlay(run_dir, "paper_revision")
         sp = _pm.for_stage(
             "paper_revision",
+            evolution_overlay=_overlay,
             topic_constraint=_pm.block("topic_constraint", topic=config.research.topic),
             writing_structure=_ws_revision,
             draft=draft,
@@ -6993,8 +7044,10 @@ def _execute_quality_gate(
                 "fabrication. Penalize severely.\n"
             )
 
+        _overlay = _get_evolution_overlay(run_dir, "quality_gate")
         sp = _pm.for_stage(
             "quality_gate",
+            evolution_overlay=_overlay,
             quality_threshold=str(config.research.quality_threshold),
             revised=paper_for_eval + _exp_context,
         )
@@ -7074,8 +7127,10 @@ def _execute_knowledge_archive(
     preamble = _build_context_preamble(config, run_dir, include_goal=True)
     if llm is not None:
         _pm = prompts or PromptManager()
+        _overlay = _get_evolution_overlay(run_dir, "knowledge_archive")
         sp = _pm.for_stage(
             "knowledge_archive",
+            evolution_overlay=_overlay,
             preamble=preamble,
             decision=decision,
             analysis=analysis,
@@ -7141,7 +7196,8 @@ def _execute_export_publish(
     revised = _read_prior_artifact(run_dir, "paper_revised.md") or ""
     if llm is not None:
         _pm = prompts or PromptManager()
-        sp = _pm.for_stage("export_publish", revised=revised)
+        _overlay = _get_evolution_overlay(run_dir, "export_publish")
+        sp = _pm.for_stage("export_publish", evolution_overlay=_overlay, revised=revised)
         resp = _chat_with_prompt(
             llm,
             sp.system,
