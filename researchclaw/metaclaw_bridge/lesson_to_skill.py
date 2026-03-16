@@ -22,6 +22,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_SEVERITY_ORDER = {"info": 0, "warning": 1, "error": 2, "critical": 3}
+
 _CONVERSION_PROMPT_SYSTEM = """\
 You are a skill designer for an AI agent system. Your job is to convert
 failure lessons from an automated research pipeline into reusable skill
@@ -86,6 +88,12 @@ def _parse_skills_response(text: str) -> list[dict[str, str]]:
         text = re.sub(r"\n?```\s*$", "", text)
     try:
         data = json.loads(text)
+        # Handle both bare array and {"skills": [...]} wrapper
+        if isinstance(data, dict):
+            for key in ("skills", "results", "data"):
+                if key in data and isinstance(data[key], list):
+                    data = data[key]
+                    break
         if isinstance(data, list):
             return [
                 s
@@ -120,19 +128,26 @@ def _write_skill(skills_dir: Path, skill: dict[str, str]) -> Path | None:
     return skill_path
 
 
+def _severity_at_least(severity: str, min_severity: str) -> bool:
+    """Check if severity meets or exceeds the minimum threshold."""
+    return _SEVERITY_ORDER.get(severity, 0) >= _SEVERITY_ORDER.get(min_severity, 0)
+
+
 def convert_lessons_to_skills(
     lessons: list[LessonEntry],
     llm: LLMClient,
     skills_dir: str | Path,
     *,
+    min_severity: str = "warning",
     max_skills: int = 3,
 ) -> list[str]:
     """Convert failure lessons into MetaClaw skills.
 
     Args:
-        lessons: High-severity lessons to convert.
+        lessons: Lessons to convert (will be filtered by severity).
         llm: LLM client for generating skills.
         skills_dir: Path to MetaClaw skills directory.
+        min_severity: Minimum severity to include ("info", "warning", "error", "critical").
         max_skills: Maximum number of skills to generate.
 
     Returns:
@@ -140,6 +155,21 @@ def convert_lessons_to_skills(
     """
     if not lessons:
         return []
+
+    # Filter by severity threshold (>= min_severity)
+    filtered = [
+        l for l in lessons
+        if _severity_at_least(getattr(l, "severity", ""), min_severity)
+    ]
+    if not filtered:
+        logger.info(
+            "No lessons at severity >= %s (total lessons: %d)", min_severity, len(lessons)
+        )
+        return []
+
+    logger.info(
+        "Converting %d lessons (severity >= %s) to skills", len(filtered), min_severity
+    )
 
     skills_path = Path(skills_dir).expanduser()
     skills_path.mkdir(parents=True, exist_ok=True)
@@ -150,7 +180,7 @@ def convert_lessons_to_skills(
     system = _CONVERSION_PROMPT_SYSTEM.format(categories=categories)
     user = _CONVERSION_PROMPT_USER.format(
         max_skills=max_skills,
-        lessons_text=_format_lessons(lessons),
+        lessons_text=_format_lessons(filtered),
         existing_skills=", ".join(existing[:50]) if existing else "(none)",
     )
 

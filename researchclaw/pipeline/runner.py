@@ -906,28 +906,23 @@ def _metaclaw_post_pipeline(
                 convert_lessons_to_skills,
             )
 
-            min_sev = getattr(l2s, "min_severity", "error")
-            filtered = [
-                l
-                for l in lessons
-                if getattr(l, "severity", "") == min_sev
-            ]
-            if filtered:
-                llm = LLMClient.from_rc_config(config)
-                new_skills = convert_lessons_to_skills(
-                    filtered,
-                    llm,
-                    getattr(bridge, "skills_dir", "~/.metaclaw/skills"),
-                    max_skills=getattr(l2s, "max_skills_per_run", 3),
+            min_sev = getattr(l2s, "min_severity", "warning")
+            llm = LLMClient.from_rc_config(config)
+            new_skills = convert_lessons_to_skills(
+                lessons,
+                llm,
+                getattr(bridge, "skills_dir", "~/.metaclaw/skills"),
+                min_severity=min_sev,
+                max_skills=getattr(l2s, "max_skills_per_run", 3),
+            )
+            if new_skills:
+                logger.info(
+                    "MetaClaw: generated %d new skills from lessons: %s",
+                    len(new_skills),
+                    new_skills,
                 )
-                if new_skills:
-                    logger.info(
-                        "MetaClaw: generated %d new skills from lessons: %s",
-                        len(new_skills),
-                        new_skills,
-                    )
         except Exception:  # noqa: BLE001
-            logger.warning("MetaClaw lesson-to-skill conversion failed")
+            logger.warning("MetaClaw lesson-to-skill conversion failed", exc_info=True)
 
     # 2. Skill effectiveness feedback
     try:

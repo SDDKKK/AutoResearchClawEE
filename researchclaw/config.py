@@ -245,7 +245,7 @@ class MetaClawLessonToSkillConfig:
     """Settings for converting lessons into MetaClaw skills."""
 
     enabled: bool = True
-    min_severity: str = "error"
+    min_severity: str = "warning"
     max_skills_per_run: int = 3
 
 
@@ -601,7 +601,7 @@ def _parse_metaclaw_bridge_config(data: dict[str, Any]) -> MetaClawBridgeConfig:
         ),
         lesson_to_skill=MetaClawLessonToSkillConfig(
             enabled=bool(l2s_data.get("enabled", True)),
-            min_severity=l2s_data.get("min_severity", "error"),
+            min_severity=l2s_data.get("min_severity", "warning"),
             max_skills_per_run=int(l2s_data.get("max_skills_per_run", 3)),
         ),
     )
