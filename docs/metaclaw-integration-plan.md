@@ -1,5 +1,7 @@
 # MetaClaw × AutoResearchClaw 集成方案
 
+> **Status**: ✅ **Implemented & Merged to main** (v0.3.0, 2026-03-16)
+>
 > **目标**: 将 MetaClaw 的持续学习能力（技能注入、技能进化、PRM 评分、RL 训练）接入 AutoResearchClaw 的 23 阶段研究流水线，提升端到端论文生成质量。
 
 ---

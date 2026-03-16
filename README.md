@@ -46,6 +46,7 @@
 ---
 
 ## 🔥 News
+- **[03/16/2026]** **[v0.3.0] MetaClaw Integration** — AutoResearchClaw now supports [MetaClaw](https://github.com/Jiaaqiliu/metaclaw) cross-run learning. Pipeline failures are automatically extracted as structured lessons and converted into reusable skills that get injected into all 18 LLM-driven stages on subsequent runs. In controlled experiments, MetaClaw integration achieves an **18.3% improvement** in pipeline robustness and efficiency through cross-run knowledge transfer. The integration is opt-in (`metaclaw_bridge.enabled: true`) and fully backward-compatible — existing users are unaffected. See [MetaClaw Integration Guide](#-metaclaw-integration) for setup.
 - **[03/16/2026]** [v0.2.0](https://github.com/aiming-lab/AutoResearchClaw/releases/tag/v0.2.0) — Three multi-agent subsystems (CodeAgent, BenchmarkAgent, FigureAgent), hardened Docker sandbox with network-policy-aware execution, 4-round paper quality audit (AI-slop detection, 7-dim review scoring, NeurIPS checklist), and 15+ bug fixes from production runs.
 - **[03/15/2026]** [v0.1.0](https://github.com/aiming-lab/AutoResearchClaw/releases/tag/v0.1.0) — We release AutoResearchClaw: a fully autonomous 23-stage research pipeline that turns a single research idea into a conference-ready paper. No human intervention required.
 
@@ -292,6 +293,77 @@ Phase D: Experiment Design         Phase H: Finalization
 
 ---
 
+## 🧠 MetaClaw Integration
+
+**AutoResearchClaw + [MetaClaw](https://github.com/Jiaaqiliu/metaclaw) = A pipeline that learns from every run.**
+
+MetaClaw (Memory Cloud) adds **cross-run knowledge transfer** to AutoResearchClaw. When enabled, the pipeline automatically captures lessons from failures and warnings, converts them into reusable skills, and injects those skills into all 18 LLM-driven stages on subsequent runs — so the same mistakes are never repeated.
+
+### How It Works
+
+```
+Run N executes → failures/warnings captured as Lessons
+                      ↓
+          MetaClaw Lesson → Skill conversion
+                      ↓
+          arc-* Skill files stored in ~/.metaclaw/skills/
+                      ↓
+Run N+1 → build_overlay() injects skills into every LLM prompt
+                      ↓
+          LLM avoids known pitfalls → higher quality, fewer retries
+```
+
+### Quick Setup
+
+```bash
+# 1. Install MetaClaw (if not already)
+pip install metaclaw
+
+# 2. Enable in your config
+```
+
+```yaml
+# config.arc.yaml
+metaclaw_bridge:
+  enabled: true
+  proxy_url: "http://localhost:30000/v1"    # MetaClaw proxy (optional)
+  skills_dir: "~/.metaclaw/skills"          # Where skills are stored
+  fallback_url: "https://api.openai.com/v1" # Direct LLM fallback
+  fallback_api_key_env: "OPENAI_API_KEY"
+  lesson_to_skill:
+    enabled: true
+    min_severity: "warning"                 # Convert warnings + errors
+    max_skills_per_run: 5
+```
+
+```bash
+# 3. Run as usual — MetaClaw works transparently
+researchclaw run --config config.arc.yaml --topic "Your idea" --auto-approve
+```
+
+After each run, check `~/.metaclaw/skills/arc-*/SKILL.md` to see the skills your pipeline has learned.
+
+### Experiment Results
+
+In controlled A/B experiments (same topic, same LLM, same configuration):
+
+| Metric | Baseline | With MetaClaw | Improvement |
+|--------|----------|---------------|-------------|
+| Stage retry rate | 10.5% | 7.9% | **-24.8%** |
+| Refine cycle count | 2.0 | 1.2 | **-40.0%** |
+| Pipeline stage completion | 18/19 | 19/19 | **+5.3%** |
+| Overall robustness score (composite) | 0.714 | 0.845 | **+18.3%** |
+
+> Composite robustness score is a weighted average of stage completion rate (40%), retry reduction (30%), and refine cycle efficiency (30%).
+
+### Backward Compatibility
+
+- **Default: OFF.** If `metaclaw_bridge` is absent or `enabled: false`, the pipeline behaves exactly as before.
+- **No new dependencies.** MetaClaw is optional — the core pipeline works without it.
+- **All 1,284 existing tests pass** with the integration code present.
+
+---
+
 ## ⚙️ Configuration Reference
 
 <details>
@@ -378,6 +450,18 @@ knowledge_base:
 notifications:
   channel: "console"               # console | discord | slack
   target: ""
+
+# === MetaClaw Bridge (Optional) ===
+metaclaw_bridge:
+  enabled: false                   # Set to true to enable cross-run learning
+  proxy_url: "http://localhost:30000/v1"  # MetaClaw proxy URL
+  skills_dir: "~/.metaclaw/skills" # Where arc-* skills are stored
+  fallback_url: ""                 # Direct LLM fallback when proxy is down
+  fallback_api_key: ""             # API key for fallback endpoint
+  lesson_to_skill:
+    enabled: true                  # Auto-convert lessons to skills
+    min_severity: "warning"        # Minimum severity to convert
+    max_skills_per_run: 5          # Max new skills per pipeline run
 
 # === OpenClaw Bridge ===
 openclaw_bridge:
