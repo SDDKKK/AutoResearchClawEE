@@ -25,6 +25,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Sequence
 from typing import Any
 
 from researchclaw.literature.models import Author, Paper
@@ -50,6 +51,8 @@ def search_openalex(
     limit: int = 20,
     year_min: int = 0,
     email: str = _POLITE_EMAIL,
+    publisher_filter: str | None = None,
+    venue_ids: Sequence[str] | None = None,
 ) -> list[Paper]:
     """Search OpenAlex for papers matching *query*.
 
@@ -63,6 +66,10 @@ def search_openalex(
         If >0, restrict to papers published in this year or later.
     email:
         Polite pool email for higher rate limits.
+    publisher_filter:
+        Optional publisher ID to filter by (e.g., "I4210136063" for IEEE).
+    venue_ids:
+        Optional venue/source IDs to filter by (e.g., ["V3149224464"] for TPWRS).
 
     Returns
     -------
@@ -83,6 +90,12 @@ def search_openalex(
     filters = []
     if year_min > 0:
         filters.append(f"from_publication_date:{year_min}-01-01")
+    if publisher_filter:
+        filters.append(f"publisher.id:{publisher_filter}")
+    if venue_ids:
+        # OpenAlex supports OR syntax with | for source IDs
+        venue_filter = "|".join(venue_ids)
+        filters.append(f"primary_location.source.id:{venue_filter}")
 
     params: dict[str, str] = {
         "search": query,

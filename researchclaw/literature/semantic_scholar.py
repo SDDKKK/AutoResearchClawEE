@@ -144,6 +144,8 @@ def search_semantic_scholar(
     limit: int = 20,
     year_min: int = 0,
     api_key: str = "",
+    fields_of_study: str | None = None,
+    venue: str | None = None,
 ) -> list[Paper]:
     """Search Semantic Scholar for papers matching *query*.
 
@@ -157,6 +159,10 @@ def search_semantic_scholar(
         If >0, restrict to papers published in this year or later.
     api_key:
         Optional S2 API key (raises rate limit to 10 req/s).
+    fields_of_study:
+        Optional field of study filter (e.g., "Engineering").
+    venue:
+        Optional venue filter (e.g., "IEEE Transactions on Power Systems").
 
     Returns
     -------
@@ -180,6 +186,10 @@ def search_semantic_scholar(
     }
     if year_min > 0:
         params["year"] = f"{year_min}-"
+    if fields_of_study:
+        params["fieldsOfStudy"] = fields_of_study
+    if venue:
+        params["venue"] = venue
 
     url = f"{_BASE_URL}?{urllib.parse.urlencode(params)}"
 

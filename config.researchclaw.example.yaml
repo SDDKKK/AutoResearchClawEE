@@ -6,6 +6,10 @@ research:
   topic: "Your research topic here"
   domains:
     - "machine-learning"
+    # For power systems optimization, use:
+    # - "electrical-engineering"
+    # - "power-systems"
+    # - "optimization"
   daily_paper_count: 10
   quality_threshold: 4.0
 
@@ -107,3 +111,5 @@ experiment:
 
 prompts:
   custom_file: ""
+  # For power systems optimization, use:
+  # custom_file: "prompts.power_systems.yaml"

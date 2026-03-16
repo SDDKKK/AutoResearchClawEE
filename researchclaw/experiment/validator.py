@@ -195,6 +195,14 @@ COMMON_SCIENCE: frozenset[str] = frozenset(
         "safetensors",
         "evaluate",
         "rouge_score",
+        # Power systems optimization stack
+        "gurobipy",
+        "networkx",
+        "pandapower",
+        "pypower",
+        "cvxpy",
+        "linopy",
+        "pypsa",
     }
 )
 

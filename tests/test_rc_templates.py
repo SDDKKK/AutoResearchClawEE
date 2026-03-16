@@ -15,6 +15,9 @@ from researchclaw.templates.conference import (
     ICLR_2026,
     ICML_2025,
     ICML_2026,
+    IEEE_TRANSACTIONS,
+    IEEE_TPWRS,
+    IEEE_CONFERENCE,
 )
 from researchclaw.templates.converter import (
     markdown_to_latex,
@@ -69,6 +72,31 @@ class TestConferenceTemplate:
         assert t.author_format == "icml"
         assert t.bib_style == "icml2025"
 
+    def test_ieee_transactions_basic_fields(self) -> None:
+        t = IEEE_TRANSACTIONS
+        assert t.name == "ieee_transactions"
+        assert t.display_name == "IEEE Transactions"
+        assert t.year == 2025
+        assert t.document_class == "IEEEtran"
+        assert t.style_package == ""  # IEEEtran uses documentclass options
+        assert t.style_options == "lettersize,journal"
+        assert t.columns == 2
+        assert t.author_format == "ieee"
+        assert t.bib_style == "IEEEtran"
+
+    def test_ieee_tpwrs_basic_fields(self) -> None:
+        t = IEEE_TPWRS
+        assert t.name == "ieee_tpwrs"
+        assert t.display_name == "IEEE Transactions on Power Systems"
+        assert t.document_class == "IEEEtran"
+
+    def test_ieee_conference_basic_fields(self) -> None:
+        t = IEEE_CONFERENCE
+        assert t.name == "ieee_conference"
+        assert t.display_name == "IEEE Conference"
+        assert t.document_class == "IEEEtran"
+        assert t.style_options == "conference"
+
     def test_frozen(self) -> None:
         with pytest.raises(AttributeError):
             NEURIPS_2024.name = "hacked"  # type: ignore[misc]
@@ -105,6 +133,41 @@ class TestRenderPreamble:
         tex = ICML_2025.render_preamble("Title", "Author", "Abstract")
         assert r"\icmltitlerunning{Running Title}" in tex
 
+    def test_ieee_transactions_preamble(self) -> None:
+        tex = IEEE_TRANSACTIONS.render_preamble("My Title", "J. Doe", "An abstract.")
+        assert r"\documentclass[lettersize,journal]{IEEEtran}" in tex
+        assert r"\usepackage{amsmath}" in tex
+        assert r"\usepackage{cite}" in tex
+        assert r"\title{My Title}" in tex
+        assert r"\author{J. Doe}" in tex
+        assert r"\markboth{IEEE Transactions on Power Systems}{}" in tex
+        assert r"\begin{abstract}" in tex
+        assert r"\end{abstract}" in tex
+
+    def test_ieee_conference_preamble(self) -> None:
+        tex = IEEE_CONFERENCE.render_preamble("Title", "Author", "Abstract")
+        assert r"\documentclass[conference]{IEEEtran}" in tex
+
+    def test_ieee_no_style_package_line(self) -> None:
+        # IEEEtran uses documentclass options, no separate \usepackage line
+        tex = IEEE_TRANSACTIONS.render_preamble("Title", "Author", "Abstract")
+        lines = tex.split("\n")
+        # Should not have a line starting with \usepackage[ for IEEEtran
+        for line in lines:
+            if line.startswith("\\usepackage[") and "IEEEtran" in line:
+                pytest.fail(f"IEEEtran should not appear in \\usepackage line: {line}")
+
+    def test_ieee_footer(self) -> None:
+        tex = IEEE_TRANSACTIONS.render_footer("refs")
+        assert r"\bibliographystyle{IEEEtran}" in tex
+        assert r"\bibliography{refs}" in tex
+        assert r"\end{document}" in tex
+
+    def test_ieee_get_style_files(self) -> None:
+        files = IEEE_TRANSACTIONS.get_style_files()
+        assert len(files) >= 1
+        assert any(f.name == "IEEEtran.cls" for f in files)
+
 
 class TestRenderFooter:
     """Tests for ConferenceTemplate.render_footer()."""
@@ -136,6 +199,17 @@ class TestGetTemplate:
         assert get_template("iclr") is ICLR_2026
         assert get_template("icml") is ICML_2026
 
+    def test_ieee_aliases(self) -> None:
+        assert get_template("ieee_transactions") is IEEE_TRANSACTIONS
+        assert get_template("ieee_tpwrs") is IEEE_TPWRS
+        assert get_template("ieee_conference") is IEEE_CONFERENCE
+        assert get_template("ieee") is IEEE_TRANSACTIONS  # short alias
+
+    def test_ieee_case_variations(self) -> None:
+        assert get_template("IEEE_TRANSACTIONS") is IEEE_TRANSACTIONS
+        assert get_template("IEEE-TPWRS") is IEEE_TPWRS
+        assert get_template("ieee conference") is IEEE_CONFERENCE
+
     def test_case_insensitive(self) -> None:
         assert get_template("NeurIPS") is NEURIPS_2025
         assert get_template("ICML_2026") is ICML_2026
@@ -157,8 +231,11 @@ class TestListConferences:
         assert "neurips_2025" in names
         assert "iclr_2026" in names
         assert "icml_2026" in names
+        assert "ieee_transactions" in names
+        assert "ieee_tpwrs" in names
+        assert "ieee_conference" in names
         # Should be deduplicated — no aliases
-        assert len(names) == 6
+        assert len(names) == 9
 
     def test_sorted(self) -> None:
         names = list_conferences()
@@ -544,13 +621,13 @@ class TestHitlStageValidation:
         assert result.ok, f"Errors: {result.errors}"
 
     def test_get_style_files_returns_bundled_sty(self) -> None:
-        """Each conference template bundles at least one .sty file."""
-        for name in ["neurips_2025", "neurips_2024", "iclr_2026", "iclr_2025", "icml_2026", "icml_2025"]:
+        """Each conference template bundles at least one .sty or .cls file."""
+        for name in ["neurips_2025", "neurips_2024", "iclr_2026", "iclr_2025", "icml_2026", "icml_2025", "ieee_transactions", "ieee_tpwrs", "ieee_conference"]:
             tpl = get_template(name)
             files = tpl.get_style_files()
             assert len(files) >= 1, f"No style files for {name}"
-            sty_names = [f.name for f in files]
-            assert any(f.endswith(".sty") for f in sty_names), f"No .sty file for {name}"
+            style_names = [f.name for f in files]
+            assert any(f.endswith((".sty", ".cls")) for f in style_names), f"No .sty or .cls file for {name}"
 
     def test_iclr_icml_have_bst_files(self) -> None:
         """ICLR and ICML templates bundle custom .bst files."""

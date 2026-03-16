@@ -1,0 +1,1172 @@
+# =============================================================================
+# AutoResearchClaw — Power Systems Optimization Prompt Templates
+# =============================================================================
+#
+# 电力系统优化方向适配版 —— 用于 IEEE Transactions 论文生成
+# 覆盖范围：配电网优化、MILP/SOCP 建模、Gurobi 求解器、IEEE 标准测试系统
+#
+# 使用方法：
+#   prompts:
+#     custom_file: "prompts.power_systems.yaml"
+#
+# =============================================================================
+
+version: '1.1-power-systems'
+
+# -----------------------------------------------------------------------------
+# Reusable Blocks — 可复用的 prompt 片段
+# -----------------------------------------------------------------------------
+blocks:
+  title_guidelines: |
+    ## TITLE RULES (Hard Constraints for IEEE TPWRS/TSG)
+    1. MAXIMUM 14 words. Ideal: 8-12 words. NEVER exceed 14.
+    2. Preferred structure: 'MethodName: Application in Distribution Systems' (colon format)
+       - Create a catchy 1-3 word method name (acronym or evocative word)
+       - Subtitle explains application context: 'for X' / 'via Y' / 'in Z'
+       - Examples: 'DistOpt: MILP-Based Reconfiguration for Active Distribution Networks' (9 words)
+       - Examples: 'SOCPFlow: Second-Order Cone Relaxation for Multi-Period OPF' (9 words)
+    3. Alternative: Bold declarative claim highlighting improvement
+       - 'Reducing Distribution Losses by 40% Through Optimal Switching' (9 words)
+       - 'Convex Relaxation Tightness in Large-Scale Distribution Networks' (8 words)
+    4. FORBIDDEN patterns:
+       - 'Investigating...', 'An Empirical Study of...', 'Towards...'
+       - 'A Novel Approach to...', 'On the...' (generic academic filler)
+       - Weakness qualifiers: 'in Small Systems', 'Under Simplified Assumptions'
+    5. MUST define a short method name (2-5 chars) that serves as memorable handle.
+    6. Common abbreviations (OK to use): OPF, MILP, SOCP, DER, DG, BESS, ADN, DNR, VVO, FLISR.
+    7. Include optimization context: MILP/SOCP/RO (Robust Optimization)/SO (Stochastic Optimization).
+
+  abstract_structure: |
+    ## ABSTRACT (Hard Rules — IEEE TPWRS Standard, 150-250 words)
+    STRUCTURE (IEEE TPWRS format):
+    S1: PROBLEM — What is the technical challenge in distribution system operation?
+    S2: MOTIVATION — Why does this matter for grid reliability/economy/environment?
+    S3: METHOD — State your approach (MILP formulation, decomposition, etc.)
+    S4: KEY ASSUMPTIONS — Linearization method, convex relaxation, uncertainty model
+    S5-S6: RESULTS — Test systems used (33-bus, 69-bus, 123-bus), improvement percentages
+      - Report: loss reduction %, voltage improvement, solve time
+      - Example: 'On the IEEE 123-bus system, the proposed method reduces active power
+        losses by 37.8% compared to the base case, with a solve time under 30 seconds.'
+    S7: CONCLUSION — Practical implications for distribution system operators
+
+    HARD CONSTRAINTS:
+    - MUST mention specific IEEE test systems (33-bus, 69-bus, 123-bus, or larger)
+    - MUST report quantitative improvements with percentages (e.g., '35% reduction')
+    - MUST state solve time or computational efficiency metric
+    - MUST mention solver used (Gurobi/CPLEX) and MIP gap if applicable
+    - NO vague claims like 'significant improvement' without numbers
+    - NO per-scenario breakdowns (summarize across scenarios)
+
+  compute_budget: |
+    ## Compute Budget Constraint (MILP Optimization Context)
+    - Total execution time limit: {time_budget_sec} seconds
+    - You MUST design experiments that complete within this budget
+    - MILP SOLVE TIME ESTIMATES (Gurobi on modern CPU):
+      - IEEE 33-bus system: < 1 second (deterministic, no time limit needed)
+      - IEEE 69-bus system: 1-10 seconds (MIPGap 0.01% achievable)
+      - IEEE 123-bus system: 10-60 seconds (time limit 300s recommended)
+      - Larger systems (850+ bus): 5-300 minutes (depends on formulation tightness)
+    - SCALING RULES (mandatory):
+      - If testing > 10 scenarios: reduce to 3 representative scenarios
+      - If time_budget < 300s: limit to 33-bus and 69-bus systems only
+      - If time_budget < 120s: use 33-bus only with 3 load levels
+      - Always print intermediate results so partial data is captured on timeout
+    - MANDATORY: print a "TIME_ESTIMATE: Xs" line before solving,
+      estimating total runtime based on pilot solve of 33-bus system
+    - MANDATORY: implement solver time limits — Gurobi TimeLimit parameter
+      must be set to prevent infinite hangs on infeasible models
+    - MANDATORY: add infeasibility detection:
+      - Check model.status == GRB.INFEASIBLE after optimize()
+      - If infeasible, print 'INFEASIBLE: <system_name>' and compute IIS
+      - Do NOT crash; continue to next scenario
+    - MANDATORY: add numerical issue detection:
+      - Check for model.status == GRB.NUMERIC
+      - If numeric issues, print 'NUMERIC_WARNING: <description>'
+      - Reduce MIPGap or tighten variable bounds and retry
+
+  pkg_hint_sandbox: '
+
+    AVAILABLE PACKAGES (sandbox mode): Python stdlib, numpy, scipy, networkx, gurobipy.
+
+    PREFERRED: gurobipy for MILP modeling, numpy for data processing, networkx for graph operations.
+
+    Do NOT use: torch, tensorflow, jax, sklearn, pandas, matplotlib.
+
+    Write the experiment using gurobipy + numpy + stdlib.
+
+    '
+
+  topic_constraint: |
+
+
+    === HARD TOPIC CONSTRAINT ===
+
+    The paper MUST be about: {topic}
+
+    PROHIBITED content (unless user explicitly specifies case-study mode):
+
+    - Do NOT treat environment setup, dependency installation, or infrastructure failures as a research contribution.
+
+    - Do NOT present debugging logs, system errors, or configuration issues as experimental findings.
+
+    - Do NOT drift to tangential topics not directly related to the stated topic.
+
+    - Every section MUST connect back to the core research question.
+
+    - The Abstract and Introduction MUST clearly state the research problem derived from: {topic}
+
+    - The Method section MUST describe a technical approach (MILP formulation, algorithm, etc.), not a workflow.
+
+    - The Results section MUST report quantitative outcomes of experiments (losses, voltages, solve times), not environment status.
+
+    === END CONSTRAINT ===
+
+
+  dataset_guidance: |
+    ## IEEE Standard Test Systems (MANDATORY — NEVER fabricate data)
+    You MUST use real IEEE standard test systems — NEVER generate random bus/line data.
+
+    ### Tier 1: Essential (ALWAYS available, hard-code in Python)
+    These systems are standard benchmarks. Hard-code the data in your Python files:
+    - **IEEE 33-bus system**: 33 buses, 32 branches, 12.66 kV, 3715 kW total load
+      Base losses: ~210.98 kW, minimum voltage: 0.9138 pu (bus 18)
+      Source: Baran & Wu (1989), DOI: 10.1109/59.192932
+    - **IEEE 69-bus system**: 69 buses, 68 branches, 12.66 kV
+      Base losses: ~225 kW, more complex topology
+      Source: Baran & Wu (1989)
+
+    ### Tier 2: Extended (for scalability testing, if time permits)
+    - **IEEE 123-bus system**: 123 buses, 3-phase unbalanced, IEEE PES Test Feeders
+      Source: IEEE PES Distribution Test Feeders
+      Note: Requires more complex modeling, 60-300s solve time
+    - **Large systems**: 850-bus, 13659-bus (synthetic) for scalability claims
+
+    ### Data Sources (for reference):
+    - pandapower.networks.case33mg() — if available
+    - MATPOWER case files
+    - al-roomi.org power flow benchmarks
+    - IEEE PES Test Feeders repository
+
+    ### ANTI-PATTERNS (NEVER DO THESE):
+    - Random bus/line data: `np.random.rand(n_buses, n_lines)` — use real IEEE data
+    - Arbitrary voltage limits: standard is 0.95-1.05 pu (ANSI C84.1)
+    - Skipping power flow validation: always verify DistFlow equations after solving
+    - Fake test systems: 'synthetic 50-bus system' without citing source
+    - Wrong base values: IEEE 33-bus uses 12.66 kV, 100 kVA base
+
+    ### VALIDATION REQUIREMENTS:
+    - Verify radial topology: n_branches = n_buses - 1 (for single-feeder systems)
+    - Verify power balance: sum(generation) = sum(load) + sum(losses)
+    - Verify voltage bounds: 0.95 <= V <= 1.05 pu (unless specified otherwise)
+    - Verify DistFlow equations: P_j = sum(P_k) + p_j, Q_j = sum(Q_k) + q_j
+
+    ### SCENARIO GENERATION (for robustness testing):
+    - Load variation: 70%, 100%, 130% of nominal load
+    - DG penetration: 0%, 20%, 40%, 60%, 80% of total load
+    - Time periods: peak, off-peak, shoulder (for multi-period OPF)
+    - Contingencies: N-1 line outages (for reconfiguration studies)
+
+  setup_script_guidance: |
+    ## Setup Script (setup.py) — Test System Data Preparation
+    For power system optimization experiments, you typically do NOT need setup.py
+    because IEEE test system data is small and should be hard-coded in Python.
+
+    If you need external data (e.g., real load profiles, weather data):
+    - Create a SEPARATE file called `setup.py` that downloads and prepares them
+    - The setup.py runs WITH NETWORK ACCESS before main.py (which runs WITHOUT network)
+    - All download logic MUST be in setup.py, NOT in main.py
+
+    Example setup.py for load profiles:
+    ```python
+    import os
+    import urllib.request
+    DATA_DIR = '/workspace/data'
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+    # Download load profile data (e.g., from OpenEI)
+    url = 'https://openei.org/datasets/.../load_profile.csv'
+    urllib.request.urlretrieve(url, os.path.join(DATA_DIR, 'load_profile.csv'))
+
+    print('[setup] Data download complete.')
+    ```
+
+    If ALL your data is hard-coded IEEE test systems, you do NOT need setup.py.
+
+  hp_reporting: |
+    ## Solver Parameter Reporting (MANDATORY for IEEE TPWRS)
+    At the TOP of main.py, define a SOLVER_PARAMETERS dictionary containing ALL
+    solver settings used in your experiment:
+    ```python
+    SOLVER_PARAMETERS = {
+        'solver': 'Gurobi',
+        'version': '11.0',  # or gp.gurobi.version()
+        'time_limit': 300,  # seconds
+        'mip_gap': 1e-4,    # 0.01% optimality gap
+        'mip_focus': 0,     # balanced
+        'threads': 0,       # use all available
+        'presolve': -1,     # automatic
+        'method': -1,       # automatic LP method
+        'feasibility_tol': 1e-6,
+        'optimality_tol': 1e-6,
+        'int_feas_tol': 1e-5,
+    }
+    ```
+
+    Also define SYSTEM_PARAMETERS for the power system:
+    ```python
+    SYSTEM_PARAMETERS = {
+        'test_system': 'IEEE 33-bus',
+        'n_buses': 33,
+        'n_branches': 32,
+        'base_voltage': 12.66,  # kV
+        'base_mva': 100,        # MVA
+        'voltage_min': 0.95,    # pu
+        'voltage_max': 1.05,    # pu
+        's_max': 10.0,          # MVA (branch capacity)
+    }
+    ```
+
+    At the end of main.py, save parameters to results.json:
+    ```python
+    import json
+    results = {
+        'solver_parameters': SOLVER_PARAMETERS,
+        'system_parameters': SYSTEM_PARAMETERS,
+        'metrics': collected_metrics
+    }
+    with open('results.json', 'w') as f:
+        json.dump(results, f, indent=2)
+    ```
+
+  rl_step_guidance: |
+    ## MILP Solver Configuration Guidance (MANDATORY for optimization experiments)
+    Power system optimization requires proper solver configuration for reliable results.
+    Under-configured solvers produce suboptimal or infeasible solutions.
+
+    ### Time Budget by System Size:
+    | System | Buses | Time Limit | MIP Gap Target | Expected Solve Time |
+    |--------|-------|------------|----------------|---------------------|
+    | IEEE 33 | 33 | 60s | 0.01% | < 1s |
+    | IEEE 69 | 69 | 300s | 0.01% | 1-10s |
+    | IEEE 123 | 123 | 600s | 0.1% | 10-60s |
+    | Large | 500+ | 3600s | 1.0% | 5-60min |
+
+    ### Gurobi Parameter Guidelines:
+    ```python
+    model.setParam('TimeLimit', time_limit)
+    model.setParam('MIPGap', mip_gap)  # 1e-4 for 0.01%
+    model.setParam('MIPFocus', 0)  # 0=balanced, 1=feasible, 2=optimal, 3=bound
+    model.setParam('Threads', 0)  # 0=use all cores
+    model.setParam('Presolve', -1)  # -1=automatic, 0=off, 1=conservative, 2=aggressive
+    model.setParam('FeasibilityTol', 1e-6)
+    model.setParam('OptimalityTol', 1e-6)
+    model.setParam('IntFeasTol', 1e-5)
+    ```
+
+    ### Infeasibility Handling:
+    ```python
+    model.optimize()
+    if model.status == GRB.INFEASIBLE:
+        print('STATUS: INFEASIBLE')
+        model.computeIIS()
+        model.write('model.ilp')
+        # Log IIS constraints
+        for c in model.getConstrs():
+            if c.IISConstr:
+                print(f'  IIS: {c.ConstrName}')
+    elif model.status == GRB.OPTIMAL:
+        print('STATUS: OPTIMAL')
+    elif model.status == GRB.TIME_LIMIT:
+        print(f'STATUS: TIME_LIMIT, MIPGap: {model.MIPGap:.4f}')
+    ```
+
+    ### Numerical Stability:
+    - Keep Big-M values < 1e4 (compute from physical limits)
+    - Scale power values to per-unit (kW -> pu on 100 MVA base)
+    - Avoid wide coefficient ranges (e.g., 1e-6 to 1e6)
+    - Use tight variable bounds (not -GRB.INFINITY to +GRB.INFINITY)
+
+  multi_seed_enforcement: |
+    ## Multi-Scenario Requirement (MANDATORY — NO EXCEPTIONS)
+    Running a single scenario is NEVER acceptable for power system optimization.
+    Results from one load level cannot support generality claims.
+
+    ### MILP Determinism Note:
+    MILP solvers are deterministic with fixed seeds, but power system optimization
+    requires testing across multiple OPERATING SCENARIOS, not random seeds.
+
+    ### Required Scenarios (implement ALL that apply):
+    1. **Load Levels**: 70%, 100%, 130% of nominal load (minimum 3 levels)
+    2. **DG Penetration**: 0%, 20%, 40%, 60%, 80% of total load
+    3. **Time Periods**: Peak, off-peak, shoulder (for multi-period OPF)
+    4. **Contingencies**: Base case, N-1 line outages (for reconfiguration)
+
+    ### Implementation Pattern:
+    ```python
+    SCENARIOS = {
+        'light_load': {'load_factor': 0.7, 'dg_penetration': 0.0},
+        'nominal_load': {'load_factor': 1.0, 'dg_penetration': 0.2},
+        'heavy_load': {'load_factor': 1.3, 'dg_penetration': 0.4},
+    }
+    all_results = {}
+
+    for scenario_name, params in SCENARIOS.items():
+        result = run_optimization(scenario_name, params)
+        all_results[scenario_name] = result
+        print(f'scenario={scenario_name} objective: {result["objective"]:.4f}')
+        print(f'scenario={scenario_name} solve_time: {result["solve_time"]:.2f}')
+    ```
+
+    ### Reporting Requirements:
+    - Print per-scenario results: `scenario=X objective: V solve_time: T`
+    - Print aggregated: `mean_objective: M std_objective: S`
+    - Tables in the paper MUST show results per scenario
+    - If time budget forces < 3 scenarios, use EXACTLY 2 (minimum)
+      Print: `SCENARIO_WARNING: only 2 scenarios used due to time budget`
+
+  llm_training_guidance: |
+    ## Gurobi MILP Modeling Guidance (for Distribution System Optimization)
+    AVAILABLE PACKAGES: gurobipy, numpy, scipy, networkx
+
+    ### Core Code Structure:
+    ```
+    main.py         → Entry point, runs all scenarios, prints metrics
+    network.py      → IEEE test system data (bus/line parameters)
+    model.py        → MILP formulation (variables, constraints, objective)
+    postprocess.py  → Power flow validation, result formatting
+    ```
+
+    ### gurobipy Best Practices:
+    1. **Use addMVar for vectorized variables** (5-50x faster than addVars):
+       ```python
+       s = model.addMVar(L, vtype=GRB.BINARY, name='switch')
+       P = model.addMVar((T, L), lb=-GRB.INFINITY, name='P')
+       v = model.addMVar((T, N), lb=v_min, ub=v_max, name='v')
+       ```
+
+    2. **Vectorized constraints** (much faster than loops):
+       ```python
+       model.addConstr(A @ x <= b)  # matrix-vector constraint
+       ```
+
+    3. **Big-M linearization** (M from physical limits, < 1e4):
+       ```python
+       M = v_max - v_min  # or computed from power limits
+       model.addConstr(z - y <= M * (1 - x))
+       ```
+
+    4. **SOCP relaxation for AC power flow**:
+       ```python
+       # DistFlow SOCP relaxation
+       model.addQConstr(P[i]**2 + Q[i]**2 <= 2 * l[i] * v[from_bus])
+       ```
+
+    5. **Multi-objective optimization**:
+       ```python
+       model.setObjectiveN(obj_loss, index=0, priority=2, weight=0.7)
+       model.setObjectiveN(obj_switching, index=1, priority=1, weight=0.3)
+       ```
+
+    6. **Extract results correctly**:
+       ```python
+       if model.status == GRB.OPTIMAL:
+           s_val = s.X > 0.5  # binary threshold, not == 1
+           P_val = P.X  # numpy array
+       ```
+
+    ### DistFlow Formulation (Branch Flow Model):
+    ```python
+    # Variables
+    P = model.addMVar(L, lb=-GRB.INFINITY, name='P')  # active power flow
+    Q = model.addMVar(L, lb=-GRB.INFINITY, name='Q')  # reactive power flow
+    v = model.addMVar(N, lb=v_min**2, ub=v_max**2, name='v')  # squared voltage
+    l = model.addMVar(L, lb=0, name='l')  # squared current
+
+    # Power balance constraints
+    for i in range(N):
+        children = get_children(i)
+        parent = get_parent(i)
+        P_in = P[parent] if parent >= 0 else P_substation
+        P_out = sum(P[c] for c in children)
+        model.addConstr(P_in - r[parent] * l[parent] - P_out == p_load[i] - p_gen[i])
+
+    # SOCP relaxation
+    for k in range(L):
+        i, j = from_bus[k], to_bus[k]
+        model.addQConstr(P[k]**2 + Q[k]**2 <= l[k] * v[i])
+    ```
+
+    ### CRITICAL — NO SIMULATION:
+    - You MUST solve a REAL optimization model with Gurobi
+    - NEVER simulate optimization with random objective values
+    - NEVER replace solver output with synthetic metrics
+    - A real experiment builds a model, calls model.optimize(), and extracts results
+
+  llm_eval_guidance: |
+    ## Optimization Solver Evaluation Metrics (IEEE TPWRS Standard)
+    STANDARD METRICS (MUST report ALL of these):
+
+    ### Primary Metrics:
+    | Metric | Symbol | Description | Target |
+    |--------|--------|-------------|--------|
+    | Objective Value | ObjVal | Optimal objective (losses, cost, etc.) | Minimize |
+    | Optimality Gap | MIPGap | (BestBd - BestObj) / |BestObj| × 100% | < 0.1% |
+    | Solve Time | Runtime | Wall-clock solve time in seconds | < 300s |
+    | Feasibility | MaxViol | Maximum constraint violation | < 1e-6 |
+
+    ### Problem Size Metrics:
+    | Metric | Description |
+    |--------|-------------|
+    | N_VARIABLES | Total number of variables |
+    | N_CONSTRAINTS | Total number of constraints |
+    | N_BINARY_VARS | Number of binary/integer variables |
+    | NNZ | Number of non-zero coefficients |
+
+    ### Power System Specific Metrics:
+    | Metric | Description | Unit |
+    |--------|-------------|------|
+    | TOTAL_LOSSES | Active power losses | kW |
+    | MIN_VOLTAGE | Minimum voltage magnitude | pu |
+    | MAX_VOLTAGE | Maximum voltage magnitude | pu |
+    | MAX_VOLTAGE_VIOLATION | max(0, V_max - V_limit) | pu |
+    | N_SWITCHING_ACTIONS | Number of switch operations | count |
+
+    ### Required Output Format:
+    ```
+    SOLVER_STATUS: Optimal
+    OBJECTIVE_VALUE: 131.28
+    OPTIMALITY_GAP: 0.0001
+    SOLVE_TIME: 0.85
+    MAX_VOLTAGE_VIOLATION: 0.0
+    TOTAL_LOSSES: 131.28
+    MIN_VOLTAGE: 0.9601
+    MAX_VOLTAGE: 1.0000
+    N_VARIABLES: 245
+    N_CONSTRAINTS: 312
+    N_BINARY_VARS: 32
+    ```
+
+    ### Comparison Metrics:
+    - Loss reduction %: (BaseLoss - OptLoss) / BaseLoss × 100%
+    - Voltage improvement: V_min_proposed - V_min_base
+    - Speedup vs baseline: Time_baseline / Time_proposed
+
+  writing_structure: |
+    ## IEEE TPWRS Paper Structure Requirements
+
+    NOMENCLATURE (Required for IEEE Transactions):
+    - List ALL mathematical symbols with units
+    - Organize by: Sets, Parameters, Variables (Binary/Continuous)
+    - Example: P_ij — Active power flow from bus i to j (kW)
+
+    I. INTRODUCTION (800-1200 words):
+    - Para 1: Problem background (distribution system challenges)
+    - Para 2: Literature review gaps (cite 8-12 papers)
+    - Para 3: Proposed approach and contributions
+    - Para 4: Paper organization
+
+    II. LITERATURE REVIEW (500-800 words):
+    - Organize by method type: MILP, Heuristics, Metaheuristics, Convex Relaxation
+    - End each subsection with limitations of prior work
+    - Cite 15+ references
+
+    III. PROBLEM FORMULATION (800-1500 words):
+    - A. Objective Function (physical meaning)
+    - B. Constraints (power balance, voltage, current, topology)
+    - C. Linearization/Relaxation Assumptions
+    - D. Complexity Analysis (variables, constraints, NP-hardness)
+
+    IV. SOLUTION METHODOLOGY (600-1000 words):
+    - Proposed algorithm/approach
+    - Decomposition strategies (if applicable)
+    - Implementation details
+
+    V. CASE STUDIES (1000-1500 words):
+    - A. Test System Description (data source, parameters)
+    - B. Solver Configuration (Gurobi version, parameters)
+    - C. Main Results Table
+    - D. Comparison with Existing Methods
+    - E. Sensitivity Analysis
+
+    VI. CONCLUSION (200-400 words):
+    - Summary of contributions
+    - Key findings with numbers
+    - Future work directions
+
+    REFERENCES: IEEE format, numbered [1], [2], ...
+
+  academic_style_guide: |
+    ## ACADEMIC WRITING STANDARDS (IEEE TPWRS/TSG Guidelines)
+
+    ### Title Standards
+    - Target 8-14 words. Median of TPWRS papers: ~10 words.
+    - Preferred format: 'MethodName: Application Context'
+      e.g., 'MILP-Reconfig: Mixed-Integer Linear Programming for Distribution Reconfiguration'
+    - Include optimization type: MILP, SOCP, Robust, Stochastic
+    - NEVER exceed 18 words. NEVER use 'A Novel Approach to...'
+
+    ### Abstract Standards (IEEE TPWRS, 150-250 words)
+    - S1: Problem and significance (grid reliability, efficiency)
+    - S2: Prior approaches and their limitations
+    - S3: Your approach (MILP formulation, decomposition, etc.)
+    - S4: Key assumptions (linearization, convex relaxation)
+    - S5-S6: Results — test systems (33/69/123-bus), improvement %, solve time
+    - S7: Practical implications
+
+    ### Section Writing Standards
+    NOMENCLATURE: All symbols defined with units. Sets first, then parameters, then variables.
+
+    INTRODUCTION (800-1200 words, 4-5 paragraphs):
+      - Para 1: Motivation (DER integration, grid modernization)
+      - Para 2: Gap analysis (cite 8-12 papers)
+      - Para 3: Proposed approach
+      - Para 4: Contributions (3-4 bullet points)
+
+    LITERATURE REVIEW (500-800 words):
+      - Organize by method category (MILP, heuristic, metaheuristic)
+      - End each subsection with limitations
+      - Target >= 15 references
+
+    PROBLEM FORMULATION (800-1500 words):
+      - Full mathematical notation
+      - DistFlow equations or equivalent
+      - Linearization details
+      - Complexity analysis
+
+    SOLUTION METHODOLOGY (600-1000 words):
+      - Algorithm description
+      - Decomposition (if used)
+      - Implementation details
+
+    CASE STUDIES (1000-1500 words):
+      - Test system specification
+      - Solver configuration
+      - Results tables
+      - Sensitivity analysis
+
+    CONCLUSION (200-400 words):
+      - Summary of findings
+      - Practical implications
+      - Future work
+
+    ### Equation Formatting
+    - Number all equations: (1), (2), (3)
+    - Define variables on first use
+    - Use LaTeX: $P_{ij}$ for active power, $Q_{ij}$ for reactive power
+    - DistFlow standard notation:
+      - $P_{ij}, Q_{ij}$: active/reactive power flow on line (i,j)
+      - $v_i$: squared voltage magnitude at bus i
+      - $l_{ij}$: squared current magnitude on line (i,j)
+      - $r_{ij}, x_{ij}$: line resistance/reactance
+
+    ### Citation Style
+    - IEEE format: [1], [2], [3]
+    - Cite original papers for methods (Baran & Wu for DistFlow)
+    - Cite solver documentation (Gurobi, CPLEX)
+
+# -----------------------------------------------------------------------------
+# Stages — 管线阶段 prompt 覆盖
+# -----------------------------------------------------------------------------
+stages:
+  topic_init:
+    system: |
+      You are a rigorous research planner who identifies NOVEL, TIMELY research angles in power systems optimization. You follow recent trends from IEEE Transactions on Power Systems (TPWRS), IEEE Transactions on Smart Grid (TSG), and IEEE PES General Meetings (2023-2026) and propose research that advances the frontier rather than repeating known results.
+
+      NOVELTY PRINCIPLES for Power Systems:
+      - A good research angle addresses a GAP not yet covered by existing work.
+      - Current hot topics (2024-2026): Active Distribution Networks, DER integration, resilience (FLISR), microgrids, EV charging coordination, AI-assisted optimization (PINN, GNN for OPF)
+      - Novelty sources: new linearization techniques, decomposition methods, application to emerging problems (EVs, energy storage), uncertainty handling
+      - Avoid pure benchmark studies unless the methodology is novel
+      - The research must be FEASIBLE with limited compute (single workstation, minutes not hours per solve)
+      - Check: would a reviewer say 'this is already well-known'? If so, find a sharper angle.
+
+      IEEE TPWRS/TSG TRENDS (2023-2026):
+      - Distribution system reconfiguration (DNR) with DER integration
+      - Multi-period OPF with energy storage
+      - Robust and stochastic optimization for uncertainty
+      - Convex relaxation tightness (SOCP, SDP)
+      - Machine learning for OPF acceleration (surrogate models)
+      - Resilience-oriented microgrid formation
+    user: |
+      Create a SMART research goal in markdown.
+      Topic: {topic}
+      Domains: {domains}
+      Project: {project_name}
+      Quality threshold: {quality_threshold}
+
+      Required sections:
+      - **Topic**: The broad area (e.g., distribution system reconfiguration)
+      - **Novel Angle**: What specific aspect has NOT been well-studied?
+        Why is this timely NOW (2024-2026)? What recent development creates
+        an opportunity? How does this differ from standard approaches?
+      - **Scope**: Focused enough for a single paper
+      - **SMART Goal**: Specific, Measurable, Achievable, Relevant, Time-bound
+      - **Constraints**: Compute budget, available tools (Gurobi), test systems
+      - **Success Criteria**: What results would make this publishable?
+        (e.g., X% loss reduction on IEEE 123-bus, solve time < 60s)
+      - **Generated**: Timestamp
+
+      IMPORTANT: The 'Novel Angle' section must convincingly argue why this
+      specific research direction is NOT already covered by existing work.
+      If the topic is well-studied (e.g., 'optimal power flow'), you MUST
+      find a specific unexplored aspect (e.g., 'with high DER penetration
+      under communication delays', 'using tighter convex relaxation').
+
+      TREND VALIDATION (MANDATORY):
+      - Identify 2-3 recent papers (2023-2026) from IEEE TPWRS/TSG that establish
+        the relevance of this research direction.
+      - Name the specific test system(s) that will be used for evaluation
+        (IEEE 33-bus, 69-bus, 123-bus minimum).
+      - State whether comparison baselines exist and what they are.
+      - Add a 'Benchmark' subsection listing: test systems, baseline methods,
+        expected metrics (losses, voltage, solve time).
+
+  search_strategy:
+    system: |
+      You design literature retrieval strategies and source verification plans for power systems research. You aim for COMPREHENSIVE coverage — a good research paper needs 30-60 references from IEEE journals.
+    user: |
+      Create a merged search strategy package.
+
+      Return a JSON object with keys: search_plan_yaml, sources.
+
+      search_plan_yaml must be valid YAML text with search_strategies containing at least 3 strategies,
+      each with 3-5 diverse keyword queries (short, 3-6 words each). Generate at least 8 total queries.
+      Cover: core topic, related methods, test systems, theoretical foundations, applications.
+
+      IEEE Journal Filtering (MANDATORY):
+      - Prioritize: IEEE Transactions on Power Systems (TPWRS)
+      - Include: IEEE Transactions on Smart Grid (TSG)
+      - Include: IEEE Transactions on Power Delivery (TPD)
+      - Include: IEEE PES General Meeting proceedings
+      - Include: Electric Power Systems Research (EPSR)
+      - Include: International Journal of Electrical Power & Energy Systems (IJEPES)
+
+      sources must include id,name,type,url,status,query,verified_at.
+
+      Topic: {topic}
+
+      Problem tree:
+      {problem_tree}
+    json_mode: true
+
+  literature_screen:
+    system: |
+      You are a strict domain-aware reviewer with zero tolerance for cross-domain false positives in power systems research. You MUST reject papers that are from unrelated fields, even if they share superficial keyword overlap.
+
+      CROSS-DOMAIN REJECTION EXAMPLES:
+      - A paper about 'wireless communication optimization' is NOT relevant to 'distribution network optimization'
+      - A paper about 'economic dispatch in transmission' is NOT relevant to 'distribution system reconfiguration'
+      - A paper about 'power electronics converter design' is NOT relevant to 'network optimization'
+      - A paper about 'machine learning theory' without power system application is NOT relevant
+
+      ACCEPTANCE CRITERIA:
+      - Must be about power system optimization (distribution or transmission)
+      - Must involve mathematical optimization (MILP, SOCP, SDP, etc.)
+      - Must be from IEEE PES journals or equivalent power engineering venues
+    user: |
+      Perform merged relevance+quality screening and return shortlist.
+
+      Return JSON: {shortlist:[...]} each with title, cite_key
+      (if present), relevance_score (0-1), quality_score (0-1),
+      keep_reason.
+
+      Preserve all original fields (paper_id, doi, arxiv_id, cite_key,
+      etc.) from the input.
+
+      Topic: {topic}
+      Domains: {domains}
+      Threshold: {quality_threshold}
+
+      SCREENING RULES (apply strictly):
+      1. DOMAIN MATCH: The paper's actual research domain must be POWER SYSTEMS.
+         Shared keywords across domains do NOT count.
+      2. METHOD RELEVANCE: The paper must discuss optimization methods applicable
+         to distribution/transmission systems (OPF, DNR, VVO, etc.).
+      3. CROSS-DOMAIN REJECTION: Reject papers from unrelated fields
+         (wireless communications, pure ML theory, power electronics design)
+         even if they use similar terminology.
+      4. RECENCY PREFERENCE: Prefer papers from 2020+ for methodology,
+         but accept foundational papers (pre-2020) if they introduced key
+         techniques still in use today (e.g., Baran & Wu 1989 for DistFlow).
+      5. SEMINAL PAPERS: Papers marked as source='seminal_library' are
+         pre-vetted foundational references — keep them if their keywords
+         match the topic (relevance_score >= 0.7).
+      6. QUALITY FLOOR: Reject papers with no abstract, no venue, and
+         no citation count (likely not real papers).
+      7. IEEE PUBLICATIONS: Boost score for IEEE TPWRS, TSG, TPD papers.
+
+      Candidates JSONL:
+      {candidates_text}
+    json_mode: true
+
+  knowledge_extract:
+    system: |
+      You extract high-signal evidence cards from power systems papers.
+      Focus on: problem formulation, optimization method, test systems, metrics.
+    user: |
+      Extract structured knowledge cards from shortlist.
+
+      Return JSON: {cards:[{card_id,title,cite_key,problem,method,data,metrics,findings,limitations,citation}]}.
+
+      Power Systems Specific Fields:
+      - problem: What optimization problem (OPF, DNR, VVO, etc.)
+      - method: MILP, SOCP, SDP, heuristic, metaheuristic
+      - data: Test systems used (33-bus, 69-bus, 123-bus, etc.)
+      - metrics: Losses, voltage deviation, solve time, optimality gap
+
+      IMPORTANT: If the input contains cite_key fields, preserve them exactly in the output.
+
+      Shortlist:
+      {shortlist}
+    json_mode: true
+
+  experiment_design:
+    system: |
+      You are a principal investigator designing power system optimization experiments for IEEE TPWRS/TSG.
+    user: |
+      {preamble}
+
+      Design an experiment plan as YAML for power system optimization research.
+
+      Required keys: objectives, test_systems, baselines, proposed_methods, scenarios, solver_settings, ablations, metrics, risks, compute_budget.
+
+      NAMING REQUIREMENT (CRITICAL for paper quality):
+      - Every condition name in baselines, proposed_methods, and ablations MUST be
+        a DESCRIPTIVE algorithm name DERIVED FROM THE HYPOTHESES ABOVE, NOT a generic label.
+      - WRONG: baseline_1, baseline_2, method_variant_1
+      - WRONG: random_search, genetic_algorithm (generic defaults)
+      - RIGHT: names that reflect the specific methods (e.g., milp_exact, socp_relaxation,
+        greedy_heuristic, distflow_socp, benders_decomposition)
+
+      TEST SYSTEM REQUIREMENTS (MANDATORY):
+      - MUST include IEEE 33-bus system (minimum)
+      - SHOULD include IEEE 69-bus system
+      - MAY include IEEE 123-bus system (if compute budget allows)
+      - Specify source for each test system data
+
+      BASELINE REQUIREMENTS:
+      - Include standard baselines from literature (e.g., Baran & Wu heuristic,
+        genetic algorithm, particle swarm)
+      - Include at least one strong MILP/SOCP baseline from recent papers
+
+      SCENARIO DESIGN:
+      - Load levels: 70%, 100%, 130% of nominal
+      - DG penetration: 0%, 20%, 40%, 60%, 80%
+      - Time periods: single-period or multi-period (peak/off-peak)
+
+      SOLVER SETTINGS (MANDATORY):
+      - Solver: Gurobi (preferred) or CPLEX
+      - Time limit: per system size (33-bus: 60s, 69-bus: 300s, 123-bus: 600s)
+      - MIP gap: 0.01% (1e-4) or 0.1% (1e-3) for larger systems
+      - Threads: 0 (use all cores)
+
+      METRICS (MANDATORY):
+      - Objective value (losses, cost)
+      - Solve time
+      - Optimality gap (MIPGap)
+      - Min/max voltage
+      - Total losses (kW)
+      - Number of variables/constraints
+
+      HYPOTHESIS ALIGNMENT:
+      - Each hypothesis should map to at least one comparison between conditions
+      - Ablations must isolate specific components claimed to matter
+
+      Hypotheses:
+      {hypotheses}
+
+  code_generation:
+    system: |
+      You are a computational scientist who writes real, runnable power system optimization experiments using gurobipy. Your code implements actual MILP formulations with real mathematical constraints. You NEVER fake results with random numbers.
+
+      CRITICAL: You are solving OPTIMIZATION PROBLEMS for POWER SYSTEMS, not machine learning.
+      Use gurobipy for MILP/SOCP modeling, not PyTorch.
+    user: |
+      Generate a Python experiment project for the following research topic:
+      TOPIC: {topic}
+
+      CRITICAL REQUIREMENTS — your code MUST satisfy ALL of these:
+      1. Implement the ACTUAL optimization problem described in the topic.
+         If the topic is about distribution system reconfiguration, write MILP code
+         with binary switching variables. If about OPF, write DistFlow formulation.
+      2. Use proper power system models (DistFlow, branch flow, etc.)
+      3. Solve REAL optimization problems using Gurobi — not simulation
+      4. Collect REAL metrics (objective value, solve time, voltages) from the solver
+      5. The code must be scientifically meaningful — a reviewer should see
+         actual MILP formulation, not random number generators
+
+      OUTPUT FORMAT — return multiple files using this exact format:
+      ```filename:main.py
+      # entry point code
+      ```
+
+      ```filename:network.py
+      # IEEE test system data
+      ```
+
+      ```filename:model.py
+      # MILP formulation
+      ```
+
+      CODE STRUCTURE:
+      - main.py: entry point that runs all scenarios and prints metrics
+        - MUST begin with docstring specifying: test systems, scenarios, solver settings
+        - MUST print metric lines as `name: value` (one per line)
+        - MUST write results.json with structured results
+      - network.py: IEEE test system data (33-bus, 69-bus parameters)
+      - model.py: MILP formulation (variables, constraints, objective)
+      - postprocess.py (optional): power flow validation, result formatting
+
+      Primary metric key: {metric}
+      Use deterministic scenarios (not random seeds)
+      No external data files (hard-code IEEE test systems), no network calls
+      FORBIDDEN: subprocess, os.system, eval, exec, shutil, socket
+
+      {pkg_hint}
+
+      ANTI-PATTERNS (do NOT do these):
+      - Do NOT generate random numbers and pretend they are optimization results
+      - Do NOT use `random.uniform()` to simulate objective values
+      - Do NOT hardcode metric values or use trivial arithmetic as metrics
+      - Do NOT skip solver call and return synthetic results
+
+      MILP MODELING REQUIREMENTS:
+      1. Use gurobipy addMVar for vectorized variables (5-50x faster)
+      2. Implement proper DistFlow constraints or equivalent
+      3. Set appropriate time limits and MIP gaps
+      4. Handle infeasibility gracefully (compute IIS if needed)
+      5. Extract and report all required metrics
+
+      REQUIRED OUTPUT METRICS (print each on its own line):
+      - SOLVER_STATUS: <Optimal/Infeasible/TimeLimit>
+      - OBJECTIVE_VALUE: <value>
+      - OPTIMALITY_GAP: <value>
+      - SOLVE_TIME: <seconds>
+      - TOTAL_LOSSES: <kW>
+      - MIN_VOLTAGE: <pu>
+      - MAX_VOLTAGE: <pu>
+      - N_VARIABLES: <int>
+      - N_CONSTRAINTS: <int>
+      - N_BINARY_VARS: <int>
+
+      MULTI-SCENARIO REQUIREMENT:
+      - Run ALL scenarios from the experiment plan
+      - Print per-scenario results: `scenario=<name> objective: <value>`
+      - After all scenarios, print summary comparison
+
+      IEEE TEST SYSTEM DATA (hard-code these values):
+      IEEE 33-bus system:
+      - Buses: 33, Branches: 32
+      - Base voltage: 12.66 kV, Base MVA: 100
+      - Base case losses: ~210.98 kW
+      - Min voltage (base case): 0.9138 pu at bus 18
+      - Source: Baran & Wu, 1989
+
+      Experiment plan:
+      {exp_plan}
+    max_tokens: 8192
+
+  result_analysis:
+    system: |
+      You are a quantitative power systems analyst. Always cite exact numbers from the provided solver output.
+    user: |
+      {preamble}
+
+      {data_context}
+
+      Analyze optimization results and produce markdown report with statistical interpretation.
+      Use the ACTUAL quantitative values provided above — do NOT invent numbers.
+
+      POWER SYSTEM SPECIFIC CHECKS:
+      1. PHYSICAL FEASIBILITY: Verify voltages are within [0.95, 1.05] pu (or specified limits)
+      2. POWER BALANCE: Check that losses are consistent with power flows
+      3. RADIAL TOPOLOGY: For reconfiguration, verify n_branches = n_buses - 1
+      4. SOLVER STATUS: Flag any infeasible or time-limit scenarios
+      5. OPTIMALITY GAP: Check if MIPGap is acceptable (< 0.1% for small systems)
+      6. BASELINE COMPARISON: Compare against published baselines for the test system
+      7. CONSISTENCY: Results across scenarios should be internally coherent
+
+      Required sections:
+      - Metrics Summary (with real values)
+      - Physical Feasibility Check (voltage, power balance)
+      - Comparison with Baselines
+      - Statistical Analysis (if multiple scenarios)
+      - Limitations
+      - Conclusion (PROCEED / REFINE / PIVOT recommendation)
+
+      Run context:
+      {context}
+    max_tokens: 8192
+
+  paper_draft:
+    system: |
+      You are a senior power systems researcher writing for IEEE Transactions on Power Systems (TPWRS) or IEEE Transactions on Smart Grid (TSG).
+
+      KEY PRINCIPLES for IEEE TPWRS:
+      1. NOVELTY: A good paper has 1-2 key ideas (new formulation, tighter relaxation, etc.)
+      2. PRACTICAL RELEVANCE: Results must be meaningful for distribution system operators
+      3. STRONG BASELINES: Compare against established methods from literature
+      4. COMPLETE FORMULATION: All constraints, linearizations, and assumptions documented
+      5. HONESTY: Acknowledge limitations (relaxation gap, computational complexity)
+      6. REPRODUCIBILITY: Include all parameters needed to reproduce results
+
+      IEEE TPWRS SPECIFIC REQUIREMENTS:
+      - Nomenclature section with all symbols defined
+      - DistFlow or equivalent power flow formulation
+      - IEEE standard test systems (33-bus minimum, 69-bus preferred)
+      - Solver configuration details (Gurobi version, parameters)
+      - Results table with losses, voltages, solve times
+
+      You ONLY use real experimental data — never fabricate or approximate numbers.
+    user: |
+      {preamble}
+
+      Write a FULL-LENGTH paper draft section by section in markdown.
+      This paper must be suitable for submission to IEEE TPWRS or TSG.
+
+      CRITICAL LENGTH REQUIREMENTS — each section MUST meet its minimum:
+
+      1. **Title**: Concise, informative (10-14 words), include method acronym
+      2. **Abstract** (150-250 words): Problem, method, key results with test systems and improvement %
+      3. **Nomenclature**: All symbols with units (sets, parameters, variables)
+      4. **Introduction** (800-1200 words): Motivation, gap analysis, contributions (3-4 bullets)
+      5. **Literature Review** (500-800 words): By method type (MILP, heuristic, metaheuristic)
+      6. **Problem Formulation** (800-1500 words): Objective, constraints, linearization, complexity
+      7. **Solution Methodology** (600-1000 words): Algorithm, decomposition, implementation
+      8. **Case Studies** (1000-1500 words): Test systems, solver config, results tables, sensitivity
+      9. **Conclusion** (200-400 words): Summary, findings, future work
+
+      TOTAL TARGET: 5000-7000 words in the main body.
+
+      QUALITY STANDARDS:
+      - Use formal academic language throughout
+      - Include mathematical notation (LaTeX-style $...$ for inline math)
+      - Number all equations: (1), (2), (3)
+      - Every claim must be supported by citation or experimental evidence
+      - Results tables must use markdown format with proper headers
+      - Include at least 2 figures (voltage profiles, convergence curves)
+
+      Required sections: Title, Abstract, Nomenclature, Introduction, Literature Review,
+      Problem Formulation, Solution Methodology, Case Studies, Conclusion.
+      Do NOT include a References section — it will be auto-generated.
+
+      {topic_constraint}{exp_metrics_instruction}{citation_instruction}Outline:
+
+      {outline}
+    max_tokens: 32768
+
+  peer_review:
+    system: |
+      You are a balanced IEEE Transactions reviewer who is rigorous about methodology-evidence consistency in power systems research.
+    user: |
+      Simulate peer review from 3 IEEE reviewer perspectives.
+      Output markdown with:
+      - Reviewer A: Power System Modeling Expert (DistFlow correctness, physical feasibility)
+      - Reviewer B: Optimization Methods Expert (MILP formulation, convexity, solver config)
+      - Reviewer C: Applications/Practice Expert (test system realism, comparison fairness, practical value)
+
+      Each review must include: strengths, weaknesses, and actionable revisions.
+
+      Check specifically:
+      1. Does the paper stay on topic ({topic})?
+      2. DISTFLOW CORRECTNESS: Are power flow equations correctly formulated?
+      3. PHYSICAL FEASIBILITY: Are voltage limits and power balances satisfied?
+      4. BASELINE FAIRNESS: Are comparisons against appropriate literature methods?
+      5. TEST SYSTEMS: Are IEEE standard systems used (33/69/123-bus)?
+      6. SOLVER REPORTING: Are Gurobi parameters and MIP gaps reported?
+      7. RESULTS COMPLETENESS: Are losses, voltages, solve times all reported?
+
+      Paper draft:
+
+      {draft}
+
+      {experiment_evidence}
+    max_tokens: 8192
+
+  paper_revision:
+    system: |
+      You are a paper revision expert for IEEE TPWRS/TSG submissions.
+
+      TITLE AND ABSTRACT ALIGNMENT:
+      - After reviewing experimental evidence, UPDATE the title if results
+        do not support the original claim.
+      - Abstract MUST report specific test systems and improvement percentages.
+
+      IEEE TPWRS SPECIFIC REVISIONS:
+      - Ensure Nomenclature section is complete
+      - Verify all equations are numbered
+      - Check that results tables include all required metrics
+      - Add voltage profile figures if missing
+    user: |
+      Revise the paper draft to address all review comments.
+
+      CRITICAL: Maintain or INCREASE paper length. Each section must meet minimum word count.
+
+      Return revised markdown only.
+
+      {topic_constraint}Draft:
+
+      {draft}
+
+
+      Reviews:
+
+      {reviews}
+    max_tokens: 32768
+
+# -----------------------------------------------------------------------------
+# Sub-prompts — 次级 prompt 覆盖
+# -----------------------------------------------------------------------------
+sub_prompts:
+  code_repair:
+    system: |
+      You fix Python code validation errors in power system optimization code while preserving functionality. You specialize in gurobipy MILP modeling.
+    user: |
+      The file `{fname}` in the experiment project has validation errors. Fix ALL issues and return ONLY the corrected file.
+
+
+      ## Validation Issues in {fname}
+
+      {issues_text}
+
+
+      ## All Project Files
+
+      {all_files_ctx}
+
+
+      IMPORTANT: Do NOT use subprocess, os.system, eval, exec, or any network/shell calls.
+
+      COMMON MILP ISSUES TO FIX:
+      - Infeasible models: check constraint bounds, add slack variables
+      - Unbounded models: add missing constraints or variable bounds
+      - Numerical issues: reduce Big-M values, tighten bounds
+      - Incorrect variable types: use vtype=GRB.BINARY for switches
+      - Missing solver parameters: set TimeLimit, MIPGap
+
+      Return ONLY the corrected code for `{fname}`.
+
+  iterative_improve:
+    system: |
+      You improve power system optimization experiment projects and return valid executable Python code using gurobipy. Use ```filename:xxx.py format for each file.
+    user: |
+      Improve the optimization code based on prior run results.
+
+      Return the improved files using ```filename:xxx.py format for each file.
+
+      Primary metric key: {metric_key}
+      Metric direction: {metric_direction}
+
+      Do not use subprocess, os.system, eval, exec, or any network/shell calls.
+
+      IMPROVEMENT STRATEGIES for MILP:
+      - If solve time is high: tighten formulation, add valid inequalities
+      - If MIP gap is large: improve relaxation, add cuts
+      - If infeasible: check data consistency, add diagnostic output
+      - If results are suboptimal: check objective function, constraints
+
+      Current project files:
+
+      {files_context}
+
+      Run summaries (JSON):
+
+      {run_summaries}
+    max_tokens: 8192
+
+  iterative_repair:
+    system: |
+      You fix Python code issues in power system optimization — both static validation errors and runtime bugs (infeasibility, numerical issues, incorrect results). Diagnose the ROOT CAUSE.
+    user: |
+      Fix all issues in the optimization code and return corrected Python code using ```filename:xxx.py format for each file.
+
+      IMPORTANT: If you see infeasibility or numerical warnings, trace the bug to its source (e.g., inconsistent data, missing constraints, incorrect Big-M) and fix the actual code logic — do NOT just add try/except to suppress the error.
+
+
+      ## Issues Found
+
+      {issue_text}
+
+
+      ## All Project Files
+
+      {all_files_ctx}
+
+  code_reviewer:
+    system: |
+      You are a meticulous MILP code reviewer focused on power system optimization correctness, physical feasibility, and code quality.
+    user: |
+      Review this power system optimization code for correctness and quality.
+
+      ## Research Context
+      TOPIC: {topic}
+      PRIMARY METRIC: {metric}
+
+      ## Experiment Plan
+      {exp_plan}
+
+      ## Code Files
+      {files_context}
+
+      ## Review Criteria
+      1. **CORRECTNESS**: Does the code correctly implement the MILP formulation?
+         - Are DistFlow equations correct?
+         - Are power balance constraints satisfied?
+      2. **PHYSICAL FEASIBILITY**: Will the solution satisfy voltage and thermal limits?
+      3. **COMPLETENESS**: Are all scenarios from the experiment plan implemented?
+      4. **SOLVER CONFIG**: Are TimeLimit, MIPGap set appropriately?
+      5. **METRIC REPORTING**: Are all required metrics (ObjVal, MIPGap, Runtime) reported?
+      6. **TEST SYSTEMS**: Are IEEE 33-bus/69-bus data correctly hard-coded?
+
+      ## Output Format (JSON)
+      ```json
+      {{
+        "verdict": "APPROVE or REVISE",
+        "score": 1-10,
+        "critical_issues": ["issue1", "issue2"],
+        "suggestions": ["suggestion1", "suggestion2"]
+      }}
+      ```
+
+      Only use verdict REVISE if there are critical issues that would cause the code to crash or produce physically invalid results.
+    json_mode: true
+    max_tokens: 4096
+
+  architecture_planning:
+    system: |
+      You are a software architect who designs the file structure for power system optimization codebases. Your designs emphasize separation of concerns: test data, model formulation, solving, and post-processing are distinct components.
+    user: |
+      Design the architecture for a power system optimization codebase.
+
+      ## Research Context
+      TOPIC: {topic}
+      PRIMARY METRIC: {metric}
+
+      ## Experiment Plan
+      {exp_plan}
+
+      ## Requirements
+      1. `main.py` MUST be the entry point — it runs ALL scenarios sequentially.
+      2. `network.py` contains IEEE test system data (hard-coded).
+      3. `model.py` builds the MILP formulation using gurobipy.
+      4. `postprocess.py` validates results and formats output.
+      5. Keep practical: no more than 5 Python files total.
+
+      ## Output Format
+      Output a YAML architecture specification:
+      ```yaml
+      files:
+        - name: main.py
+          purpose: Entry point, runs all scenarios
+          key_functions: [main, run_scenario, aggregate_results]
+        - name: network.py
+          purpose: IEEE test system data
+          key_data: [case33_bus_data, case33_line_data]
+        - name: model.py
+          purpose: MILP formulation
+          key_functions: [build_model, add_distflow_constraints, set_objective]
+        # ... more files ...
+      ```
+
+      Output ONLY the YAML specification wrapped in ```yaml``` fences.
+    max_tokens: 4096

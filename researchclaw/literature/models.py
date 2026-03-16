@@ -100,6 +100,18 @@ class Paper:
                 "aaai",
                 "cvpr",
                 "acl",
+                # IEEE power systems venues
+                "ieee",
+                "transactions",
+                "power systems",
+                "smart grid",
+                "power delivery",
+                "pes",
+                "general meeting",
+                "powertech",
+                "isgt",
+                "cired",
+                "pesgm",
             )
         ):
             entry_type = "inproceedings"
