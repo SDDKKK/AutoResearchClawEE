@@ -107,6 +107,7 @@ research:
   topic: "Your research topic here"
 
 llm:
+  provider: "openai"  # or "openrouter" for access to 200+ models
   base_url: "https://api.openai.com/v1"
   api_key_env: "OPENAI_API_KEY"
   primary_model: "gpt-4o"
@@ -117,6 +118,33 @@ experiment:
   sandbox:
     python_path: ".venv/bin/python"
 ```
+
+</details>
+
+<details>
+<summary>🌐 Using OpenRouter (200+ models via single API)</summary>
+
+[OpenRouter](https://openrouter.ai) provides unified access to models from Anthropic, Google, Meta, Mistral, and more through a single API key.
+
+```yaml
+llm:
+  provider: "openrouter"
+  api_key_env: "OPENROUTER_API_KEY"
+  primary_model: "anthropic/claude-3.5-sonnet"
+  fallback_models:
+    - "google/gemini-pro-1.5"
+    - "meta-llama/llama-3.1-70b-instruct"
+```
+
+**Setup:**
+1. Get your API key at https://openrouter.ai/keys
+2. Export: `export OPENROUTER_API_KEY="sk-or-..."`
+3. Browse models: https://openrouter.ai/models
+
+**Popular models:**
+- `anthropic/claude-3.5-sonnet` — Best for research reasoning
+- `google/gemini-pro-1.5` — 1M context window
+- `meta-llama/llama-3.1-70b-instruct` — Open-source, strong performance
 
 </details>
 
