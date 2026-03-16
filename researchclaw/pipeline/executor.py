@@ -36,6 +36,101 @@ from researchclaw.experiment.validator import (
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Domain detection — maps research topic to academic domain & venue context
+# ---------------------------------------------------------------------------
+
+_DOMAIN_KEYWORDS: dict[str, tuple[list[str], str, str]] = {
+    # domain_id: (keywords, display_name, top_venues)
+    "ml": (
+        ["machine learning", "deep learning", "neural network", "transformer",
+         "reinforcement learning", "GAN", "diffusion model", "LLM", "language model",
+         "computer vision", "NLP", "representation learning", "self-supervised",
+         "federated learning", "meta-learning", "continual learning", "few-shot",
+         "knowledge distillation", "attention mechanism", "fine-tuning", "RLHF",
+         "vision transformer", "ViT", "BERT", "GPT", "autoencoder"],
+        "machine learning",
+        "NeurIPS, ICML, ICLR",
+    ),
+    "physics": (
+        ["quantum", "thermodynamic", "electrodynamic", "particle physics",
+         "condensed matter", "statistical mechanics", "cosmology", "astrophysics",
+         "plasma", "optics", "photonics", "relativity", "gravitational"],
+        "physics",
+        "Physical Review Letters, Nature Physics, JHEP",
+    ),
+    "chemistry": (
+        ["molecular", "catalysis", "polymer", "organic chemistry", "inorganic",
+         "electrochemistry", "spectroscopy", "crystallography", "drug discovery",
+         "protein folding", "computational chemistry", "DFT", "force field"],
+        "chemistry",
+        "JACS, Nature Chemistry, Angewandte Chemie",
+    ),
+    "economics": (
+        ["econometric", "macroeconomic", "microeconomic", "game theory",
+         "market", "fiscal policy", "monetary", "behavioral economics",
+         "causal inference", "panel data", "regression discontinuity",
+         "instrumental variable", "supply chain", "auction"],
+        "economics",
+        "AER, Econometrica, QJE, Review of Economic Studies",
+    ),
+    "mathematics": (
+        ["theorem", "proof", "conjecture", "topology", "algebra",
+         "number theory", "combinatorics", "differential equation",
+         "stochastic process", "functional analysis", "manifold",
+         "Riemannian", "category theory", "graph theory"],
+        "mathematics",
+        "Annals of Mathematics, Inventiones Mathematicae, JAMS",
+    ),
+    "engineering": (
+        ["robotics", "control system", "signal processing", "FPGA",
+         "embedded system", "VLSI", "antenna", "fluid dynamics", "CFD",
+         "finite element", "structural", "mechatronics", "autonomous"],
+        "engineering",
+        "IEEE Transactions, ASME journals, AIAA",
+    ),
+    "biology": (
+        ["genomics", "proteomics", "transcriptomics", "CRISPR",
+         "single-cell", "phylogenetic", "ecology", "neuroscience",
+         "bioinformatics", "sequencing", "gene expression", "epigenetic"],
+        "biology",
+        "Nature, Science, Cell, PNAS",
+    ),
+}
+
+
+def _detect_domain(topic: str, domains: tuple[str, ...] = ()) -> tuple[str, str, str]:
+    """Detect research domain from topic string and config domains.
+
+    Returns ``(domain_id, display_name, top_venues)``.
+    Falls back to ``("ml", "machine learning", "NeurIPS, ICML, ICLR")``.
+    """
+    # If user explicitly specified domains, check them first
+    for d in domains:
+        d_lower = d.lower().strip()
+        for did, (kws, dname, venues) in _DOMAIN_KEYWORDS.items():
+            if d_lower in (did, dname) or any(k in d_lower for k in kws[:3]):
+                return did, dname, venues
+
+    # Auto-detect from topic text
+    topic_lower = topic.lower()
+    best_did, best_score = "ml", 0
+    for did, (kws, dname, venues) in _DOMAIN_KEYWORDS.items():
+        score = sum(1 for k in kws if k.lower() in topic_lower)
+        if score > best_score:
+            best_score = score
+            best_did = did
+
+    did = best_did
+    _, dname, venues = _DOMAIN_KEYWORDS[did]
+    return did, dname, venues
+
+
+def _is_ml_domain(domain_id: str) -> bool:
+    """Check if the detected domain is ML/AI."""
+    return domain_id == "ml"
+
+
 @dataclass(frozen=True)
 class StageResult:
     """Outcome of executing a single stage."""
@@ -1180,7 +1275,10 @@ Derived from `goal.md` for topic: {config.research.topic}
                         ),
                     }
                 ],
-                system="You are a senior ML researcher evaluating research topic quality.",
+                system=(
+                    f"You are a senior {_detect_domain(config.research.topic, config.research.domains)[1]} "
+                    f"researcher evaluating research topic quality."
+                ),
             )
             _eval_data = _safe_json_loads(_eval_resp.content, {})
             if isinstance(_eval_data, dict):
@@ -2083,13 +2181,13 @@ def _execute_experiment_design(
         plan = {
             "topic": config.research.topic,
             "generated": _utcnow_iso(),
-            "objectives": ["Evaluate hypotheses with controlled ablations"],
-            "datasets": ["regime_easy", "regime_hard"],
-            "baselines": ["standard_baseline", "oracle_upper_bound"],
-            "proposed_methods": ["proposed_method", "proposed_method_variant"],
-            "ablations": ["no_key_component", "reduced_capacity"],
+            "objectives": ["Evaluate hypotheses with controlled experiments"],
+            "datasets": ["primary_dataset", "secondary_dataset"],
+            "baselines": ["established_method_1", "established_method_2"],
+            "proposed_methods": ["proposed_approach", "proposed_variant"],
+            "ablations": ["without_key_component", "simplified_version"],
             "metrics": [config.experiment.metric_key, "secondary_metric"],
-            "risks": ["overfitting", "data leakage"],
+            "risks": ["validity threats", "confounding variables"],
             "compute_budget": {"max_gpu": 1, "max_hours": 4},
         }
     # ── BA: BenchmarkAgent — intelligent dataset/baseline selection ──────
@@ -2526,7 +2624,7 @@ def _execute_code_generation(
                 resp.content[:300],
             )
 
-    # --- Fallback: real gradient descent on a quadratic objective ---
+    # --- Fallback: generic numerical experiment ---
     if not files:
         files = {
             "main.py": (
@@ -2534,20 +2632,26 @@ def _execute_code_generation(
                 "\n"
                 "np.random.seed(42)\n"
                 "\n"
-                "# Objective: minimize f(x) = sum(x_i^2) for x in R^10\n"
-                "# Gradient: grad_f(x) = 2 * x\n"
+                "# Fallback experiment: parameter sweep on a synthetic objective\n"
+                "# This runs when LLM code generation fails to produce valid code.\n"
                 "dim = 10\n"
-                "x = np.random.randn(dim)\n"
-                "lr = 0.1\n"
-                "best_loss = float('inf')\n"
+                "n_conditions = 3\n"
+                "results = {}\n"
                 "\n"
-                "for step in range(50):\n"
-                "    loss = float(np.sum(x ** 2))\n"
-                "    best_loss = min(best_loss, loss)\n"
-                "    grad = 2.0 * x\n"
-                "    x = x - lr * grad\n"
-                "    if step % 5 == 0 or step == 49:\n"
-                f"        print('{metric}: ' + format(best_loss, '.6f'))\n"
+                "for cond_idx in range(n_conditions):\n"
+                "    cond_name = f'condition_{cond_idx}'\n"
+                "    scores = []\n"
+                "    for seed in range(3):\n"
+                "        rng = np.random.RandomState(seed + cond_idx * 100)\n"
+                "        x = rng.randn(dim)\n"
+                "        score = float(1.0 / (1.0 + np.sum(x ** 2)))\n"
+                "        scores.append(score)\n"
+                "    mean_score = float(np.mean(scores))\n"
+                "    results[cond_name] = mean_score\n"
+                f"    print(f'condition={{cond_name}} {metric}: {{mean_score:.6f}}')\n"
+                "\n"
+                "best = max(results, key=results.get)\n"
+                f"print(f'{metric}: {{results[best]:.6f}}')\n"
             )
         }
 
@@ -2701,8 +2805,8 @@ def _execute_code_generation(
         if len(all_code_review) > 12000:
             all_code_review = all_code_review[:12000] + "\n... [truncated]"
         review_prompt = (
-            f"You are a senior ML researcher reviewing experiment code for a "
-            f"conference submission.\n\n"
+            f"You are a senior researcher reviewing experiment code for a "
+            f"research submission.\n\n"
             f"TOPIC: {config.research.topic}\n"
             f"EXPERIMENT PLAN:\n{exp_plan[:3000]}\n\n"
             f"CODE:\n```python\n{all_code_review}\n```\n\n"
@@ -5052,6 +5156,35 @@ def _validate_draft_quality(
                 f"to achieve more even section lengths."
             )
 
+    # --- C-4/C-5: Citation count and recency checks ---
+    _cite_pattern = re.compile(r"\[([a-zA-Z][a-zA-Z0-9_-]*\d{4}[a-zA-Z0-9]*)\]")
+    cited_keys = set(_cite_pattern.findall(draft))
+    if cited_keys:
+        n_citations = len(cited_keys)
+        if n_citations < 15:
+            overall_warnings.append(
+                f"Only {n_citations} unique citations found (target: >=15 for a full paper)"
+            )
+            revision_directives.append(
+                f"Add more references — a top-venue paper typically cites 25-40 works. "
+                f"Currently only {n_citations} unique citations."
+            )
+        # Check recency: count citations with year >= current_year - 2
+        _year_pat = re.compile(r"(\d{4})")
+        import datetime as _dt_cit
+        _cur_year = _dt_cit.datetime.now().year
+        recent_count = sum(
+            1 for k in cited_keys
+            for m in [_year_pat.search(k)]
+            if m and int(m.group(1)) >= _cur_year - 2
+        )
+        recency_ratio = recent_count / n_citations if n_citations > 0 else 0.0
+        if recency_ratio < 0.3 and n_citations >= 10:
+            overall_warnings.append(
+                f"Citation recency low: only {recent_count}/{n_citations} "
+                f"({recency_ratio:.0%}) from last 3 years (target: >=30%%)"
+            )
+
     result: dict[str, Any] = {
         "section_analysis": section_analysis,
         "overall_warnings": overall_warnings,
@@ -5384,7 +5517,7 @@ def _execute_paper_draft(
                     "| Comparison | Mean Diff | Std Diff | t-statistic | p-value | Significance |\n"
                     "Use the PAIRED STATISTICAL COMPARISONS data above to fill this table.\n"
                     "Mark significance: *** (p<0.001), ** (p<0.01), * (p<0.05), n.s.\n"
-                    "This is non-negotiable — a NeurIPS paper MUST have statistical tests.\n"
+                    "This is non-negotiable — a top-venue paper MUST have statistical tests.\n"
                 )
                 exp_metrics_instruction += stat_table_block
 
@@ -5485,25 +5618,37 @@ def _execute_paper_draft(
             evidence_refs=(),
         )
 
-    # R4-2: HARD BLOCK — refuse to write paper with no real data
+    # R4-2: HARD BLOCK — refuse to write paper with no real data (ML/empirical domains)
+    # For non-empirical domains (math proofs, theoretical economics), allow proceeding
+    _domain_id, _domain_name, _domain_venues = _detect_domain(
+        config.research.topic, config.research.domains
+    )
+    _empirical_domains = {"ml", "engineering", "biology", "chemistry"}
     if not has_real_metrics:
-        logger.error(
-            "BLOCKED: Cannot write paper — experiment produced NO metrics. "
-            "The pipeline will not fabricate results."
-        )
-        (stage_dir / "paper_draft.md").write_text(
-            "# Paper Draft Blocked\n\n"
-            "**Reason**: Experiment stage produced no metrics (status: failed/timeout). "
-            "Cannot write a paper without real experimental data.\n\n"
-            "**Action Required**: Fix experiment execution or increase time_budget_sec.",
-            encoding="utf-8",
-        )
-        return StageResult(
-            stage=Stage.PAPER_DRAFT,
-            status=StageStatus.FAILED,
-            artifacts=("paper_draft.md",),
-            evidence_refs=(),
-        )
+        if _domain_id in _empirical_domains:
+            logger.error(
+                "BLOCKED: Cannot write paper — experiment produced NO metrics. "
+                "The pipeline will not fabricate results."
+            )
+            (stage_dir / "paper_draft.md").write_text(
+                "# Paper Draft Blocked\n\n"
+                "**Reason**: Experiment stage produced no metrics (status: failed/timeout). "
+                "Cannot write a paper without real experimental data.\n\n"
+                "**Action Required**: Fix experiment execution or increase time_budget_sec.",
+                encoding="utf-8",
+            )
+            return StageResult(
+                stage=Stage.PAPER_DRAFT,
+                status=StageStatus.FAILED,
+                artifacts=("paper_draft.md",),
+                evidence_refs=(),
+            )
+        else:
+            logger.warning(
+                "No experiment metrics found, but domain '%s' may be non-empirical "
+                "(theoretical/mathematical). Proceeding with paper draft.",
+                _domain_name,
+            )
 
     # R11-5: Experiment quality minimum threshold before paper writing
     # Parse analysis.md for quality rating and condition completeness

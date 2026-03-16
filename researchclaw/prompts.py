@@ -616,7 +616,18 @@ _DEFAULT_BLOCKS: dict[str, str] = {
         "- No disclaimers like 'due to computational constraints'\n\n"
         "CONCLUSION:\n"
         "- Summarize findings (match actual results, no aspirational claims)\n"
-        "- 2-3 sentences of future work\n"
+        "- 2-3 sentences of future work\n\n"
+        "PROSE QUALITY (CRITICAL — violation = desk reject):\n"
+        "- Write FLOWING ACADEMIC PARAGRAPHS, not bullet-point lists.\n"
+        "- Each paragraph must have 4-8 sentences with smooth transitions.\n"
+        "- Introduction, Related Work, and Method must each be >=3 paragraphs.\n"
+        "- FORBIDDEN: starting 3+ consecutive paragraphs with the same word.\n"
+        "- FORBIDDEN: bullet-point lists in Introduction or Related Work sections.\n"
+        "- Use varied sentence structures: mix simple, compound, and complex sentences.\n"
+        "- Connect paragraphs with transition phrases: 'Building on this insight...', "
+        "'In contrast to prior work...', 'To address this limitation...'.\n"
+        "- Each Related Work paragraph must COMPARE your approach to cited work, "
+        "not merely summarize what each paper does.\n"
     ),
     "llm_training_guidance": (
         "\n## LLM Fine-Tuning Guidance (when topic involves language model training)\n"
@@ -1206,8 +1217,8 @@ _DEFAULT_STAGES: dict[str, dict[str, Any]] = {
     "topic_init": {
         "system": (
             "You are a rigorous research planner who identifies NOVEL, TIMELY "
-            "research angles. You follow recent trends from top ML conferences "
-            "(NeurIPS, ICML, ICLR 2024-2026) and propose research that advances "
+            "research angles. You follow recent trends from top venues in the "
+            "relevant domain and propose research that advances "
             "the frontier rather than repeating known results.\n\n"
             "NOVELTY PRINCIPLES:\n"
             "- A good research angle addresses a GAP not yet covered by existing work.\n"
@@ -1383,7 +1394,7 @@ _DEFAULT_STAGES: dict[str, dict[str, Any]] = {
     },
     # ── Phase D: Experiment Design ───────────────────────────────────────
     "experiment_design": {
-        "system": "You are a principal investigator designing ML experiments.",
+        "system": "You are a principal investigator designing rigorous research experiments.",
         "user": (
             "{preamble}\n\n"
             "Design an experiment plan as YAML.\n"
@@ -1825,7 +1836,7 @@ _DEFAULT_STAGES: dict[str, dict[str, Any]] = {
     # ── Phase F: Analysis & Decision ─────────────────────────────────────
     "result_analysis": {
         "system": (
-            "You are a quantitative ML analyst. Always cite exact numbers "
+            "You are a quantitative research analyst. Always cite exact numbers "
             "from the provided data."
         ),
         "user": (
@@ -1929,7 +1940,7 @@ _DEFAULT_STAGES: dict[str, dict[str, Any]] = {
     },
     "paper_draft": {
         "system": (
-            "You are a top-tier ML paper author writing for NeurIPS/ICML/ICLR.\n\n"
+            "You are a top-tier academic paper author writing for leading venues.\n\n"
             "KEY PRINCIPLES (from accepted paper analyses):\n"
             "1. NOVELTY: A good paper has 1-2 key ideas and keeps the rest simple.\n"
             "2. NARRATIVE: A short, rigorous, evidence-based technical story with a takeaway.\n"
@@ -1956,10 +1967,10 @@ _DEFAULT_STAGES: dict[str, dict[str, Any]] = {
             "hyperparameters (learning rate, clipping, discount factor, etc.), "
             "state/observation representation, reward definition, and baseline "
             "configurations.\n"
-            "13. For RL methods: specify policy architecture, training procedure "
-            "(number of rollouts, epochs, batch handling), and any stability "
-            "mechanisms (gradient clipping, reward normalization).\n"
-            "14. For baselines: specify acquisition function, surrogate model, "
+            "13. For learning-based methods: specify model architecture, training procedure "
+            "(iterations, epochs, batch handling), and any stability "
+            "mechanisms (regularization, normalization).\n"
+            "14. For baselines: specify the exact algorithm/method configuration "
             "and any tuning performed to make baselines competitive.\n\n"
             "FAILURE-AWARE REPORTING REQUIREMENTS:\n"
             "15. If any method has a success rate < 100%%, the Results section "
@@ -1983,9 +1994,8 @@ _DEFAULT_STAGES: dict[str, dict[str, Any]] = {
             "statistical grounding.\n\n"
             "METHOD NAMING RULES:\n"
             "21. NEVER use generic labels like 'baseline_1', 'method_variant_1', "
-            "'method_variant_2' in the paper. Use descriptive algorithm names "
-            "(e.g., 'Random Search', 'Bayesian Optimization', 'PPO', "
-            "'Curiosity-Driven RL'). Generic labels make the paper "
+            "'method_variant_2' in the paper. Use descriptive algorithm/method names "
+            "that reflect what the method actually does. Generic labels make the paper "
             "scientifically uninterpretable.\n"
             "22. Each method MUST have a full description: architecture, "
             "training procedure, key hyperparameters, and implementation details. "
@@ -2034,7 +2044,7 @@ _DEFAULT_STAGES: dict[str, dict[str, Any]] = {
             "(1) potential positive societal impacts of this work, "
             "(2) potential negative societal impacts or risks, "
             "(3) ethical considerations specific to this research area. "
-            "This section is MANDATORY for NeurIPS and expected by ICML/ICLR.\n"
+            "This section is MANDATORY for top ML venues and recommended for all research papers.\n"
             "{writing_structure}\n"
             "{topic_constraint}"
             "{exp_metrics_instruction}"
@@ -2112,7 +2122,7 @@ _DEFAULT_STAGES: dict[str, dict[str, Any]] = {
             "  (![Caption](charts/...)). If the draft has zero figures, ADD them in the Results\n"
             "  section using the chart files. A paper with zero figures will be desk-rejected.\n"
             "- Consolidate ALL hedging/caveats into Limitations section only.\n"
-            "- The final paper body MUST be <= 6,500 words for NeurIPS 9-page limit.\n"
+            "- The final paper body MUST be <= 6,500 words (standard 9-page conference limit).\n"
             "  If the current draft exceeds this, compress by removing redundant restatements.\n"
             "{writing_structure}\n"
             "{topic_constraint}"

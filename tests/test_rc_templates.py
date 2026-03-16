@@ -158,8 +158,8 @@ class TestListConferences:
         assert "neurips_2025" in names
         assert "iclr_2026" in names
         assert "icml_2026" in names
-        # Should be deduplicated — no aliases
-        assert len(names) == 6
+        # Should be deduplicated — no aliases (6 conference + 1 generic)
+        assert len(names) == 7
 
     def test_sorted(self) -> None:
         names = list_conferences()
