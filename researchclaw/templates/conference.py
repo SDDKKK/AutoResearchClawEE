@@ -129,7 +129,7 @@ class ConferenceTemplate:
             # IEEE format: \IEEEmembership and \thanks support
             return (
                 f"\\author{{{authors}}}\n"
-                f"\\markboth{{IEEE Transactions on Power Systems}}{{}}"
+                f"\\markboth{{{self.display_name}}}{{}}"
             )
         return f"\\author{{{authors}}}"
 

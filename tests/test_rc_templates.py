@@ -141,7 +141,7 @@ class TestRenderPreamble:
         assert r"\usepackage{cite}" in tex
         assert r"\title{My Title}" in tex
         assert r"\author{J. Doe}" in tex
-        assert r"\markboth{IEEE Transactions on Power Systems}{}" in tex
+        assert r"\markboth{IEEE Transactions}{}" in tex
         assert r"\begin{abstract}" in tex
         assert r"\end{abstract}" in tex
 

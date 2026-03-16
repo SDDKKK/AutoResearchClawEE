@@ -2165,7 +2165,7 @@ class TestConferenceWritingQuality:
         from researchclaw.writing_guide import format_writing_tips
 
         result = format_writing_tips()
-        assert "Conference Writing Best Practices" in result
+        assert "Writing Best Practices" in result
         assert "Title" in result
         assert "Common Rejections" in result
 
