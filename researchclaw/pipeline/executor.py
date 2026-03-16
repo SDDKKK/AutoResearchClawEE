@@ -4935,8 +4935,9 @@ def _write_paper_sections(
         "Follow the LENGTH REQUIREMENTS strictly:\n\n"
         "1. **Title** (HARD RULE: MUST be 14 words or fewer. Create a catchy method name "
         "first, then build the title: 'MethodName: Subtitle'. If your title exceeds 14 words, "
-        "it will be automatically rejected.)\n"
-        f"2. **Abstract** (180-220 words){abstract_structure}\n"
+        "it will be automatically rejected. NEVER use 'Untitled Paper'.)\n"
+        f"2. **Abstract** (150-220 words — HARD LIMIT. Do NOT exceed 220 words. "
+        f"Do NOT include raw metric paths or 16-digit decimals.){abstract_structure}\n"
         "3. **Introduction** (800-1000 words): real-world motivation, problem statement, "
         "research gap analysis with citations, method overview, 3-4 contributions as bullet points, "
         "paper organization paragraph. MUST cite 8-12 references.\n"
@@ -5022,8 +5023,17 @@ def _write_paper_sections(
         "comparison with prior work (CITE 3-5 papers here!), practical implications.\n"
         "9. **Limitations** (200-300 words): honest assessment of scope, dataset, methodology. "
         "ALL caveats consolidated HERE — nowhere else in the paper.\n"
-        "10. **Conclusion** (200-300 words): summary of contributions (NO number repetition from "
-        "Results), main findings, concrete future work with specific research directions.\n\n"
+        "10. **Conclusion** (100-200 words MAXIMUM — this is a HARD LIMIT): "
+        "Summarize contributions in 2-3 sentences. State main finding in 1 sentence. "
+        "Suggest 2-3 concrete future directions in 1-2 sentences. "
+        "Do NOT repeat any specific numbers from Results. Do NOT restate the abstract. "
+        "A good conclusion is SHORT and forward-looking.\n\n"
+        "CRITICAL FORMATTING RULES FOR ALL SECTIONS:\n"
+        "- Write as FLOWING PROSE paragraphs, NOT bullet-point lists\n"
+        "- NEVER dump raw metric paths like 'config/method_name/seed_3/primary_metric'\n"
+        "- All numbers must be rounded to 4 decimal places maximum\n"
+        "- Every table MUST have a descriptive caption (not just 'Table 1')\n"
+        "- Use \\begin{algorithm} or pseudocode notation, NOT \\begin{verbatim}\n\n"
         "Output markdown with ## headers. Do NOT include a References section."
     )
     resp3 = _chat_with_prompt(llm, system, call3_user, max_tokens=_paper_max_tokens)
@@ -5227,6 +5237,46 @@ def _validate_draft_quality(
                 f"Citation recency low: only {recent_count}/{n_citations} "
                 f"({recency_ratio:.0%}) from last 3 years (target: >=30%%)"
             )
+
+    # --- Abstract and Conclusion length enforcement ---
+    for sec in sections_data:
+        hl = sec["heading_lower"]
+        body_text: str = sec["body"]
+        wc = len(body_text.split())
+        if hl == "abstract" and wc > 250:
+            overall_warnings.append(
+                f"Abstract is too long: {wc} words (target: 150-220 words)"
+            )
+            revision_directives.append(
+                f"COMPRESS the Abstract from {wc} to 150-220 words. "
+                f"Remove raw metric values, redundant context, and self-references."
+            )
+        if hl in ("conclusion", "conclusions", "conclusion and future work"):
+            if wc > 300:
+                overall_warnings.append(
+                    f"Conclusion is too long: {wc} words (target: 100-200 words)"
+                )
+                revision_directives.append(
+                    f"COMPRESS the Conclusion from {wc} to 100-200 words. "
+                    f"Do NOT repeat specific metric values from Results. "
+                    f"Summarize findings in 2-3 sentences, then 2-3 future directions."
+                )
+
+    # --- Raw metric path detection (log dumps in prose) ---
+    _raw_path_re = re.compile(
+        r"\\texttt\{[a-zA-Z0-9_/.-]+(?:/[a-zA-Z0-9_/.-]+){2,}",
+    )
+    raw_path_count = len(_raw_path_re.findall(draft))
+    if raw_path_count > 3:
+        overall_warnings.append(
+            f"Raw metric paths in prose: {raw_path_count} instances of "
+            f"\\texttt{{config/path/metric}} style dumps"
+        )
+        revision_directives.append(
+            "REMOVE raw experiment log paths from prose. Replace "
+            "\\texttt{config/metric/path} with human-readable metric names "
+            "and summarize values in tables, not inline text."
+        )
 
     # --- Writing quality lint ---
     _weasel_words = re.compile(
@@ -6008,17 +6058,42 @@ def _execute_paper_draft(
 
     # IMP-6 + FA: Inject chart references into paper draft prompt
     # Prefer FigureAgent's figure_plan.json (rich descriptions) over raw file scan
+    # BUG-FIX: figure_plan.json may be a list (from FigureAgent planner) or a dict
+    # (from executor overwrite).  The orchestrator writes a list at planning time;
+    # the executor overwrites with a dict only when figure_count > 0.  If the
+    # FigureAgent renders 0 charts the list persists, and calling .get() on it
+    # raises AttributeError.
     _fa_descriptions = ""
     for _s14_dir in sorted(run_dir.glob("stage-14*")):
-        _fp_path = _s14_dir / "figure_plan.json"
-        if _fp_path.exists():
+        # Prefer the final plan (dict with figure_descriptions) if it exists
+        for _fp_name in ("figure_plan_final.json", "figure_plan.json"):
+            _fp_path = _s14_dir / _fp_name
+            if not _fp_path.exists():
+                continue
             try:
                 _fp_data = json.loads(_fp_path.read_text(encoding="utf-8"))
-                _fa_descriptions = _fp_data.get("figure_descriptions", "")
+                if isinstance(_fp_data, dict):
+                    _fa_descriptions = _fp_data.get("figure_descriptions", "")
+                elif isinstance(_fp_data, list) and _fp_data:
+                    # List format from FigureAgent planner — synthesize descriptions
+                    _desc_parts = ["## PLANNED FIGURES (from figure plan)\n"]
+                    for _fig in _fp_data:
+                        if isinstance(_fig, dict):
+                            _fid = _fig.get("figure_id", "unnamed")
+                            _ftitle = _fig.get("title", "")
+                            _fcap = _fig.get("caption", "")
+                            _fsec = _fig.get("section", "results")
+                            _desc_parts.append(
+                                f"- **{_fid}** ({_fsec}): {_ftitle}\n  {_fcap}"
+                            )
+                    if len(_desc_parts) > 1:
+                        _fa_descriptions = "\n".join(_desc_parts)
             except (json.JSONDecodeError, OSError):
                 pass
             if _fa_descriptions:
                 break
+        if _fa_descriptions:
+            break
 
     if _fa_descriptions:
         exp_metrics_instruction += "\n\n" + _fa_descriptions

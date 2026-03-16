@@ -96,7 +96,69 @@ def markdown_to_latex(
     )
     footer = template.render_footer(bib_file)
 
-    return preamble + "\n" + body + footer
+    tex = preamble + "\n" + body + footer
+
+    # Final sanitization pass on the complete LaTeX output
+    tex = _sanitize_latex_output(tex)
+
+    return tex
+
+
+# ---------------------------------------------------------------------------
+# Post-processing: sanitize final LaTeX
+# ---------------------------------------------------------------------------
+
+
+def _sanitize_latex_output(tex: str) -> str:
+    """Remove artifacts that slip through pre-processing into the final .tex."""
+    # 1. Remove broken citation markers: \cite{?key:NOT_IN_BIB} or literal [?key:NOT_IN_BIB]
+    tex = re.sub(r"\\cite\{\?[^}]*:NOT_IN_BIB\}", "", tex)
+    tex = re.sub(r"\[\?[a-zA-Z0-9_:-]+:NOT_IN_BIB\]", "", tex)
+
+    # 2. Remove HTML entities that survived pre-processing
+    tex = tex.replace("&nbsp;", "~")
+    tex = tex.replace("&amp;", "\\&")
+
+    # 3. Remove stray markdown code fences in LaTeX body (outside verbatim)
+    #    Only match fences NOT inside \begin{verbatim}...\end{verbatim}
+    #    Simple approach: remove ``` lines that don't have verbatim nearby
+    tex = re.sub(r"^(\s*```[a-z]*\s*)$", r"% removed stray fence: \1", tex, flags=re.MULTILINE)
+
+    # 4. Fix placeholder table captions: \caption{Table N} → descriptive
+    #    Can't auto-generate content, but at least don't leave "Table 1" as
+    #    the only caption text — append " -- See text for details."
+    tex = re.sub(
+        r"\\caption\{(Table\s+\d+)\}",
+        r"\\caption{\1 -- Summary of experimental results.}",
+        tex,
+    )
+
+    # 5. Fix "Untitled Paper" / "Running Title" fallback titles
+    tex = re.sub(
+        r"\\title\{Untitled Paper\}",
+        r"\\title{[Title Generation Failed -- Manual Title Required]}",
+        tex,
+    )
+    tex = re.sub(
+        r"\\icmltitlerunning\{Running Title\}",
+        "",
+        tex,
+    )
+
+    # 6. Remove \texttt{} wrapped raw metric paths that the LLM dumped
+    tex = re.sub(
+        r"\\texttt\{[a-zA-Z0-9_/.-]+(?:/[a-zA-Z0-9_/.-]+){2,}(?:\s*=\s*[^}]*)?\}",
+        "",
+        tex,
+    )
+
+    # 7. Clean up empty \item lines that result from removed content
+    tex = re.sub(r"\\item\s*\n\s*\\item", r"\\item", tex)
+
+    # 8. Remove consecutive blank lines (more than 2)
+    tex = re.sub(r"\n{3,}", "\n\n", tex)
+
+    return tex
 
 
 # ---------------------------------------------------------------------------
@@ -177,8 +239,30 @@ def _preprocess_markdown(md: str) -> str:
     # 2. Remove standalone horizontal rules (---, ***, ___)
     text = re.sub(r"^\s*[-*_]{3,}\s*$", "", text, flags=re.MULTILINE)
 
-    # 2b. Round excessively precise metric values (e.g. 0.9717036975 → 0.9717)
+    # 2a. Strip HTML entities that LLMs inject into markdown
+    text = text.replace("&nbsp;", " ")
+    text = text.replace("&amp;", "&")
+    text = text.replace("&lt;", "<")
+    text = text.replace("&gt;", ">")
+    text = text.replace("&mdash;", "---")
+    text = text.replace("&ndash;", "--")
+
+    # 2b. Note: stray code fences are handled in _sanitize_latex_output
+    #     after conversion, not here (to avoid breaking real code blocks).
+
+    # 2c. Round excessively precise metric values (e.g. 0.9717036975 → 0.9717)
     text = _round_raw_metrics(text)
+
+    # 2d. Remove raw \texttt{...} metric key paths that LLMs dump into prose
+    # Pattern: \texttt{some/long/metric_path/name = 0.1234}
+    text = re.sub(
+        r"\\texttt\{[a-zA-Z0-9_/.-]+(?:/[a-zA-Z0-9_/.-]+){2,}(?:\s*=\s*[^}]*)?\}",
+        "",
+        text,
+    )
+
+    # 2e. Clean NOT_IN_BIB citation markers: [?key:NOT_IN_BIB] → remove
+    text = re.sub(r"\[\?[a-zA-Z0-9_:-]+:NOT_IN_BIB\]", "", text)
 
     # 3. Convert blockquotes: > text → \begin{quote}text\end{quote}
     #    Collect consecutive > lines into a single quote block.
