@@ -2181,13 +2181,31 @@ def _execute_code_generation(
     if config.experiment.mode in ("sandbox", "docker"):
         if config.experiment.mode == "docker":
             pkg_prefix = "docker mode"
-            pkg_extras = (
-                ", torchvision, torchaudio, matplotlib, seaborn, scipy, "
-                "tqdm, torchdiffeq, gymnasium, networkx, PyYAML, Pillow, "
-                "transformers, datasets, accelerate, peft, bitsandbytes, "
-                "timm, einops, torchmetrics, h5py, "
-                "and additional pip-installable packages (auto-detected from imports)"
-            )
+            _net_policy = config.experiment.docker.network_policy
+            if _net_policy == "none":
+                pkg_extras = (
+                    ", torchvision, torchaudio, matplotlib, seaborn, scipy, "
+                    "tqdm, torchdiffeq, gymnasium, networkx, PyYAML, Pillow, "
+                    "transformers, datasets, accelerate, peft, bitsandbytes, "
+                    "timm, einops, torchmetrics, h5py "
+                    "(ONLY pre-installed packages — NO pip install available)"
+                )
+            elif _net_policy == "full":
+                pkg_extras = (
+                    ", torchvision, torchaudio, matplotlib, seaborn, scipy, "
+                    "tqdm, torchdiffeq, gymnasium, networkx, PyYAML, Pillow, "
+                    "transformers, datasets, accelerate, peft, bitsandbytes, "
+                    "timm, einops, torchmetrics, h5py, "
+                    "and additional pip-installable packages (auto-detected from imports)"
+                )
+            else:  # setup_only, pip_only
+                pkg_extras = (
+                    ", torchvision, torchaudio, matplotlib, seaborn, scipy, "
+                    "tqdm, torchdiffeq, gymnasium, networkx, PyYAML, Pillow, "
+                    "transformers, datasets, accelerate, peft, bitsandbytes, "
+                    "timm, einops, torchmetrics, h5py, "
+                    "and additional pip-installable packages via requirements.txt"
+                )
         else:
             pkg_prefix = "sandbox mode"
             pkg_extras = ""
@@ -2235,15 +2253,38 @@ def _execute_code_generation(
     # --- Dataset guidance + setup script + HP reporting (docker/sandbox modes) ---
     extra_guidance = ""
     if config.experiment.mode in ("sandbox", "docker"):
-        try:
-            extra_guidance += _pm.block("dataset_guidance")
-        except Exception:  # noqa: BLE001
-            pass
-        if config.experiment.mode == "docker":
+        _net_policy = (
+            config.experiment.docker.network_policy
+            if config.experiment.mode == "docker"
+            else "none"  # sandbox mode has no network
+        )
+        if _net_policy == "none":
+            # No network at all — only pre-cached datasets, no setup.py
             try:
-                extra_guidance += _pm.block("setup_script_guidance")
+                extra_guidance += _pm.block("network_disabled_guidance")
             except Exception:  # noqa: BLE001
                 pass
+        elif _net_policy == "full":
+            # Full network — datasets + full network note
+            try:
+                extra_guidance += _pm.block("dataset_guidance")
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                extra_guidance += _pm.block("network_full_guidance")
+            except Exception:  # noqa: BLE001
+                pass
+        else:
+            # setup_only / pip_only — datasets + setup script (existing behavior)
+            try:
+                extra_guidance += _pm.block("dataset_guidance")
+            except Exception:  # noqa: BLE001
+                pass
+            if config.experiment.mode == "docker":
+                try:
+                    extra_guidance += _pm.block("setup_script_guidance")
+                except Exception:  # noqa: BLE001
+                    pass
         try:
             extra_guidance += _pm.block("hp_reporting")
         except Exception:  # noqa: BLE001
