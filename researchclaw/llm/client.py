@@ -412,11 +412,27 @@ class LLMClient:
         with urllib.request.urlopen(req, timeout=self.config.timeout_sec) as resp:
             data = json.loads(resp.read())
 
+        # Handle API error responses (e.g., {"error": {"message": "..."}})
+        if "error" in data:
+            error_info = data["error"]
+            error_msg = error_info.get("message", str(error_info))
+            error_type = error_info.get("type", "api_error")
+            raise urllib.error.HTTPError(
+                url, 500, f"{error_type}: {error_msg}", {}, None
+            )
+
+        # Validate response structure
+        if "choices" not in data or not data["choices"]:
+            raise ValueError(f"Malformed API response: missing choices. Got: {data}")
+
         choice = data["choices"][0]
         usage = data.get("usage", {})
 
+        message = choice.get("message", {})
+        content = message.get("content") or ""
+
         return LLMResponse(
-            content=choice["message"]["content"] or "",
+            content=content,
             model=data.get("model", model),
             prompt_tokens=usage.get("prompt_tokens", 0),
             completion_tokens=usage.get("completion_tokens", 0),

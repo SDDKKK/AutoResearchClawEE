@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Protocol, cast
 
-from researchclaw.config import ExperimentConfig, SandboxConfig, SshRemoteConfig
+from researchclaw.config import ExperimentConfig, SshRemoteConfig
 from researchclaw.experiment.factory import create_sandbox
 from researchclaw.experiment.sandbox import SandboxProtocol
 
@@ -118,7 +118,7 @@ class ExperimentRunner:
         # Git integration (Phase 3)
         self._git: _GitManager | None = None
         if git_repo_dir is not None:
-            from arc.experiment_git import ExperimentGitManager
+            from researchclaw.experiment.git_manager import ExperimentGitManager
             mgr = ExperimentGitManager(git_repo_dir)
             if mgr.is_git_repo():
                 self._git = mgr

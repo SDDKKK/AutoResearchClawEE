@@ -53,6 +53,92 @@ class StageResult:
     evidence_refs: tuple[str, ...] = ()
 
 
+# Domain detection for topic-aware fallback and writing guide selection
+_DOMAIN_KEYWORDS: dict[str, tuple[list[str], str, str]] = {
+    # domain_id: (keywords, display_name, top_venues)
+    "ml": (
+        ["machine learning", "deep learning", "neural network", "transformer",
+         "reinforcement learning", "GAN", "diffusion model", "LLM", "language model",
+         "computer vision", "NLP", "representation learning", "self-supervised",
+         "federated learning", "meta-learning", "continual learning", "few-shot",
+         "knowledge distillation", "attention mechanism", "fine-tuning", "RLHF",
+         "vision transformer", "ViT", "BERT", "GPT", "autoencoder"],
+        "machine learning",
+        "NeurIPS, ICML, ICLR",
+    ),
+    "physics": (
+        ["quantum", "thermodynamic", "electrodynamic", "particle physics",
+         "condensed matter", "statistical mechanics", "cosmology", "astrophysics",
+         "plasma", "optics", "photonics", "relativity", "gravitational"],
+        "physics",
+        "Physical Review Letters, Nature Physics, JHEP",
+    ),
+    "chemistry": (
+        ["molecular", "catalysis", "polymer", "organic chemistry", "inorganic",
+         "electrochemistry", "spectroscopy", "crystallography", "drug discovery",
+         "protein folding", "computational chemistry", "DFT", "force field"],
+        "chemistry",
+        "JACS, Nature Chemistry, Angewandte Chemie",
+    ),
+    "economics": (
+        ["econometric", "macroeconomic", "microeconomic", "game theory",
+         "market", "fiscal policy", "monetary", "behavioral economics",
+         "causal inference", "panel data", "regression discontinuity",
+         "instrumental variable", "supply chain", "auction"],
+        "economics",
+        "AER, Econometrica, JPE, QJE",
+    ),
+    "biology": (
+        ["genomics", "proteomics", "transcriptomics", "metabolomics",
+         "single-cell", "spatial transcriptomics", "phylogenetics",
+         "population genetics", "systems biology", "synthetic biology",
+         "bioinformatics", "biomarker", "clinical trial", "epidemiology"],
+        "biology",
+        "Nature, Science, Cell, PNAS",
+    ),
+    "power_systems": (
+        ["power system", "distribution network", "topology", "BIBC",
+         "load flow", "power flow", "reconfiguration", "reliability",
+         "FMEA", "outage", "switching", "smart grid", "microgrid",
+         "voltage regulation", "transformer", "feeder", "SCADA",
+         "gurobipy", "MILP", "optimal power flow", "OPF"],
+        "power systems engineering",
+        "IEEE Transactions on Power Systems, IEEE Transactions on Smart Grid",
+    ),
+}
+
+
+def _detect_domain(topic: str, domain_hint: str = "") -> tuple[str, str, str]:
+    """Detect research domain from topic text.
+
+    Returns (domain_id, display_name, top_venues).
+    """
+    d_lower = domain_hint.lower().strip()
+    if d_lower:
+        # Direct match on domain hint
+        for did, (kws, dname, venues) in _DOMAIN_KEYWORDS.items():
+            if d_lower in (did, dname) or any(k in d_lower for k in kws[:3]):
+                return did, dname, venues
+
+    # Auto-detect from topic text
+    topic_lower = topic.lower()
+    best_did, best_score = "ml", 0
+    for did, (kws, dname, venues) in _DOMAIN_KEYWORDS.items():
+        score = sum(1 for k in kws if k.lower() in topic_lower)
+        if score > best_score:
+            best_score = score
+            best_did = did
+
+    did = best_did
+    _, dname, venues = _DOMAIN_KEYWORDS[did]
+    return did, dname, venues
+
+
+def _is_ml_domain(domain_id: str) -> bool:
+    """Check if the detected domain is ML/AI."""
+    return domain_id == "ml"
+
+
 def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -140,6 +226,25 @@ def _ensure_sandbox_deps(code: str, python_path: str) -> list[str]:
     if installed:
         logger.info("Sandbox: auto-installed packages: %s", ", ".join(installed))
     return installed
+
+
+def _find_prior_file(run_dir: Path, filename: str) -> Path | None:
+    """Like ``_read_prior_artifact`` but returns the *Path* instead of content."""
+    def _stage_sort_key(p: Path) -> tuple[str, int]:
+        name = p.name
+        if "_v" in name:
+            base, _, ver = name.rpartition("_v")
+            try:
+                return (base, -int(ver))
+            except ValueError:
+                return (name, -999)
+        return (name, 0)
+
+    for stage_subdir in sorted(run_dir.glob("stage-*"), key=_stage_sort_key, reverse=True):
+        candidate = stage_subdir / filename
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def _read_prior_artifact(run_dir: Path, filename: str) -> str | None:
@@ -2796,7 +2901,7 @@ def _execute_code_generation(
         try:
             repair_resp = _chat_with_prompt(
                 llm,
-                _pm.prompts["code_generation"]["system"],
+                _pm.system("code_generation"),
                 repair_prompt,
                 max_tokens=_code_max_tokens,
             )
@@ -2872,8 +2977,8 @@ def _execute_code_generation(
         )
         try:
             review_resp = llm.chat(
+                [{"role": "user", "content": review_prompt}],
                 system="You are a meticulous ML code reviewer. Be strict.",
-                user=review_prompt,
                 max_tokens=2048,
             )
             # Extract JSON from LLM response (may be wrapped in markdown fences)
@@ -2936,7 +3041,7 @@ def _execute_code_generation(
                     try:
                         fix_resp = _chat_with_prompt(
                             llm,
-                            _pm.prompts["code_generation"]["system"],
+                            _pm.system("code_generation"),
                             fix_prompt,
                             max_tokens=_code_max_tokens,
                         )
@@ -2983,11 +3088,11 @@ def _execute_code_generation(
         )
         try:
             align_resp = llm.chat(
+                [{"role": "user", "content": align_prompt}],
                 system="You are a scientific code reviewer checking topic-experiment alignment.",
-                user=align_prompt,
                 max_tokens=1024,
             )
-            align_data = _safe_json_loads(align_resp, {})
+            align_data = _safe_json_loads(align_resp.content, {})
             if isinstance(align_data, dict) and not align_data.get("aligned", True):
                 alignment_ok = False
                 alignment_note = align_data.get("reason", "Misaligned")
@@ -3012,11 +3117,11 @@ def _execute_code_generation(
                 )
                 regen_resp = _chat_with_prompt(
                     llm,
-                    system=_pm.prompts["code_generation"]["system"],
-                    user=regen_prompt,
+                    _pm.system("code_generation"),
+                    regen_prompt,
                     max_tokens=_code_max_tokens,
                 )
-                regen_files = _extract_multi_file_blocks(regen_resp)
+                regen_files = _extract_multi_file_blocks(regen_resp.content)
                 if regen_files and "main.py" in regen_files:
                     files = regen_files
                     for fname, code in files.items():
@@ -3039,11 +3144,11 @@ def _execute_code_generation(
                 '{"has_duplicates": true/false, "details": "which conditions are identical"}'
             )
             abl_resp = llm.chat(
+                [{"role": "user", "content": ablation_prompt}],
                 system="You are a code reviewer checking experimental conditions.",
-                user=ablation_prompt,
                 max_tokens=512,
             )
-            abl_data = _safe_json_loads(abl_resp, {})
+            abl_data = _safe_json_loads(abl_resp.content, {})
             if isinstance(abl_data, dict) and abl_data.get("has_duplicates"):
                 logger.warning(
                     "Stage 10: Duplicate ablation conditions detected: %s",
@@ -7117,7 +7222,9 @@ def execute_stage(
                     )
                     break
 
-    if gate_required(stage, config.security.hitl_required_stages):
+    if result.status == StageStatus.DONE and gate_required(
+        stage, config.security.hitl_required_stages
+    ):
         if auto_approve_gates:
             if bridge.use_memory:
                 adapters.memory.append("gates", f"{run_id}:{int(stage)}:auto-approved")
@@ -7160,3 +7267,613 @@ def execute_stage(
         pass
 
     return result
+
+
+_BULLET_LENIENT_SECTIONS = frozenset({
+    "introduction", "limitations", "limitation",
+    "limitations and future work", "abstract",
+})
+
+# Main body sections used for balance ratio check.
+_BALANCE_SECTIONS = frozenset({
+    "introduction", "related work", "method", "experiments", "results",
+    "discussion",
+})
+
+
+def _validate_draft_quality(
+    draft: str,
+    stage_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Validate a paper draft for section balance and prose quality.
+
+    Checks:
+    1. Per-section word count vs ``SECTION_WORD_TARGETS``.
+    2. Bullet-point / numbered-list density per section.
+    3. Largest-to-smallest main-section word-count ratio.
+
+    Returns a dict with ``section_analysis``, ``overall_warnings``, and
+    ``revision_directives``.  Optionally writes ``draft_quality.json`` to
+    *stage_dir*.
+    """
+    from researchclaw.prompts import SECTION_WORD_TARGETS, _SECTION_TARGET_ALIASES
+
+    _heading_re = re.compile(r"^(#{1,4})\s+(.+)$", re.MULTILINE)
+    matches = list(_heading_re.finditer(draft))
+
+    sections_data: list[dict[str, Any]] = []
+    for i, m in enumerate(matches):
+        level = len(m.group(1))
+        heading = m.group(2).strip()
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(draft)
+        body = draft[start:end].strip()
+        sections_data.append({
+            "heading": heading,
+            "heading_lower": heading.strip().lower(),
+            "level": level,
+            "body": body,
+        })
+
+    section_analysis: list[dict[str, Any]] = []
+    overall_warnings: list[str] = []
+    revision_directives: list[str] = []
+    main_section_words: dict[str, int] = {}
+
+    _bullet_re = re.compile(r"^\s*[-*]\s+", re.MULTILINE)
+    _numbered_re = re.compile(r"^\s*\d+\.\s+", re.MULTILINE)
+
+    for sec in sections_data:
+        if sec["level"] > 2:
+            continue
+        heading_lower: str = sec["heading_lower"]
+        body: str = sec["body"]
+        word_count = len(body.split())
+        canon = heading_lower
+        if canon not in SECTION_WORD_TARGETS:
+            canon = _SECTION_TARGET_ALIASES.get(heading_lower, "")
+        entry: dict[str, Any] = {
+            "heading": sec["heading"],
+            "word_count": word_count,
+            "canonical": canon,
+        }
+        if canon and canon in SECTION_WORD_TARGETS:
+            lo, hi = SECTION_WORD_TARGETS[canon]
+            entry["target"] = [lo, hi]
+            if word_count < int(lo * 0.7):
+                overall_warnings.append(
+                    f"{sec['heading']} is severely under target "
+                    f"({word_count} words, target {lo}-{hi})"
+                )
+                revision_directives.append(
+                    f"EXPAND {sec['heading']} from {word_count} to {lo}+ words. "
+                    f"Add substantive content \u2014 do NOT pad with filler."
+                )
+                entry["status"] = "severely_short"
+            elif word_count < lo:
+                overall_warnings.append(
+                    f"{sec['heading']} is under target "
+                    f"({word_count} words, target {lo}-{hi})"
+                )
+                revision_directives.append(
+                    f"Expand {sec['heading']} from {word_count} to {lo}+ words."
+                )
+                entry["status"] = "short"
+            elif word_count > int(hi * 1.3):
+                overall_warnings.append(
+                    f"{sec['heading']} exceeds target "
+                    f"({word_count} words, target {lo}-{hi})"
+                )
+                revision_directives.append(
+                    f"Compress {sec['heading']} from {word_count} to {hi} words or fewer."
+                )
+                entry["status"] = "long"
+            else:
+                entry["status"] = "ok"
+        if body:
+            total_lines = len([ln for ln in body.splitlines() if ln.strip()])
+            bullet_lines = len(_bullet_re.findall(body)) + len(_numbered_re.findall(body))
+            density = bullet_lines / total_lines if total_lines > 0 else 0.0
+            entry["bullet_density"] = round(density, 2)
+            threshold = 0.50 if heading_lower in _BULLET_LENIENT_SECTIONS else 0.25
+            if density > threshold and total_lines >= 4:
+                overall_warnings.append(
+                    f"{sec['heading']} has {bullet_lines}/{total_lines} "
+                    f"bullet/numbered lines ({density:.0%} density, "
+                    f"threshold {threshold:.0%})"
+                )
+                revision_directives.append(
+                    f"REWRITE {sec['heading']} as flowing academic prose. "
+                    f"Convert bullet points to narrative paragraphs."
+                )
+                entry["bullet_status"] = "high"
+            else:
+                entry["bullet_status"] = "ok"
+        canon_balance = canon or heading_lower
+        if canon_balance in _BALANCE_SECTIONS:
+            main_section_words[canon_balance] = word_count
+        section_analysis.append(entry)
+
+    if len(main_section_words) >= 2:
+        wc_values = list(main_section_words.values())
+        max_wc = max(wc_values)
+        min_wc = min(wc_values)
+        if min_wc > 0 and max_wc / min_wc > 3.0:
+            largest = max(main_section_words, key=main_section_words.get)  # type: ignore[arg-type]
+            smallest = min(main_section_words, key=main_section_words.get)  # type: ignore[arg-type]
+            overall_warnings.append(
+                f"Section imbalance: {largest} ({max_wc} words) vs "
+                f"{smallest} ({min_wc} words) \u2014 ratio {max_wc / min_wc:.1f}x"
+            )
+            revision_directives.append(
+                f"Rebalance sections: expand {smallest} and/or compress {largest} "
+                f"to achieve more even section lengths."
+            )
+
+    # --- C-4/C-5: Citation count and recency checks ---
+    _cite_pattern = re.compile(r"\[([a-zA-Z][a-zA-Z0-9_-]*\d{4}[a-zA-Z0-9]*)\]")
+    cited_keys = set(_cite_pattern.findall(draft))
+    if cited_keys:
+        n_citations = len(cited_keys)
+        if n_citations < 15:
+            overall_warnings.append(
+                f"Only {n_citations} unique citations found (target: >=15 for a full paper)"
+            )
+            revision_directives.append(
+                f"Add more references \u2014 a top-venue paper typically cites 25-40 works. "
+                f"Currently only {n_citations} unique citations."
+            )
+        # Check recency: count citations with year >= current_year - 2
+        import datetime as _dt_cit
+        _year_pat = re.compile(r"(\d{4})")
+        _cur_year = _dt_cit.datetime.now().year
+        recent_count = sum(
+            1 for k in cited_keys
+            for m in [_year_pat.search(k)]
+            if m and int(m.group(1)) >= _cur_year - 2
+        )
+        recency_ratio = recent_count / n_citations if n_citations > 0 else 0.0
+        if recency_ratio < 0.3 and n_citations >= 10:
+            overall_warnings.append(
+                f"Citation recency low: only {recent_count}/{n_citations} "
+                f"({recency_ratio:.0%}) from last 3 years (target: >=30%%)"
+            )
+
+    # --- Abstract and Conclusion length enforcement ---
+    for sec in sections_data:
+        hl = sec["heading_lower"]
+        body_text: str = sec["body"]
+        wc = len(body_text.split())
+        if hl == "abstract" and wc > 250:
+            overall_warnings.append(
+                f"Abstract is too long: {wc} words (target: 150-220 words)"
+            )
+            revision_directives.append(
+                f"COMPRESS the Abstract from {wc} to 150-220 words. "
+                f"Remove raw metric values, redundant context, and self-references."
+            )
+        if hl in ("conclusion", "conclusions", "conclusion and future work"):
+            if wc > 300:
+                overall_warnings.append(
+                    f"Conclusion is too long: {wc} words (target: 100-200 words)"
+                )
+                revision_directives.append(
+                    f"COMPRESS the Conclusion from {wc} to 100-200 words. "
+                    f"Do NOT repeat specific metric values from Results. "
+                    f"Summarize findings in 2-3 sentences, then 2-3 future directions."
+                )
+
+    # --- Raw metric path detection (log dumps in prose) ---
+    _raw_path_re = re.compile(
+        r"\\texttt\{[a-zA-Z0-9_/.-]+(?:/[a-zA-Z0-9_/.-]+){2,}",
+    )
+    raw_path_count = len(_raw_path_re.findall(draft))
+    if raw_path_count > 3:
+        overall_warnings.append(
+            f"Raw metric paths in prose: {raw_path_count} instances of "
+            r"\\texttt{config/path/metric} style dumps"
+        )
+        revision_directives.append(
+            r"REMOVE raw experiment log paths from prose. Replace "
+            r"\texttt{config/metric/path} with human-readable metric names "
+            "and summarize values in tables, not inline text."
+        )
+
+    # --- Writing quality lint ---
+    _weasel_words = re.compile(
+        r"\b(various|many|several|quite|fairly|really|very|rather|"
+        r"somewhat|relatively|arguably|interestingly|importantly|"
+        r"it is well known that|it is obvious that|clearly)\b",
+        re.IGNORECASE,
+    )
+    _duplicate_words = re.compile(r"\b(\w+)\s+\1\b", re.IGNORECASE)
+    weasel_count = len(_weasel_words.findall(draft))
+    dup_matches = _duplicate_words.findall(draft)
+    dup_count = len([d for d in dup_matches if d.lower() not in ("that", "had")])
+    if weasel_count > 20:
+        overall_warnings.append(
+            f"High weasel-word count: {weasel_count} instances "
+            f"(consider replacing vague words with precise language)"
+        )
+        revision_directives.append(
+            "Replace vague hedging words (various, several, quite, fairly, "
+            "rather, somewhat) with precise quantities or remove them."
+        )
+    if dup_count > 0:
+        overall_warnings.append(
+            f"Duplicate adjacent words found: {dup_count} instance(s) "
+            f"(e.g., 'the the', 'is is')"
+        )
+        revision_directives.append(
+            "Fix duplicate adjacent words (likely typos)."
+        )
+
+    # --- AI-slop / boilerplate detection ---
+    _BOILERPLATE_PHRASES = [
+        "delves into", "delve into", "it is worth noting",
+        "it should be noted", "it is important to note",
+        "leverage the power of", "leverages the power of",
+        "in this paper, we propose", "in this work, we propose",
+        "to the best of our knowledge",
+        "in the realm of", "in the landscape of",
+        "plays a crucial role", "plays a pivotal role",
+        "groundbreaking", "cutting-edge", "state-of-the-art",
+        "game-changing", "paradigm shift",
+        "a myriad of", "a plethora of",
+        "aims to bridge the gap", "bridge the gap",
+        "shed light on", "sheds light on",
+        "pave the way", "paves the way",
+        "the advent of", "with the advent of",
+        "in recent years", "in recent times",
+        "has gained significant attention",
+        "has attracted considerable interest",
+        "has emerged as a promising",
+        "a comprehensive overview",
+        "a holistic approach", "holistic understanding",
+        "showcasing the efficacy", "demonstrate the efficacy",
+        "multifaceted", "underscores the importance",
+        "navigate the complexities",
+        "harness the potential", "harnessing the power",
+        "it is imperative to", "it is crucial to",
+        "a nuanced understanding", "nuanced approach",
+        "robust and scalable", "seamlessly integrates",
+        "the intricacies of", "intricate interplay",
+        "facilitate a deeper understanding",
+        "a testament to",
+    ]
+    draft_lower = draft.lower()
+    boilerplate_hits: list[str] = []
+    for phrase in _BOILERPLATE_PHRASES:
+        count = draft_lower.count(phrase)
+        if count > 0:
+            boilerplate_hits.extend([phrase] * count)
+    if len(boilerplate_hits) > 5:
+        unique_phrases = sorted(set(boilerplate_hits))[:5]
+        overall_warnings.append(
+            f"AI boilerplate detected: {len(boilerplate_hits)} instances "
+            f"of generic LLM phrases (e.g., {', '.join(repr(p) for p in unique_phrases[:3])})"
+        )
+        revision_directives.append(
+            "REWRITE sentences containing AI-generated boilerplate phrases. "
+            "Replace generic language (e.g., 'delves into', 'it is worth noting', "
+            "'leverages the power of', 'plays a crucial role', 'paves the way') "
+            "with precise, specific academic language."
+        )
+
+    # --- Related work depth check ---
+    _rw_headings = {"related work", "related works", "background", "literature review"}
+    rw_body = ""
+    for sec in sections_data:
+        if sec["heading_lower"] in _rw_headings and sec["level"] <= 2:
+            rw_body = sec["body"]
+            break
+    if rw_body and len(rw_body.split()) > 50:
+        _comparative_pats = re.compile(
+            r"\b(unlike|in contrast|whereas|while .+ focus|"
+            r"however|differ(?:s|ent)|our (?:method|approach) .+ instead|"
+            r"we (?:instead|differ)|compared to|as opposed to|"
+            r"goes beyond|extends|improves upon|addresses the limitation)\b",
+            re.IGNORECASE,
+        )
+        sentences = [s.strip() for s in re.split(r"[.!?]+", rw_body) if s.strip()]
+        comparative_sents = sum(1 for s in sentences if _comparative_pats.search(s))
+        ratio = comparative_sents / len(sentences) if sentences else 0.0
+        if ratio < 0.15 and len(sentences) >= 5:
+            overall_warnings.append(
+                f"Related Work is purely descriptive: only {comparative_sents}/{len(sentences)} "
+                f"sentences ({ratio:.0%}) contain comparative language (target: >=15%)"
+            )
+            revision_directives.append(
+                "REWRITE Related Work to critically compare with prior methods. "
+                "Use phrases like 'unlike X, our approach...', 'in contrast to...', "
+                "'while X focuses on... we address...' for at least 20% of sentences."
+            )
+
+    # --- Statistical rigor check (result sections) ---
+    _results_headings = {"results", "experiments", "experimental results", "evaluation"}
+    results_body = ""
+    for sec in sections_data:
+        if sec["heading_lower"] in _results_headings and sec["level"] <= 2:
+            results_body += sec["body"] + "\n"
+    if results_body and len(results_body.split()) > 100:
+        has_std = bool(re.search(r"±|\\pm|\bstd\b|\\std\b|standard deviation", results_body, re.IGNORECASE))
+        has_ci = bool(re.search(r"confidence interval|\bCI\b|95%|p-value|p\s*<", results_body, re.IGNORECASE))
+        has_seeds = bool(re.search(r"(?:seed|run|trial)s?\s*[:=]\s*\d|averaged?\s+over\s+\d+\s+(?:seed|run|trial)", results_body, re.IGNORECASE))
+        if not has_std and not has_ci and not has_seeds:
+            overall_warnings.append(
+                "No statistical measures found in results (no std, CI, p-values, or multi-seed reporting)"
+            )
+            revision_directives.append(
+                "ADD error bars (\u00b1std), confidence intervals, or note the number of "
+                "random seeds used. Single-run results without variance reporting "
+                "are insufficient for top venues."
+            )
+
+    result: dict[str, Any] = {
+        "section_analysis": section_analysis,
+        "overall_warnings": overall_warnings,
+        "revision_directives": revision_directives,
+    }
+    if stage_dir is not None:
+        (stage_dir / "draft_quality.json").write_text(
+            json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        if overall_warnings:
+            logger.warning(
+                "Draft quality: %d warning(s) \u2014 %s",
+                len(overall_warnings),
+                "; ".join(overall_warnings[:3]),
+            )
+        else:
+            logger.info("Draft quality: all checks passed")
+    return result
+
+
+def _review_compiled_pdf(
+    pdf_path: Path,
+    llm: LLMClient,
+    topic: str,
+) -> dict[str, Any]:
+    """Multi-dimensional LLM review of compiled paper (AI-Scientist style).
+
+    Scores the paper on 7 academic review dimensions (1-10 each),
+    identifies specific strengths/weaknesses, and provides an overall
+    accept/reject recommendation with confidence.
+
+    Returns a dict with dimensional scores, issues, and decision.
+    """
+    if not pdf_path.exists():
+        return {}
+
+    # Use source-based review since not all models support vision
+    tex_path = pdf_path.with_suffix(".tex")
+    if not tex_path.exists():
+        return {}
+
+    tex_content = tex_path.read_text(encoding="utf-8")[:12000]
+
+    review_prompt = (
+        "You are a senior Area Chair at a top AI conference (NeurIPS/ICML/ICLR) "
+        "reviewing a paper submission. Provide a rigorous, structured review.\n\n"
+        f"PAPER TOPIC: {topic}\n\n"
+        f"LaTeX source:\n```latex\n{tex_content}\n```\n\n"
+        "REVIEW INSTRUCTIONS:\n"
+        "Score each dimension 1-10 (1=unacceptable, 5=borderline, 8=strong accept, "
+        "10=best paper candidate). Be critical but fair.\n\n"
+        "DIMENSIONS:\n"
+        "1. SOUNDNESS: Are claims well-supported? Is methodology correct? "
+        "Are there logical gaps or unsupported claims?\n"
+        "2. PRESENTATION: Is the writing clear, flowing, and professional? "
+        "Are there grammar errors, bullet lists in prose sections, or "
+        "boilerplate phrases? Is it free of AI-generated slop?\n"
+        "3. CONTRIBUTION: Is the contribution significant? Does it advance "
+        "the field beyond incremental improvement?\n"
+        "4. ORIGINALITY: Is the approach novel? Does it differentiate clearly "
+        "from prior work?\n"
+        "5. CLARITY: Are the method and results easy to understand? Are figures "
+        "and tables well-designed with descriptive captions?\n"
+        "6. SIGNIFICANCE: Would the community benefit from this work? Does it "
+        "open new research directions?\n"
+        "7. REPRODUCIBILITY: Are experimental details sufficient to reproduce "
+        "results? Are hyperparameters, datasets, and metrics clearly stated?\n\n"
+        "Also evaluate:\n"
+        "- Are all figures referenced in the text?\n"
+        "- Are tables properly formatted (booktabs style, no vertical rules)?\n"
+        "- Does the related work critically compare, not just list papers?\n\n"
+        "Return JSON with this structure:\n"
+        '{"dimension_scores": {"soundness": N, "presentation": N, ...}, '
+        '"overall_score": N, "confidence": "high|medium|low", '
+        '"verdict": "accept|weak_accept|borderline|reject", '
+        '"strengths": ["..."], "weaknesses": ["..."], "summary": "..."}'
+    )
+
+    try:
+        resp = llm.chat(
+            [{"role": "user", "content": review_prompt}],
+            system="You are an expert academic reviewer. Be rigorous and specific.",
+            max_tokens=2048,
+        )
+        content = resp.content if hasattr(resp, "content") else str(resp)
+        # Extract JSON
+        content = content.strip()
+        if content.startswith("```"):
+            lines = content.splitlines()
+            if lines[0].startswith("```json"):
+                lines = lines[1:]
+            elif lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            content = "\n".join(lines)
+        review_data = _safe_json_loads(content, {})
+        if isinstance(review_data, dict):
+            return review_data
+    except Exception:
+        pass
+
+    return {}
+
+
+def _collect_experiment_results(
+    run_dir: Path,
+    metric_key: str = "",
+    metric_direction: str = "maximize",
+) -> dict[str, Any]:
+    """Aggregate experiment metrics from runs/ directory across prior stages.
+
+    Returns a dict with ``runs``, ``metrics_summary``, ``best_run``,
+    ``latex_table``, and optionally ``structured_results``.
+    """
+    runs_data: list[dict[str, Any]] = []
+    structured_results: Any = None
+
+    # Scan all stage dirs for runs/ subdirectory
+    for stage_subdir in sorted(run_dir.glob("stage-*/runs")):
+        # Check for structured results.json first
+        results_json = stage_subdir / "results.json"
+        if results_json.exists() and structured_results is None:
+            try:
+                structured_results = json.loads(
+                    results_json.read_text(encoding="utf-8")
+                )
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        for run_file in sorted(stage_subdir.glob("*.json")):
+            if run_file.name == "results.json":
+                continue  # Already handled above
+            parsed = _safe_json_loads(run_file.read_text(encoding="utf-8"), {})
+            if isinstance(parsed, dict) and "metrics" in parsed:
+                # Also check for structured_results inside run payload
+                if "structured_results" in parsed and structured_results is None:
+                    structured_results = parsed["structured_results"]
+                runs_data.append(parsed)
+            elif isinstance(parsed, dict) and "key_metrics" in parsed:
+                # Simulated mode uses key_metrics
+                parsed["metrics"] = parsed.pop("key_metrics")
+                runs_data.append(parsed)
+
+    if not runs_data:
+        result: dict[str, Any] = {"runs": [], "metrics_summary": {}, "best_run": None, "latex_table": ""}
+        if structured_results is not None:
+            result["structured_results"] = structured_results
+        return result
+
+    # Aggregate metrics across runs
+    all_metric_keys: set[str] = set()
+    for r in runs_data:
+        m = r.get("metrics") or {}
+        if isinstance(m, dict):
+            all_metric_keys.update(m.keys())
+
+    metrics_summary: dict[str, dict[str, Any]] = {}
+    for mk in all_metric_keys:
+        values: list[float] = []
+        for r in runs_data:
+            m = r.get("metrics") or {}
+            if isinstance(m, dict) and mk in m:
+                try:
+                    values.append(float(m[mk]))
+                except (ValueError, TypeError):
+                    pass
+        if values:
+            import statistics
+            metrics_summary[mk] = {
+                "mean": round(statistics.mean(values), 6),
+                "std": round(statistics.stdev(values), 6) if len(values) > 1 else 0.0,
+                "min": round(min(values), 6),
+                "max": round(max(values), 6),
+                "count": len(values),
+            }
+
+    # Find best run
+    best_run = None
+    if metric_key and runs_data:
+        best_value = float("-inf") if metric_direction == "maximize" else float("inf")
+        for r in runs_data:
+            m = r.get("metrics") or {}
+            if isinstance(m, dict) and metric_key in m:
+                try:
+                    v = float(m[metric_key])
+                    if metric_direction == "maximize" and v > best_value:
+                        best_value = v
+                        best_run = r
+                    elif metric_direction == "minimize" and v < best_value:
+                        best_value = v
+                        best_run = r
+                except (ValueError, TypeError):
+                    pass
+
+    # Build simple LaTeX table
+    latex_lines: list[str] = [
+        "\\begin{table}[h]",
+        "\\centering",
+        "\\begin{tabular}{lrrr}",
+        "\\toprule",
+        "Metric & Mean & Std & Count \\\\",
+        "\\midrule",
+    ]
+    for mk, ms in sorted(metrics_summary.items()):
+        latex_lines.append(
+            f"{mk} & {ms['mean']:.4f} & {ms['std']:.4f} & {ms['count']} \\\\"
+        )
+    latex_lines.extend([
+        "\\bottomrule",
+        "\\end{tabular}",
+        "\\caption{Experiment Results}",
+        "\\end{table}",
+    ])
+
+    result = {
+        "runs": runs_data,
+        "metrics_summary": metrics_summary,
+        "best_run": best_run,
+        "latex_table": "\n".join(latex_lines),
+    }
+    if structured_results is not None:
+        result["structured_results"] = structured_results
+
+    return result
+
+
+def _generate_neurips_checklist(
+    has_experiments: bool = True,
+    has_theory: bool = False,
+    has_code: bool = True,
+) -> str:
+    """Generate a NeurIPS-style paper checklist appendix in markdown.
+
+    This checklist is based on the NeurIPS 2025 submission requirements.
+    It is appended to the paper before LaTeX conversion.
+    """
+    items = [
+        ("Claims", "Do the main claims accurately reflect the paper's contributions and scope?", "Yes"),
+        ("Limitations", "Does the paper discuss limitations of the work?", "Yes"),
+    ]
+    if has_theory:
+        items.append(
+            ("Theory", "Are all assumptions stated and proofs included?", "Yes")
+        )
+    items.extend([
+        ("Experiments reproducibility", "Does the paper fully disclose experimental settings?", "Yes" if has_experiments else "NA"),
+        ("Code and data", "Is code or data provided for reproducibility?", "Yes" if has_code else "No"),
+        ("Experimental details", "Are training details and hyperparameters specified?", "Yes" if has_experiments else "NA"),
+        ("Error bars", "Are error bars or confidence intervals reported?", "Yes" if has_experiments else "NA"),
+        ("Compute resources", "Are compute requirements documented?", "Yes" if has_experiments else "NA"),
+        ("Code of ethics", "Does the work comply with the code of ethics?", "Yes"),
+        ("Broader impacts", "Are potential negative societal impacts discussed?", "Yes"),
+        ("Licenses", "Are licenses for used assets respected?", "Yes"),
+        ("New assets", "Are newly released assets documented?", "NA"),
+        ("Human subjects", "Were IRB approvals obtained if applicable?", "NA"),
+    ])
+
+    lines = [
+        "## NeurIPS Paper Checklist",
+        "",
+    ]
+    for label, question, answer in items:
+        lines.append(f"**{label}**: {question}")
+        lines.append(f"Answer: [{answer}]")
+        lines.append("")
+
+    return "\n".join(lines)
