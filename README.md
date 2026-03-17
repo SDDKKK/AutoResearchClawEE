@@ -18,8 +18,8 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+"></a>
-  <a href="#testing"><img src="https://img.shields.io/badge/Tests-1128%20passed-brightgreen?logo=pytest&logoColor=white" alt="1128 Tests Passed"></a>
-  <a href="https://github.com/Jiaaqiliu/AutoResearchClaw"><img src="https://img.shields.io/badge/GitHub-AutoResearchClaw-181717?logo=github" alt="GitHub"></a>
+  <a href="#testing"><img src="https://img.shields.io/badge/Tests-1183%20passed-brightgreen?logo=pytest&logoColor=white" alt="1183 Tests Passed"></a>
+  <a href="https://github.com/aiming-lab/AutoResearchClaw"><img src="https://img.shields.io/badge/GitHub-AutoResearchClaw-181717?logo=github" alt="GitHub"></a>
   <a href="#openclaw-integration"><img src="https://img.shields.io/badge/OpenClaw-Compatible-ff4444?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==" alt="OpenClaw Compatible"></a>
 </p>
 
@@ -42,6 +42,12 @@
 ---
 
 > **🧪 We're looking for testers!** Try the pipeline with your own research idea — from any field — and [tell us what you think](docs/TESTER_GUIDE.md). Your feedback directly shapes the next version. **[→ Testing Guide](docs/TESTER_GUIDE.md)** | **[→ 中文测试指南](docs/TESTER_GUIDE_CN.md)**
+
+---
+
+## 🔥 News
+- **[03/16/2026]** [v0.2.0](https://github.com/aiming-lab/AutoResearchClaw/releases/tag/v0.2.0) — Three multi-agent subsystems (CodeAgent, BenchmarkAgent, FigureAgent), hardened Docker sandbox with network-policy-aware execution, 4-round paper quality audit (AI-slop detection, 7-dim review scoring, NeurIPS checklist), and 15+ bug fixes from production runs.
+- **[03/15/2026]** [v0.1.0](https://github.com/aiming-lab/AutoResearchClaw/releases/tag/v0.1.0) — We release AutoResearchClaw: a fully autonomous 23-stage research pipeline that turns a single research idea into a conference-ready paper. No human intervention required.
 
 ---
 
@@ -80,7 +86,7 @@ The pipeline runs **end-to-end without human intervention**. When experiments fa
 
 ```bash
 # 1. Clone & install
-git clone https://github.com/Jiaaqiliu/AutoResearchClaw.git
+git clone https://github.com/aiming-lab/AutoResearchClaw.git
 cd AutoResearchClaw
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
@@ -107,7 +113,6 @@ research:
   topic: "Your research topic here"
 
 llm:
-  provider: "openai"  # or "openrouter" for access to 200+ models
   base_url: "https://api.openai.com/v1"
   api_key_env: "OPENAI_API_KEY"
   primary_model: "gpt-4o"
@@ -118,33 +123,6 @@ experiment:
   sandbox:
     python_path: ".venv/bin/python"
 ```
-
-</details>
-
-<details>
-<summary>🌐 Using OpenRouter (200+ models via single API)</summary>
-
-[OpenRouter](https://openrouter.ai) provides unified access to models from Anthropic, Google, Meta, Mistral, and more through a single API key.
-
-```yaml
-llm:
-  provider: "openrouter"
-  api_key_env: "OPENROUTER_API_KEY"
-  primary_model: "anthropic/claude-3.5-sonnet"
-  fallback_models:
-    - "google/gemini-pro-1.5"
-    - "meta-llama/llama-3.1-70b-instruct"
-```
-
-**Setup:**
-1. Get your API key at https://openrouter.ai/keys
-2. Export: `export OPENROUTER_API_KEY="sk-or-..."`
-3. Browse models: https://openrouter.ai/models
-
-**Popular models:**
-- `anthropic/claude-3.5-sonnet` — Best for research reasoning
-- `google/gemini-pro-1.5` — 1M context window
-- `meta-llama/llama-3.1-70b-instruct` — Open-source, strong performance
 
 </details>
 
@@ -355,7 +333,7 @@ llm:
 # === Experiment ===
 experiment:
   mode: "sandbox"                  # simulated | sandbox | docker | ssh_remote
-  time_budget_sec: 600             # Max execution time per run (default: 600s)
+  time_budget_sec: 300             # Max execution time per run (default: 300s)
   max_iterations: 10               # Max optimization iterations
   metric_key: "val_loss"           # Primary metric name
   metric_direction: "minimize"     # minimize | maximize

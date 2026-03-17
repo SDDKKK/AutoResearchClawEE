@@ -116,7 +116,9 @@ def test_llm_client_model_chain_is_primary_plus_fallbacks():
     client = _make_client(
         primary_model="gpt-5.4", fallback_models=["gpt-4.1", "gpt-4o"]
     )
-    assert client._model_chain == ["gpt-5.4", "gpt-4.1", "gpt-4o"]
+    # Fork uses _pool (provider pool) instead of _model_chain
+    pool_models = [m for _, _, _, m in client._pool]
+    assert pool_models == ["gpt-5.4", "gpt-4.1", "gpt-4o"]
 
 
 def test_needs_max_completion_tokens_for_new_models():
@@ -289,6 +291,7 @@ def test_chat_prepends_system_message(monkeypatch: pytest.MonkeyPatch):
         max_tokens: int,
         temperature: float,
         json_mode: bool,
+        **kwargs: object,
     ) -> LLMResponse:
         captured["messages"] = messages
         return LLMResponse(content="ok", model=model)
@@ -309,8 +312,9 @@ def test_chat_uses_fallback_after_first_model_error(monkeypatch: pytest.MonkeyPa
         max_tokens: int,
         temperature: float,
         json_mode: bool,
+        **kwargs: object,
     ) -> LLMResponse:
-        _ = (self, messages, max_tokens, temperature, json_mode)
+        _ = (self, messages, max_tokens, temperature, json_mode, kwargs)
         calls.append(model)
         if model == "gpt-5.2":
             raise RuntimeError("first failed")

@@ -233,6 +233,45 @@ class PromptManager:
 # DEFAULT PROMPTS — edit prompts.yaml to override; do NOT edit these.
 # ========================================================================
 
+# -- Canonical section word-count targets ----------------------------------
+# Single source of truth for per-section word-count ranges.
+# Used by executor._validate_draft_quality() and converter.check_paper_completeness().
+SECTION_WORD_TARGETS: dict[str, tuple[int, int]] = {
+    "abstract": (180, 220),
+    "introduction": (800, 1000),
+    "related work": (600, 800),
+    "method": (1000, 1500),
+    "experiments": (800, 1200),
+    "results": (600, 800),
+    "discussion": (400, 600),
+    "limitations": (200, 300),
+    "conclusion": (200, 300),
+    "broader impact": (200, 400),
+}
+
+# Aliases mapping heading variants to canonical names in SECTION_WORD_TARGETS.
+_SECTION_TARGET_ALIASES: dict[str, str] = {
+    "methods": "method",
+    "methodology": "method",
+    "proposed method": "method",
+    "approach": "method",
+    "experimental setup": "experiments",
+    "experimental results": "results",
+    "results and discussion": "results",
+    "results and analysis": "results",
+    "conclusions": "conclusion",
+    "conclusion and future work": "conclusion",
+    "summary": "conclusion",
+    "background": "related work",
+    "literature review": "related work",
+    "prior work": "related work",
+    "limitation": "limitations",
+    "limitations and future work": "limitations",
+    "broader impacts": "broader impact",
+    "societal impact": "broader impact",
+    "ethical considerations": "broader impact",
+}
+
 # -- Reusable blocks -----------------------------------------------------
 
 _DEFAULT_BLOCKS: dict[str, str] = {
@@ -343,6 +382,37 @@ _DEFAULT_BLOCKS: dict[str, str] = {
         "Do NOT use: torch, tensorflow, jax, sklearn, pandas, scipy, matplotlib, "
         "or any deep learning framework.\n"
         "Write the experiment using ONLY numpy and stdlib.\n"
+    ),
+    "network_disabled_guidance": (
+        "\n## ⚠️ NO NETWORK ACCESS — CRITICAL CONSTRAINT ⚠️\n"
+        "This experiment runs with network_policy='none'. There is NO network access\n"
+        "at ANY phase (no pip install, no dataset downloads, no HTTP requests).\n\n"
+        "### ONLY these pre-cached datasets are available:\n"
+        "- `torchvision.datasets.CIFAR10(root='/opt/datasets', train=True/False, download=False)`\n"
+        "- `torchvision.datasets.CIFAR100(root='/opt/datasets', train=True/False, download=False)`\n"
+        "- `torchvision.datasets.MNIST(root='/opt/datasets', train=True/False, download=False)`\n"
+        "- `torchvision.datasets.FashionMNIST(root='/opt/datasets', train=True/False, download=False)`\n"
+        "- `torchvision.datasets.STL10(root='/opt/datasets', split='train'/'test', download=False)`\n"
+        "- `torchvision.datasets.SVHN(root='/opt/datasets', split='train'/'test', download=False)`\n\n"
+        "### FORBIDDEN (will cause runtime failure):\n"
+        "- Do NOT create setup.py (it cannot run without network)\n"
+        "- Do NOT create requirements.txt (pip install is unavailable)\n"
+        "- Do NOT use `download=True` on any dataset\n"
+        "- Do NOT use `urllib`, `requests`, `httpx`, or any HTTP library\n"
+        "- Do NOT use `datasets.load_dataset()` from HuggingFace (requires download)\n"
+        "- Do NOT import packages not pre-installed in the Docker image\n\n"
+        "### Available pre-installed packages:\n"
+        "torch, torchvision, torchaudio, numpy, scipy, sklearn, matplotlib, seaborn,\n"
+        "pandas, tqdm, gymnasium, networkx, PyYAML, Pillow, timm, einops, torchmetrics,\n"
+        "h5py, transformers, datasets, accelerate, peft, bitsandbytes.\n\n"
+        "If your research topic requires a dataset NOT in the pre-cached list,\n"
+        "you MUST adapt to use one of the 6 pre-cached datasets instead.\n"
+    ),
+    "network_full_guidance": (
+        "\n## Network Access: Full\n"
+        "This experiment runs with network_policy='full'. Network access is available\n"
+        "throughout ALL execution phases (setup, pip install, and main experiment).\n"
+        "You may download datasets, install packages, and make HTTP requests at any time.\n"
     ),
     "dataset_guidance": (
         "\n## Standard Datasets & Real Baselines (MANDATORY when applicable)\n"
@@ -457,6 +527,20 @@ _DEFAULT_BLOCKS: dict[str, str] = {
         "Reinforcement learning requires MANY more training steps than supervised learning.\n"
         "Under-trained RL agents produce random-chance performance, making ALL comparisons\n"
         "meaningless and the paper unpublishable.\n\n"
+        "### Environment Availability:\n"
+        "#### Always available (classic control — no extra dependencies):\n"
+        "- CartPole-v1, Pendulum-v1, MountainCar-v0, MountainCarContinuous-v0,\n"
+        "  Acrobot-v1, LunarLander-v3\n"
+        "- These are lightweight and fast — PREFER these unless MuJoCo is specifically required.\n\n"
+        "#### MuJoCo environments (pre-installed in Docker image):\n"
+        "- HalfCheetah-v5, Hopper-v5, Walker2d-v5, Ant-v5, Humanoid-v5,\n"
+        "  Swimmer-v5, Reacher-v5, InvertedPendulum-v5, InvertedDoublePendulum-v5\n"
+        "- Require MuJoCo runtime — available in Docker but NOT in basic sandbox mode.\n\n"
+        "#### RULE: If the research topic says 'MuJoCo-free', 'without MuJoCo',\n"
+        "  or 'classic control only' → you MUST use classic control environments ONLY.\n"
+        "  Do NOT import or reference MuJoCo in any way.\n\n"
+        "#### DEFAULT RECOMMENDATION: Prefer classic control environments unless the\n"
+        "  research topic specifically requires MuJoCo locomotion tasks.\n\n"
         "### Minimum Steps by Algorithm Family:\n"
         "| Algorithm | Environment | Min Steps | Recommended |\n"
         "|-----------|-------------|-----------|-------------|\n"
@@ -523,37 +607,69 @@ _DEFAULT_BLOCKS: dict[str, str] = {
     ),
     "writing_structure": (
         "\n## Paper Section Writing Rules\n"
-        "ABSTRACT (150-200 words, 5-sentence structure):\n"
+        "ABSTRACT (5-sentence structure):\n"
         "- (1) Problem and significance (2) Prior approaches and gaps\n"
         "- (3) Your approach and novelty (4) Key results with 2-3 specific numbers\n"
         "- (5) Implication/takeaway\n"
         "- Do NOT list per-seed ranges (e.g., '0.71-0.73 across seeds') — use mean +/- std\n"
         "- Do NOT repeat numbers that appear in the Results section — pick the 2-3 most impactful\n\n"
-        "INTRODUCTION (800-1200 words):\n"
-        "- Paragraph 1: Problem motivation (why this matters)\n"
-        "- Paragraph 2: What exists and why it falls short\n"
-        "- Paragraph 3: Your approach and key insight\n"
-        "- Paragraph 4: Contributions (2-3 bullet points)\n\n"
-        "RELATED WORK (600-900 words):\n"
-        "- Organize by sub-topic, not chronologically\n"
-        "- End each paragraph with how your work differs\n"
-        "- Cite at least 15 references, all directly relevant\n\n"
-        "METHOD (800-1200 words):\n"
-        "- Full algorithm description (pseudocode or step-by-step)\n"
-        "- All hyperparameters with values and justification\n"
-        "- Architecture details sufficient for reproduction\n\n"
-        "RESULTS (800-1200 words):\n"
+        "INTRODUCTION (4 paragraphs, 800-1000 words, cite 8-12 references):\n"
+        "Paragraph 1: Problem motivation (why this matters). "
+        "Paragraph 2: What exists and why it falls short. "
+        "Paragraph 3: Your approach and key insight. "
+        "Paragraph 4: Contributions (2-3 bullet points allowed here ONLY).\n\n"
+        "RELATED WORK:\n"
+        "Organize by sub-topic, not chronologically. "
+        "End each paragraph with how YOUR work differs from the cited work. "
+        "Cite at least 15 references, all directly relevant.\n\n"
+        "METHOD:\n"
+        "Write as flowing narrative prose (NOT bullet points). "
+        "Include full algorithm description with pseudocode or step-by-step. "
+        "State all hyperparameters with values and justification. "
+        "Provide architecture details sufficient for reproduction.\n\n"
+        "RESULTS:\n"
         "- Do NOT repeat the same number more than twice across the paper\n"
         "- Each number in a table should be discussed AT MOST once in text\n"
         "- Tables: mean +/- std with 95%% CI in parentheses\n"
         "- Bold the best result in each column\n"
-        "- Every comparison claim must cite a p-value\n\n"
-        "LIMITATIONS (200-400 words, 3-5 points):\n"
+        "- Every comparison claim must cite a p-value or note multiple seeds\n"
+        "- Report the number of random seeds/runs used\n\n"
+        "FIGURES AND TABLES:\n"
+        "- Every figure MUST be referenced in the text (e.g., 'As shown in Figure 1')\n"
+        "- Every table MUST be referenced in the text (e.g., 'Table 2 summarizes')\n"
+        "- Figure captions: 1-2 descriptive sentences (not just 'Results comparison')\n"
+        "- Table captions go ABOVE the table; figure captions go BELOW the figure\n"
+        "- Axis labels must include units where applicable\n"
+        "- Use consistent font sizes across all figures\n\n"
+        "DISCUSSION (if applicable, can be merged into Results):\n"
+        "- Paragraph 1: Summarize key findings and their significance\n"
+        "- Paragraph 2: Compare with prior work — explain WHY results differ\n"
+        "- Paragraph 3: Discuss unexpected or negative results honestly\n"
+        "- Paragraph 4: Broader implications and practical applications\n\n"
+        "LIMITATIONS (3-5 points):\n"
         "- State each limitation ONCE, here only — not scattered throughout\n"
-        "- No disclaimers like 'due to computational constraints'\n\n"
-        "CONCLUSION (200-300 words):\n"
+        "- No disclaimers like 'due to computational constraints'\n"
+        "- Include compute resources used (GPU type, training time)\n\n"
+        "CONCLUSION:\n"
         "- Summarize findings (match actual results, no aspirational claims)\n"
-        "- 2-3 sentences of future work\n"
+        "- 2-3 sentences of future work\n\n"
+        "PROSE QUALITY (CRITICAL — violation = desk reject):\n"
+        "- Write FLOWING ACADEMIC PARAGRAPHS, not bullet-point lists.\n"
+        "- Each paragraph must have 4-8 sentences with smooth transitions.\n"
+        "- Introduction, Related Work, and Method must each be >=3 paragraphs.\n"
+        "- FORBIDDEN: starting 3+ consecutive paragraphs with the same word.\n"
+        "- FORBIDDEN: bullet-point lists in Introduction or Related Work sections.\n"
+        "- Use varied sentence structures: mix simple, compound, and complex sentences.\n"
+        "- Connect paragraphs with transition phrases: 'Building on this insight...', "
+        "'In contrast to prior work...', 'To address this limitation...'.\n"
+        "- Each Related Work paragraph must COMPARE your approach to cited work, "
+        "not merely summarize what each paper does.\n"
+        "- FORBIDDEN AI-BOILERPLATE phrases (instant credibility loss):\n"
+        "  'delves into', 'it is worth noting', 'plays a crucial role',\n"
+        "  'leverages the power of', 'paves the way', 'a myriad of',\n"
+        "  'paradigm shift', 'groundbreaking', 'in the realm of',\n"
+        "  'holistic approach', 'multifaceted', 'navigate the complexities'.\n"
+        "  Replace ALL such phrases with precise, specific academic language.\n"
     ),
     "llm_training_guidance": (
         "\n## LLM Fine-Tuning Guidance (when topic involves language model training)\n"
@@ -958,14 +1074,18 @@ _DEFAULT_SUB_PROMPTS: dict[str, dict[str, Any]] = {
             "Primary metric key: {metric_key}\n"
             "Metric direction: {metric_direction}\n"
             "Do not use subprocess, os.system, eval, exec, or any network/shell calls.\n\n"
-            "TOPIC-CODE ALIGNMENT CHECK (do this FIRST):\n"
+            "EXPERIMENT PLAN ANCHOR (CRITICAL — read before making changes):\n"
             "The research topic is: {topic}\n"
-            "Before making incremental improvements, verify that the current code "
-            "actually implements an experiment relevant to this topic. If the code "
-            "is fundamentally unrelated to the topic (e.g., a generic optimizer "
-            "when the topic is about multi-agent simulation, or a trivial function "
-            "when a complex simulation is needed), REWRITE the code from scratch "
-            "to match the topic. Do NOT incrementally improve irrelevant code.\n\n"
+            "{exp_plan_anchor}"
+            "RULES FOR REFINEMENT:\n"
+            "- NEVER rename, remove, or replace existing condition names. "
+            "The condition names in the code MUST match the experiment plan.\n"
+            "- NEVER add new conditions that are not in the experiment plan.\n"
+            "- ONLY improve the IMPLEMENTATION of existing conditions "
+            "(fix bugs, tune hyperparameters, improve training loops).\n"
+            "- If the code has fundamental issues (wrong algorithm, missing "
+            "components), fix the implementation but keep the same condition "
+            "names and class hierarchy.\n\n"
             "{condition_coverage_hint}"
             "Current project files:\n{files_context}\n"
             "Run summaries (JSON):\n{run_summaries}"

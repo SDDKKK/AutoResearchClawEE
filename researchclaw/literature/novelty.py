@@ -19,7 +19,6 @@ Usage
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from datetime import datetime, timezone
@@ -120,10 +119,6 @@ _STOP_WORDS = frozenset(
         "show",
         "results",
         "performance",
-        "learning",
-        "model",
-        "data",
-        "training",
         "evaluation",
     }
 )
@@ -169,11 +164,15 @@ def _compute_similarity(
     hypothesis_keywords: list[str],
     paper_title: str,
     paper_abstract: str,
+    hypothesis_title: str = "",
 ) -> float:
     """Combined similarity score between hypotheses keywords and a paper."""
     paper_keywords = _extract_keywords(f"{paper_title} {paper_abstract}")
     kw_sim = _jaccard_keywords(hypothesis_keywords, paper_keywords)
-    # Weighted: keyword overlap is most informative
+    # Blend keyword overlap with title similarity when available
+    if hypothesis_title and paper_title:
+        t_sim = _title_similarity(hypothesis_title, paper_title)
+        return round(0.7 * kw_sim + 0.3 * t_sim, 4)
     return round(kw_sim, 4)
 
 
@@ -371,8 +370,6 @@ def _assess_novelty(
     # Take top-5 most similar
     top = similar_papers[:5]
     max_sim = max(p["similarity"] for p in top)
-    avg_sim = sum(p["similarity"] for p in top) / len(top)
-
     # High-citation papers with high similarity are more concerning
     high_cite_overlap = sum(
         1 for p in top if p["similarity"] >= 0.4 and p.get("citation_count", 0) >= 50

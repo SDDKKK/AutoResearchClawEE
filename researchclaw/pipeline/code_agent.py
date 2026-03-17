@@ -193,37 +193,21 @@ class CodeAgent:
         nodes_explored = 0
         if self._cfg.tree_search_enabled and self._sandbox_factory:
             best, nodes_explored = self._phase3_tree_search(
-                topic,
-                exp_plan,
-                metric,
-                pkg_hint,
-                arch_spec,
-                max_tokens,
+                topic, exp_plan, metric, pkg_hint, arch_spec, max_tokens,
             )
         else:
             files = self._phase2_generate_and_fix(
-                topic,
-                exp_plan,
-                metric,
-                pkg_hint,
-                arch_spec,
-                max_tokens,
+                topic, exp_plan, metric, pkg_hint, arch_spec, max_tokens,
             )
             best = SolutionNode(
-                node_id="single",
-                files=files,
-                runs_ok=True,
-                score=1.0,
+                node_id="single", files=files, runs_ok=True, score=1.0,
             )
 
         # Phase 4: Review dialog
         review_rounds = 0
         if self._cfg.review_max_rounds > 0:
             best.files, review_rounds = self._phase4_review(
-                best.files,
-                topic,
-                exp_plan,
-                metric,
+                best.files, topic, exp_plan, metric,
             )
 
         elapsed = time.time() - t0
@@ -246,10 +230,7 @@ class CodeAgent:
     # ── Phase 1: Architecture Planning ────────────────────────────────────
 
     def _phase1_architecture(
-        self,
-        topic: str,
-        exp_plan: str,
-        metric: str,
+        self, topic: str, exp_plan: str, metric: str,
     ) -> str:
         """Generate an architecture spec before writing code."""
         self._log_event("Phase 1: Architecture planning")
@@ -287,12 +268,7 @@ class CodeAgent:
 
         # Initial generation (uses the existing code_generation prompt)
         files = self._generate_code(
-            topic,
-            exp_plan,
-            metric,
-            pkg_hint,
-            arch_spec,
-            max_tokens,
+            topic, exp_plan, metric, pkg_hint, arch_spec, max_tokens,
         )
         if not files:
             self._log_event("  WARNING: empty generation, returning fallback")
@@ -354,14 +330,14 @@ class CodeAgent:
         return files
 
     def _fix_runtime_error(
-        self,
-        files: dict[str, str],
-        result: Any,
+        self, files: dict[str, str], result: Any,
     ) -> dict[str, str]:
         """Fix a runtime error using structured LLM feedback."""
         files_ctx = self._format_files(files)
         stderr_tail = (result.stderr or "")[-3000:]
-        stdout_tail = "\n".join((result.stdout or "").split("\n")[-50:])
+        stdout_tail = "\n".join(
+            (result.stdout or "").split("\n")[-50:]
+        )
 
         sp = self._pm.sub_prompt(
             "code_exec_fix",
@@ -399,12 +375,7 @@ class CodeAgent:
         for k in range(n_cand):
             self._log_event(f"  Generating candidate {k + 1}/{n_cand}")
             files = self._generate_code(
-                topic,
-                exp_plan,
-                metric,
-                pkg_hint,
-                arch_spec,
-                max_tokens,
+                topic, exp_plan, metric, pkg_hint, arch_spec, max_tokens,
             )
             node = SolutionNode(
                 node_id=f"gen-{k}",
@@ -530,7 +501,7 @@ class CodeAgent:
             resp = self._chat(sp.system, sp.user, max_tokens=4096)
 
             review = self._parse_json(resp.content)
-            if not isinstance(review, dict):
+            if not isinstance(review, dict) or not review:
                 self._log_event(
                     f"  Review round {r + 1}: could not parse JSON, skipping"
                 )
@@ -586,8 +557,7 @@ class CodeAgent:
             sandbox_dir = self._stage_dir / "agent_sandbox"
             sandbox_dir.mkdir(parents=True, exist_ok=True)
             self._sandbox = self._sandbox_factory(
-                self._exp_config,
-                sandbox_dir,
+                self._exp_config, sandbox_dir,
             )
         return self._sandbox
 
@@ -645,30 +615,21 @@ class CodeAgent:
         """Best-effort JSON extraction from LLM response."""
         # Direct parse
         try:
-            result = json.loads(text)
-            if isinstance(result, dict):
-                return result
-            return None
+            return json.loads(text)
         except (json.JSONDecodeError, ValueError):
             pass
         # ```json``` fenced block
         m = re.search(r"```json\s*\n(.*?)```", text, re.DOTALL)
         if m:
             try:
-                result = json.loads(m.group(1))
-                if isinstance(result, dict):
-                    return result
-                return None
+                return json.loads(m.group(1))
             except (json.JSONDecodeError, ValueError):
                 pass
         # First {...} object
         m = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", text, re.DOTALL)
         if m:
             try:
-                result = json.loads(m.group(0))
-                if isinstance(result, dict):
-                    return result
-                return None
+                return json.loads(m.group(0))
             except (json.JSONDecodeError, ValueError):
                 pass
         return None
