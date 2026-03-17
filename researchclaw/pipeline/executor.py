@@ -2973,7 +2973,9 @@ def _execute_code_generation(
         kw in w for kw in ("UnboundLocalError", "unregistered", "does not exist",
                            "empty or trivial subclass", "does NOT override",
                            "Import-usage mismatch", "NameError",
-                           "was removed", "ptp()")
+                           "was removed", "ptp()",
+                           "copy-paste", "identical method signatures",
+                           "identical AST", "NOT a real ablation")
     )]
     if critical_deep and llm is not None:
         logger.info(
@@ -3002,7 +3004,12 @@ def _execute_code_generation(
             f"- NumPy 2.0: ndarray.ptp() was removed — use arr.max()-arr.min()\n"
             f"- NumPy 2.0: np.bool/np.int/np.float removed — use builtins\n"
             f"- Pretrained models (EfficientNet, ResNet, ViT) expect 224×224 input "
-            f"— add `transforms.Resize(224)` when using CIFAR (32×32) or similar\n\n"
+            f"— add `transforms.Resize(224)` when using CIFAR (32×32) or similar\n"
+            f"- Copy-paste ablation: if two classes have identical bodies, REWRITE "
+            f"the ablation to genuinely remove/reduce a component (e.g., zero out "
+            f"attention weights, halve hidden dimensions, remove a loss term)\n"
+            f"- KD: teacher must be frozen, add projection layers if teacher_dim != "
+            f"student_dim, use temperature T=4 for soft targets\n\n"
             f"Current code:\n{all_code_ctx}\n"
         )
         try:
@@ -3025,7 +3032,9 @@ def _execute_code_generation(
                         "UnboundLocalError", "unregistered", "does not exist",
                         "empty or trivial subclass", "does NOT override",
                         "Import-usage mismatch", "NameError",
-                        "was removed", "ptp()"
+                        "was removed", "ptp()",
+                        "copy-paste", "identical method signatures",
+                        "identical AST", "NOT a real ablation"
                     ))
                 ])
                 logger.info(
