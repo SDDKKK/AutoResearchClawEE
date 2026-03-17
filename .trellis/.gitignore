@@ -1,0 +1,41 @@
+# Developer identity (local only)
+.developer
+
+# Current task pointer (each dev works on different task)
+.current-task
+
+# Task directories (local workflow state, not project source)
+tasks/
+
+# Ralph Loop state file
+.ralph-state.json
+
+# Todo Enforcer state file
+.todo-enforcer-state.json
+
+# Ephemeral scratchpad (per-task, overwritten)
+memory/scratchpad.md
+
+# Agent runtime files
+.agents/
+.agent-log
+.agent-runner.sh
+.session-id
+
+# Task directory runtime files
+.plan-log
+
+# Atomic update temp files
+*.tmp
+
+# Update backup directories
+.backup-*
+
+# Conflict resolution temp files
+*.new
+
+# Python cache
+__pycache__/
+
+# Trellis-sync state (machine-generated, local only)
+.sync-state.json
