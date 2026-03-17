@@ -21,6 +21,9 @@ PROVIDER_PRESETS = {
     "deepseek": {
         "base_url": "https://api.deepseek.com/v1",
     },
+    "anthropic": {
+        "base_url": "https://api.anthropic.com",
+    },
     "openai-compatible": {
         "base_url": None,  # Use user-provided base_url
     },
@@ -32,6 +35,7 @@ def create_llm_client(config: RCConfig) -> LLMClient | ACPClient:
 
     Supported providers:
     - ``"acp"`` → :class:`ACPClient` (spawns an ACP-compatible agent)
+    - ``"anthropic"`` → :class:`LLMClient` with Anthropic Messages API adapter
     - ``"openrouter"`` → :class:`LLMClient` with OpenRouter base URL
     - ``"openai"`` → :class:`LLMClient` with OpenAI base URL
     - ``"deepseek"`` → :class:`LLMClient` with DeepSeek base URL
@@ -43,28 +47,9 @@ def create_llm_client(config: RCConfig) -> LLMClient | ACPClient:
     """
     if config.llm.provider == "acp":
         from researchclaw.llm.acp_client import ACPClient as _ACP
-
         return _ACP.from_rc_config(config)
 
     from researchclaw.llm.client import LLMClient as _LLM
-    from researchclaw.llm.client import LLMConfig
-
-    # Get preset for provider (if any)
-    preset = PROVIDER_PRESETS.get(config.llm.provider, {})
-    preset_base_url = preset.get("base_url")
-
-    # Use preset base_url if available, otherwise use config value
-    base_url = preset_base_url if preset_base_url else config.llm.base_url
-
-    return _LLM(
-        LLMConfig(
-            base_url=base_url,
-            api_key=(
-                config.llm.api_key
-                or os.environ.get(config.llm.api_key_env, "")
-                or ""
-            ),
-            primary_model=config.llm.primary_model or "gpt-4o",
-            fallback_models=list(config.llm.fallback_models or []),
-        )
-    )
+    
+    # Use from_rc_config to properly initialize adapters (e.g., Anthropic)
+    return _LLM.from_rc_config(config)

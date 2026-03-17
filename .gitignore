@@ -66,6 +66,8 @@ image/logo_prompt.md
 # macOS
 .DS_Store
 
+run.log
+
 # Misc temp files
 .history/
 .serena/
