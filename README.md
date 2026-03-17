@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="image/framework.png?v=2" width="100%" alt="AutoResearchClaw Framework">
+  <img src="image/framework_v2.png" width="100%" alt="AutoResearchClaw Framework">
 </p>
 
 
