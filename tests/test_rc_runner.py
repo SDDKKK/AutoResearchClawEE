@@ -738,9 +738,6 @@ def test_write_checkpoint_preserves_old_on_write_failure(
     def _exploding_open(path, *args, **kwargs):
         # mkstemp returns an fd (int), then we open(fd, ...) — intercept that
         if isinstance(path, int):
-            import os
-            real_path = os.fspath(os.readlink(f"/dev/fd/{path}")) if hasattr(os, "readlink") else ""
-            # Just blow up on any fd-based open to simulate write failure
             raise OSError("disk full")
         return original_open(path, *args, **kwargs)
 

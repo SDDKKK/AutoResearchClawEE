@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import importlib
 import logging
+import os
 import shutil
 import tempfile
 import time as _time
@@ -69,7 +70,7 @@ def _write_pipeline_summary(run_dir: Path, summary: dict[str, object]) -> None:
 
 
 def _write_checkpoint(run_dir: Path, stage: Stage, run_id: str) -> None:
-    """Write checkpoint atomically via temp file + rename to prevent corruption"""
+    """Write checkpoint atomically via temp file + rename to prevent corruption."""
     checkpoint = {
         "last_completed_stage": int(stage),
         "last_completed_name": stage.name,
@@ -83,6 +84,12 @@ def _write_checkpoint(run_dir: Path, stage: Stage, run_id: str) -> None:
             fh.write(json.dumps(checkpoint, indent=2))
         Path(tmp_path).replace(target)
     except BaseException:
+        # Close fd if open() itself failed (fd not yet owned by file object);
+        # harmless OSError if the with-block already closed it.
+        try:
+            os.close(fd)
+        except OSError:
+            pass
         Path(tmp_path).unlink(missing_ok=True)
         raise
 

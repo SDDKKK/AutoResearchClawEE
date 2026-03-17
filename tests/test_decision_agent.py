@@ -778,3 +778,47 @@ class TestLatexFigurePlacement:
         assert "\\caption{My Figure}" in result
         assert "\\label{fig:" in result
 
+
+# =========================================================================
+# Pipeline wrapper — _chat_with_prompt strip_thinking default
+# =========================================================================
+
+
+class TestChatWithPromptStripThinking:
+    """Verify _chat_with_prompt passes strip_thinking to llm.chat()."""
+
+    def test_default_strips_thinking(self):
+        """_chat_with_prompt should pass strip_thinking=True by default."""
+        from unittest.mock import MagicMock
+        from researchclaw.pipeline.executor import _chat_with_prompt
+        from researchclaw.llm.client import LLMResponse
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = LLMResponse(
+            content="clean output", model="test", finish_reason="stop",
+        )
+
+        result = _chat_with_prompt(mock_llm, system="sys", user="hello")
+
+        call_kwargs = mock_llm.chat.call_args
+        assert call_kwargs.kwargs.get("strip_thinking") is True
+
+    def test_can_disable_stripping(self):
+        """_chat_with_prompt(strip_thinking=False) should forward the flag."""
+        from unittest.mock import MagicMock
+        from researchclaw.pipeline.executor import _chat_with_prompt
+        from researchclaw.llm.client import LLMResponse
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = LLMResponse(
+            content="<think>reasoning</think>output",
+            model="test", finish_reason="stop",
+        )
+
+        _chat_with_prompt(
+            mock_llm, system="sys", user="hello", strip_thinking=False,
+        )
+
+        call_kwargs = mock_llm.chat.call_args
+        assert call_kwargs.kwargs.get("strip_thinking") is False
+
