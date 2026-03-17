@@ -450,6 +450,132 @@ def _extract_paper_title(md_text: str) -> str:
     return "Untitled Paper"
 
 
+def _generate_framework_diagram_prompt(
+    paper_text: str,
+    config: "RCConfig",
+    *,
+    llm: "LLMClient | None" = None,
+) -> str:
+    """Generate a text-to-image prompt for a methodology framework diagram.
+
+    Reads the paper's method section and produces a detailed prompt suitable
+    for AI image generators (DALL-E, Midjourney, etc.).  The prompt describes
+    an academic-style architecture/framework overview figure.
+
+    Returns the prompt as a Markdown string, or empty string on failure.
+    """
+    import re as _re
+
+    # Extract method/approach section from paper
+    _method_section = ""
+    _method_patterns = [
+        r"(?:^#{1,3}\s+(?:Method(?:ology)?|Approach|Proposed\s+(?:Method|Framework|Approach)|Our\s+Method|Technical\s+Approach|Model\s+Architecture).*?)(?=^#{1,3}\s+|\Z)",
+    ]
+    for _pat in _method_patterns:
+        _match = _re.search(_pat, paper_text, _re.MULTILINE | _re.DOTALL | _re.IGNORECASE)
+        if _match:
+            _method_section = _match.group(0)[:3000]
+            break
+
+    if not _method_section:
+        # Fallback: use abstract + first 1500 chars
+        _abs_match = _re.search(
+            r"(?:^#{1,2}\s+Abstract\s*\n)(.*?)(?=^#{1,2}\s+|\Z)",
+            paper_text, _re.MULTILINE | _re.DOTALL | _re.IGNORECASE,
+        )
+        _method_section = (_abs_match.group(1)[:1500] if _abs_match else paper_text[:2000])
+
+    title = _extract_paper_title(paper_text)
+    topic = config.research.topic
+
+    # Use LLM to generate the prompt if available
+    if llm is not None:
+        _system = (
+            "You are an expert academic figure designer. Generate a detailed text-to-image "
+            "prompt for creating a methodology framework/architecture overview diagram.\n\n"
+            "Requirements:\n"
+            "- Academic style: clean, professional, suitable for a top-tier ML conference paper\n"
+            "- Color palette: sophisticated and harmonious (suggest specific hex colors, "
+            "prefer muted blues #4477AA, teals #44AA99, warm accents #CCBB44, soft purples #AA3377)\n"
+            "- Layout: left-to-right or top-to-bottom data flow, with clearly labeled components\n"
+            "- Components: boxes/modules with rounded corners, directional arrows, clear labels\n"
+            "- Information density: high but not cluttered — each box should have a short label\n"
+            "- Text on figure: minimal, only component names and key annotations\n"
+            "- Background: white or very light grey\n"
+            "- Style: vector-art look, flat design with subtle shadows, NO photorealism\n\n"
+            "Output ONLY the prompt text (no markdown headers, no explanations). "
+            "The prompt should be 150-300 words, highly specific and actionable."
+        )
+        _user = (
+            f"Paper title: {title}\n"
+            f"Research topic: {topic}\n\n"
+            f"Method section excerpt:\n{_method_section}\n\n"
+            "Generate a detailed text-to-image prompt for the methodology framework diagram."
+        )
+        try:
+            resp = _chat_with_prompt(llm, _system, _user, max_tokens=1024)
+            _llm_prompt = resp.content.strip()
+            if len(_llm_prompt) > 50:
+                return (
+                    f"# Framework Diagram Prompt\n\n"
+                    f"**Paper**: {title}\n\n"
+                    f"## Image Generation Prompt\n\n"
+                    f"{_llm_prompt}\n\n"
+                    f"## Usage Instructions\n\n"
+                    f"1. Copy the prompt above into an AI image generator "
+                    f"(DALL-E 3, Midjourney, Ideogram, etc.)\n"
+                    f"2. Generate the image at high resolution (2048x1024 or similar landscape)\n"
+                    f"3. Save as `framework_diagram.png` in the same `charts/` folder\n"
+                    f"4. Insert into the paper's Method section using:\n"
+                    f"   - LaTeX: `\\includegraphics[width=\\textwidth]{{charts/framework_diagram.png}}`\n"
+                    f"   - Markdown: `![Framework Overview](charts/framework_diagram.png)`\n"
+                )
+        except Exception:
+            logger.debug("Framework prompt LLM generation failed, using template")
+
+    # Fallback: template-based prompt without LLM
+    _components = []
+    _component_patterns = [
+        (r"(?:encoder|decoder|transformer|attention|convolution|MLP|GNN|ResNet|ViT)", "Neural Network Module"),
+        (r"(?:loss|objective|criterion|training|optimization)", "Training/Optimization"),
+        (r"(?:data|dataset|input|preprocessing|augmentation)", "Data Pipeline"),
+        (r"(?:output|prediction|inference|evaluation)", "Output/Evaluation"),
+    ]
+    _method_lower = _method_section.lower()
+    for pat, label in _component_patterns:
+        if _re.search(pat, _method_lower):
+            _components.append(label)
+
+    if not _components:
+        _components = ["Input Processing", "Core Model", "Training Loop", "Evaluation"]
+
+    return (
+        f"# Framework Diagram Prompt\n\n"
+        f"**Paper**: {title}\n\n"
+        f"## Image Generation Prompt\n\n"
+        f"Create a clean, academic-style methodology framework diagram for a research paper "
+        f"titled \"{title}\". "
+        f"The diagram should show a left-to-right data flow pipeline with these main components: "
+        f"{', '.join(_components)}. "
+        f"Use a professional color palette with muted blues (#4477AA), teals (#44AA99), "
+        f"warm yellows (#CCBB44), and soft purples (#AA3377) on a white background. "
+        f"Each component should be a rounded rectangle with a short label inside. "
+        f"Connect components with clean directional arrows. "
+        f"Add subtle shadows for depth. Flat vector-art style, no photorealism. "
+        f"High information density but visually clean. "
+        f"Suitable for a top-tier machine learning conference paper (ICML/NeurIPS/ICLR). "
+        f"Landscape orientation, 2048x1024 resolution.\n\n"
+        f"## Usage Instructions\n\n"
+        f"1. Copy the prompt above into an AI image generator "
+        f"(DALL-E 3, Midjourney, Ideogram, etc.)\n"
+        f"2. Generate the image at high resolution (2048x1024 or similar landscape)\n"
+        f"3. Save as `framework_diagram.png` in the same `charts/` folder\n"
+        f"4. Insert into the paper's Method section using:\n"
+        f"   - LaTeX: `\\includegraphics[width=\\textwidth]{{charts/framework_diagram.png}}`\n"
+        f"   - Markdown: `![Framework Overview](charts/framework_diagram.png)`\n"
+    )
+
+
 def _safe_filename(name: str) -> str:
     name = name.replace("/", "_").replace("\\", "_").replace("..", "_")
     name = re.sub(r"[^a-zA-Z0-9_\-.]", "_", name)
@@ -1773,6 +1899,50 @@ def _execute_literature_collect(
     # Write candidates
     out = stage_dir / "candidates.jsonl"
     _write_jsonl(out, candidates)
+
+    # BUG-50 fix: Generate BibTeX from candidates when real search failed
+    # (LLM/placeholder fallback paths don't populate bibtex_entries)
+    if not bibtex_entries and candidates:
+        for c in candidates:
+            if c.get("is_placeholder"):
+                continue
+            _ck = c.get("cite_key", "")
+            if not _ck:
+                # Derive cite_key from first author surname + year
+                _authors = c.get("authors", [])
+                _surname = "unknown"
+                if isinstance(_authors, list) and _authors:
+                    _a0 = _authors[0] if isinstance(_authors[0], str) else (_authors[0].get("name", "") if isinstance(_authors[0], dict) else "")
+                    _surname = _a0.split()[-1].lower() if _a0.strip() else "unknown"
+                _yr = c.get("year", 2024)
+                _title_word = "".join(
+                    w[0] for w in str(c.get("title", "study")).split()[:3]
+                ).lower()
+                _ck = f"{_surname}{_yr}{_title_word}"
+            _title = c.get("title", "Untitled")
+            _year = c.get("year", 2024)
+            _author_str = ""
+            _raw_authors = c.get("authors", [])
+            if isinstance(_raw_authors, list):
+                _names = []
+                for _a in _raw_authors:
+                    if isinstance(_a, str):
+                        _names.append(_a)
+                    elif isinstance(_a, dict):
+                        _names.append(_a.get("name", ""))
+                _author_str = " and ".join(n for n in _names if n)
+            bibtex_entries.append(
+                f"@article{{{_ck},\n"
+                f"  title={{{_title}}},\n"
+                f"  author={{{_author_str or 'Unknown'}}},\n"
+                f"  year={{{_year}}},\n"
+                f"  url={{{c.get('url', '')}}},\n"
+                f"}}"
+            )
+        logger.info(
+            "Stage 4: Generated %d BibTeX entries from candidates (fallback)",
+            len(bibtex_entries),
+        )
 
     # Write references.bib (F2.4)
     artifacts = ["candidates.jsonl"]
@@ -6519,6 +6689,21 @@ def _execute_paper_draft(
                 len(_chart_files),
             )
 
+    # WS-5.5: Framework diagram placeholder instruction
+    exp_metrics_instruction += (
+        "\n\n## FRAMEWORK DIAGRAM PLACEHOLDER\n"
+        "In the Method/Approach section, include a placeholder for the methodology "
+        "framework overview figure. Insert this exactly:\n\n"
+        "```\n"
+        "![Framework Overview](charts/framework_diagram.png)\n"
+        "**Figure N.** Overview of the proposed methodology. "
+        "[A detailed framework diagram will be generated separately and inserted here.]\n"
+        "```\n\n"
+        "This figure should be referenced in the text as 'Figure N' and discussed briefly "
+        "(1-2 sentences describing the overall pipeline/architecture flow). "
+        "The actual image will be generated post-hoc using a text-to-image model.\n"
+    )
+
     # P5: Extract hyperparameters from results.json for paper Method section
     _hp_table = ""
     for _s14_dir in sorted(run_dir.glob("stage-14*")):
@@ -7549,69 +7734,43 @@ def _execute_export_publish(
         logger.warning("LaTeX generation skipped: %s", exc)
 
     # WS-5.4: Generate result visualizations
+    # Priority: FigureAgent charts (stage-14) > fallback visualize.py charts
     try:
+        chart_dir = stage_dir / "charts"
+        chart_dir.mkdir(parents=True, exist_ok=True)
+        charts: list[Path] = []
+
+        # Check if FigureAgent produced charts in stage-14 (any version)
+        _fa_charts_found = False
+        for _fa_dir in sorted(run_dir.glob("stage-14*/charts"), reverse=True):
+            _fa_pngs = list(_fa_dir.glob("fig_*.png"))
+            if _fa_pngs:
+                import shutil
+                for _fa_png in _fa_pngs:
+                    dest = chart_dir / _fa_png.name
+                    shutil.copy2(_fa_png, dest)
+                    charts.append(dest)
+                _fa_charts_found = True
+                logger.info(
+                    "Stage 22: Copied %d FigureAgent charts from %s",
+                    len(_fa_pngs), _fa_dir,
+                )
+                break
+
+        # Always generate structured charts from visualize.py (different names)
         from researchclaw.experiment.visualize import generate_all_charts
-
-        charts = generate_all_charts(
+        _metric_dir = getattr(config.experiment, "metric_direction", "minimize")
+        _viz_charts = generate_all_charts(
             run_dir,
-            stage_dir / "charts",
+            chart_dir,
             metric_key=config.experiment.metric_key,
+            metric_direction=_metric_dir,
         )
-
-        # FIX-4: Also generate per-condition comparison from structured results
-        results_json_path = None
-        for sd in sorted(run_dir.glob("stage-*/runs/results.json")):
-            results_json_path = sd
-        if results_json_path is None:
-            for sd in sorted(run_dir.glob("stage-*/runs/sandbox/_project/results.json")):
-                results_json_path = sd
-
-        if results_json_path and results_json_path.exists():
-            try:
-                import matplotlib
-                matplotlib.use("Agg")
-                import matplotlib.pyplot as plt
-
-                chart_dir = stage_dir / "charts"
-                chart_dir.mkdir(parents=True, exist_ok=True)
-                sr = json.loads(results_json_path.read_text(encoding="utf-8"))
-                conditions = sr.get("conditions", sr.get("per_condition", {}))
-                if isinstance(conditions, dict) and conditions:
-                    cond_names = list(conditions.keys())
-                    metric_key = config.experiment.metric_key
-                    means = []
-                    stds = []
-                    for cn in cond_names:
-                        cd = conditions[cn]
-                        if isinstance(cd, dict):
-                            m = cd.get(f"{metric_key}_mean", cd.get("mean", cd.get(metric_key, 0)))
-                            s = cd.get(f"{metric_key}_std", cd.get("std", 0))
-                        else:
-                            m, s = 0, 0
-                        means.append(float(m) if m else 0)
-                        stds.append(float(s) if s else 0)
-
-                    fig, ax = plt.subplots(figsize=(max(6, len(cond_names) * 1.2), 5))
-                    x = range(len(cond_names))
-                    ax.bar(x, means, yerr=stds, color="#2196F3", alpha=0.8, capsize=4)
-                    ax.set_xlabel("Method")
-                    ax.set_ylabel(metric_key)
-                    ax.set_title(f"Method Comparison: {metric_key}")
-                    ax.set_xticks(list(x))
-                    ax.set_xticklabels(cond_names, rotation=30, ha="right", fontsize=9)
-                    ax.grid(True, axis="y", alpha=0.3)
-                    fig.tight_layout()
-                    chart_path = chart_dir / "method_comparison.png"
-                    fig.savefig(chart_path, dpi=150)
-                    plt.close(fig)
-                    charts.append(chart_path)
-                    logger.info("Stage 22: Generated method comparison chart")
-            except Exception as exc:
-                logger.warning("Stage 22: Method comparison chart failed: %s", exc)
+        charts.extend(_viz_charts)
 
         if charts:
             artifacts.append("charts/")
-            logger.info("Stage 22: Generated %d chart(s)", len(charts))
+            logger.info("Stage 22: Generated %d chart(s) total", len(charts))
     except Exception as exc:  # noqa: BLE001
         logger.warning("Chart generation failed: %s", exc)
 
@@ -7749,6 +7908,21 @@ def _execute_export_publish(
                 "Stage 22: Packaged single-file code release with %d deps",
                 len(requirements),
             )
+    # WS-5.5: Generate framework diagram prompt for methodology section
+    try:
+        _framework_prompt = _generate_framework_diagram_prompt(
+            final_paper, config, llm=llm
+        )
+        if _framework_prompt:
+            _chart_dir = stage_dir / "charts"
+            _chart_dir.mkdir(parents=True, exist_ok=True)
+            (_chart_dir / "framework_diagram_prompt.md").write_text(
+                _framework_prompt, encoding="utf-8"
+            )
+            logger.info("Stage 22: Generated framework diagram prompt → charts/framework_diagram_prompt.md")
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Stage 22: Framework diagram prompt generation skipped: %s", exc)
+
     return StageResult(
         stage=Stage.EXPORT_PUBLISH,
         status=StageStatus.DONE,
