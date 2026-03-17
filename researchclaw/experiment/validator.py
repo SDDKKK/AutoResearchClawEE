@@ -475,7 +475,10 @@ def check_code_complexity(code: str) -> list[str]:
     import re
 
     hardcoded_patterns = [
-        (r"print\(['\"].*:\s*0\.\d+['\"]\)", "print statement with hardcoded metric value"),
+        (
+            r"print\(['\"].*:\s*0\.\d+['\"]\)",
+            "print statement with hardcoded metric value",
+        ),
         (r"metric.*=\s*0\.\d{2,}", "hardcoded metric assignment"),
     ]
     for pattern, desc in hardcoded_patterns:
@@ -545,7 +548,10 @@ def check_class_quality(all_files: dict[str, str]) -> list[str]:
                         for sub in ast.walk(item):
                             if isinstance(sub, ast.Call):
                                 call_name = _resolve_call_name(sub.func)
-                                if call_name.startswith("nn.") and call_name != "nn.Module":
+                                if (
+                                    call_name.startswith("nn.")
+                                    and call_name != "nn.Module"
+                                ):
                                     has_forward_new_module = True
 
             # Count effective body lines
@@ -553,8 +559,10 @@ def check_class_quality(all_files: dict[str, str]) -> list[str]:
             if node.end_lineno and node.lineno:
                 cls_body = code_lines[node.lineno - 1 : node.end_lineno]
                 body_lines = sum(
-                    1 for l in cls_body
-                    if l.strip() and not l.strip().startswith("#")
+                    1
+                    for l in cls_body
+                    if l.strip()
+                    and not l.strip().startswith("#")
                     and not l.strip().startswith(("import ", "from "))
                 )
 
@@ -596,7 +604,7 @@ def check_class_quality(all_files: dict[str, str]) -> list[str]:
     class_names = list(class_info.keys())
     for i, name_a in enumerate(class_names):
         info_a = class_info[name_a]
-        for name_b in class_names[i + 1:]:
+        for name_b in class_names[i + 1 :]:
             info_b = class_info[name_b]
             if (
                 info_a["body_lines"] > 5
@@ -732,9 +740,7 @@ def check_variable_scoping(code: str, fname: str = "main.py") -> list[str]:
     return warnings
 
 
-def _collect_if_only_assignments(
-    if_node: ast.If, result: dict[str, int]
-) -> None:
+def _collect_if_only_assignments(if_node: ast.If, result: dict[str, int]) -> None:
     """Collect variables assigned only inside if/elif branches."""
     for child in ast.iter_child_nodes(if_node):
         if isinstance(child, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
@@ -819,8 +825,14 @@ def check_api_correctness(code: str, fname: str = "main.py") -> list[str]:
             )
 
         # NumPy 2.0 removed type aliases
-        for old_alias in ("np.bool", "np.int", "np.float", "np.complex",
-                          "np.object", "np.str"):
+        for old_alias in (
+            "np.bool",
+            "np.int",
+            "np.float",
+            "np.complex",
+            "np.object",
+            "np.str",
+        ):
             pattern = _re.escape(old_alias) + r"(?![_\w\d])"
             if _re.search(pattern, stripped):
                 warnings.append(

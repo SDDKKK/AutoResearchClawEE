@@ -90,7 +90,9 @@ class LLMClient:
 
     def __init__(self, config: LLMConfig) -> None:
         self.config = config
-        self._pool: list[tuple[str, str, str, str]] = []  # (name, base_url, api_key, model)
+        self._pool: list[
+            tuple[str, str, str, str]
+        ] = []  # (name, base_url, api_key, model)
         self._pool_index = 0
 
         # Build provider pool if configured
@@ -106,27 +108,26 @@ class LLMClient:
         if not self._pool:
             models = [config.primary_model] + list(config.fallback_models)
             for m in models:
-                self._pool.append((
-                    "default",
-                    config.base_url,
-                    config.api_key,
-                    m
-                ))
+                self._pool.append(("default", config.base_url, config.api_key, m))
 
-        logger.debug(f"LLMClient initialized with {len(self._pool)} provider-model pairs")
+        logger.debug(
+            f"LLMClient initialized with {len(self._pool)} provider-model pairs"
+        )
 
     @classmethod
     def from_rc_config(cls, rc_config: Any) -> LLMClient:
         # Convert provider_pool from dataclass to dict format expected by LLMConfig
         provider_pool = []
-        if hasattr(rc_config.llm, 'provider_pool') and rc_config.llm.provider_pool:
+        if hasattr(rc_config.llm, "provider_pool") and rc_config.llm.provider_pool:
             for entry in rc_config.llm.provider_pool:
-                provider_pool.append({
-                    "name": entry.name,
-                    "base_url": entry.base_url,
-                    "api_key": entry.api_key,
-                    "models": list(entry.models),
-                })
+                provider_pool.append(
+                    {
+                        "name": entry.name,
+                        "base_url": entry.base_url,
+                        "api_key": entry.api_key,
+                        "models": list(entry.models),
+                    }
+                )
 
         return cls(
             LLMConfig(
@@ -189,8 +190,13 @@ class LLMClient:
             try:
                 logger.debug(f"Trying provider {name} with model {m}")
                 resp = self._call_with_retry(
-                    m, messages, max_tok, temp, json_mode,
-                    base_url=base_url, api_key=api_key
+                    m,
+                    messages,
+                    max_tok,
+                    temp,
+                    json_mode,
+                    base_url=base_url,
+                    api_key=api_key,
                 )
                 # Success: stick with this provider for next call
                 self._pool_index = idx
@@ -198,12 +204,16 @@ class LLMClient:
                 return resp
             except urllib.error.HTTPError as e:
                 if e.code == 429:
-                    logger.warning(f"Provider {name}/{m} rate limited (429). Rotating...")
+                    logger.warning(
+                        f"Provider {name}/{m} rate limited (429). Rotating..."
+                    )
                     last_error = e
                     continue
                 # Non-retryable HTTP errors
                 if e.code in (400, 403, 404):
-                    logger.warning(f"Provider {name}/{m} failed with HTTP {e.code}: {e}")
+                    logger.warning(
+                        f"Provider {name}/{m} failed with HTTP {e.code}: {e}"
+                    )
                     last_error = e
                     continue
                 # Other retryable HTTP errors - try next provider
@@ -211,11 +221,15 @@ class LLMClient:
                 last_error = e
                 continue
             except (urllib.error.URLError, OSError) as e:
-                logger.warning(f"Provider {name}/{m} connection error: {e}. Rotating...")
+                logger.warning(
+                    f"Provider {name}/{m} connection error: {e}. Rotating..."
+                )
                 last_error = e
                 continue
             except Exception as exc:  # noqa: BLE001
-                logger.warning(f"Provider {name}/{m} failed: {exc}. Trying next.", exc_info=True)
+                logger.warning(
+                    f"Provider {name}/{m} failed: {exc}. Trying next.", exc_info=True
+                )
                 last_error = exc
                 continue
 
@@ -271,8 +285,13 @@ class LLMClient:
         for attempt in range(self.config.max_retries):
             try:
                 return self._raw_call(
-                    model, messages, max_tokens, temperature, json_mode,
-                    base_url=base_url, api_key=api_key
+                    model,
+                    messages,
+                    max_tokens,
+                    temperature,
+                    json_mode,
+                    base_url=base_url,
+                    api_key=api_key,
                 )
             except urllib.error.HTTPError as e:
                 status = e.code
@@ -354,7 +373,7 @@ class LLMClient:
     ) -> LLMResponse:
         """Make a single API call."""
         # Use provided base_url/api_key or fall back to config defaults
-        call_base_url = (base_url or self.config.base_url).rstrip('/')
+        call_base_url = (base_url or self.config.base_url).rstrip("/")
         call_api_key = api_key or self.config.api_key
 
         body: dict[str, Any] = {
