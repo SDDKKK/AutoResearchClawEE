@@ -67,6 +67,8 @@ image/logo_prompt.md
 # macOS
 .DS_Store
 
+run.log
+
 # Misc temp files
 .history/
 .serena/
@@ -78,3 +80,15 @@ cli_pause
 
 .venv_arc/
 /config.arc.yaml
+
+# Test outputs and run logs (local only)
+test_outputs*/
+records/
+run*_full_log.txt
+mdpdf.log
+scripts/md2pdf.py
+
+# Local docs (not for public)
+docs/tasks/
+docs/feature_expansion_analysis.*
+docs/tester_guide_cn.*
