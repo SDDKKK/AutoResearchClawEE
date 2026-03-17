@@ -110,6 +110,16 @@ class AcpConfig:
 
 
 @dataclass(frozen=True)
+class ProviderPoolEntry:
+    """Single provider entry in the provider pool."""
+
+    name: str
+    base_url: str
+    api_key: str
+    models: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class LlmConfig:
     provider: str
     base_url: str = ""
@@ -120,6 +130,7 @@ class LlmConfig:
     s2_api_key: str = ""
     notes: str = ""
     acp: AcpConfig = field(default_factory=AcpConfig)
+    provider_pool: tuple[ProviderPoolEntry, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -435,6 +446,16 @@ def validate_config(
 
 def _parse_llm_config(data: dict[str, Any]) -> LlmConfig:
     acp_data = data.get("acp") or {}
+    pool_data = data.get("provider_pool") or []
+    provider_pool = tuple(
+        ProviderPoolEntry(
+            name=p.get("name", f"provider_{i}"),
+            base_url=p.get("base_url", ""),
+            api_key=p.get("api_key", ""),
+            models=tuple(p.get("models", [])),
+        )
+        for i, p in enumerate(pool_data)
+    )
     return LlmConfig(
         provider=data.get("provider", "openai-compatible"),
         base_url=data.get("base_url", ""),
@@ -451,6 +472,7 @@ def _parse_llm_config(data: dict[str, Any]) -> LlmConfig:
             session_name=acp_data.get("session_name", "researchclaw"),
             timeout_sec=int(acp_data.get("timeout_sec", 600)),
         ),
+        provider_pool=provider_pool,
     )
 
 

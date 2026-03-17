@@ -52,6 +52,17 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _has_key_recursive(d: dict, key: str) -> bool:
+    """Check if *key* exists in *d* at any nesting level."""
+    if key in d:
+        return True
+    return any(
+        _has_key_recursive(v, key)
+        for v in d.values()
+        if isinstance(v, dict)
+    )
+
+
 def _write_stage_meta(
     stage_dir: Path, stage: Stage, run_id: str, result: StageResult
 ) -> None:
@@ -167,7 +178,12 @@ def _extract_yaml_block(text: str) -> str:
 
 def _safe_json_loads(text: str, default: Any) -> Any:
     try:
-        return json.loads(text)
+        result = json.loads(text)
+        # Guard: when caller expects a dict (default={}), reject non-dict results
+        # to prevent 'list' object has no attribute 'get' crashes.
+        if isinstance(default, dict) and not isinstance(result, dict):
+            return default
+        return result
     except Exception:  # noqa: BLE001
         return default
 
@@ -2005,8 +2021,8 @@ def _execute_experiment_design(
             _capturing = False
             for line in resp.content.splitlines():
                 if _re_yaml.match(
-                    r"^(baselines|proposed_methods|ablations|datasets|"
-                    r"metrics|objectives|risks|compute_budget)\s*:",
+                    r"^(baselines|proposed_methods|ablations|datasets|test_systems|"
+                    r"scenarios|solver_settings|metrics|objectives|risks|compute_budget)\s*:",
                     line,
                 ):
                     _capturing = True
@@ -2037,24 +2053,66 @@ def _execute_experiment_design(
             "Stage 09: LLM failed to produce valid experiment plan YAML. "
             "Using topic-derived fallback."
         )
-        plan = {
-            "topic": config.research.topic,
-            "generated": _utcnow_iso(),
-            "objectives": ["Evaluate hypotheses with controlled ablations"],
-            "datasets": ["regime_easy", "regime_hard"],
-            "baselines": ["standard_baseline", "oracle_upper_bound"],
-            "proposed_methods": ["proposed_method", "proposed_method_variant"],
-            "ablations": ["no_key_component", "reduced_capacity"],
-            "metrics": [config.experiment.metric_key, "secondary_metric"],
-            "risks": ["overfitting", "data leakage"],
-            "compute_budget": {"max_gpu": 1, "max_hours": 4},
-        }
+        # Domain-aware fallback: detect power systems topics
+        _POWER_KEYWORDS = {"power", "distribution", "grid", "milp", "reconfiguration", "network", "electrical"}
+        topic_lower = config.research.topic.lower()
+        domains = {d.lower() for d in getattr(config.research, 'domains', [])}
+        is_power = bool(
+            (_POWER_KEYWORDS & set(topic_lower.split()))
+            or (_POWER_KEYWORDS & domains)
+            or "power-systems" in domains
+            or "electrical-engineering" in domains
+        )
+
+        if is_power:
+            plan = {
+                "topic": config.research.topic,
+                "generated": _utcnow_iso(),
+                "objectives": [
+                    "Evaluate proposed MILP formulation on standard test systems",
+                    "Compare with existing reconfiguration methods",
+                ],
+                "test_systems": ["IEEE_33bus", "IEEE_69bus", "IEEE_123bus"],
+                "baselines": ["original_topology", "heuristic_reconfiguration", "relaxed_LP"],
+                "proposed_methods": ["proposed_MILP", "proposed_MILP_with_DG"],
+                "scenarios": ["base_load", "peak_load", "high_DG_penetration"],
+                "solver_settings": {"solver": "gurobi", "time_limit_sec": 300, "mip_gap": 0.01},
+                "ablations": ["no_switching_constraints", "no_voltage_limits", "no_DG"],
+                "metrics": [
+                    config.experiment.metric_key,
+                    "voltage_deviation",
+                    "switching_operations",
+                    "computation_time",
+                ],
+                "risks": ["solver_infeasibility", "numerical_conditioning"],
+                "compute_budget": {"max_cpu_cores": 4, "max_hours": 2},
+            }
+        else:
+            # Keep original ML fallback for non-power domains
+            plan = {
+                "topic": config.research.topic,
+                "generated": _utcnow_iso(),
+                "objectives": ["Evaluate hypotheses with controlled ablations"],
+                "datasets": ["regime_easy", "regime_hard"],
+                "baselines": ["standard_baseline", "oracle_upper_bound"],
+                "proposed_methods": ["proposed_method", "proposed_method_variant"],
+                "ablations": ["no_key_component", "reduced_capacity"],
+                "metrics": [config.experiment.metric_key, "secondary_metric"],
+                "risks": ["overfitting", "data leakage"],
+                "compute_budget": {"max_gpu": 1, "max_hours": 4},
+            }
     # ── BA: BenchmarkAgent — intelligent dataset/baseline selection ──────
+    # Skip BenchmarkAgent for power-systems plans: it injects ML datasets
+    # (CIFAR-10, FashionMNIST) and ML baselines (SGD, Adam, AdamW) that are
+    # irrelevant for MILP / power-systems experiments.  Power-systems plans
+    # use ``test_systems`` instead of ``datasets``.
     _benchmark_plan = None
     if (
         config.experiment.benchmark_agent.enabled
         and config.experiment.mode in ("sandbox", "docker")
         and llm is not None
+        and not _has_key_recursive(plan if isinstance(plan, dict) else {}, "test_systems")
+        and not _has_key_recursive(plan if isinstance(plan, dict) else {}, "solver_settings")
     ):
         try:
             from researchclaw.agents.benchmark_agent import BenchmarkOrchestrator
@@ -3777,6 +3835,8 @@ def _execute_result_analysis(
     if _refine_log_text:
         try:
             _refine_data = json.loads(_refine_log_text)
+            if not isinstance(_refine_data, dict):
+                _refine_data = {}
             _best_iter = None
             _best_ver = _refine_data.get("best_version", "")
             for _it in _refine_data.get("iterations", []):
@@ -3877,6 +3937,8 @@ def _execute_result_analysis(
     if _refine_log_text:
         try:
             _rl = json.loads(_refine_log_text)
+            if not isinstance(_rl, dict):
+                _rl = {}
             for _it in _rl.get("iterations", []):
                 for _sbx_key in ("sandbox", "sandbox_after_fix"):
                     _sbx_stdout = (_it.get(_sbx_key) or {}).get("stdout", "")
@@ -4340,6 +4402,8 @@ def _execute_research_decision(
     if _refine_log:
         try:
             _rl = json.loads(_refine_log)
+            if not isinstance(_rl, dict):
+                _rl = {}
             _iters = _rl.get("iterations", [])
             _metrics = [it.get("metric") for it in _iters if isinstance(it, dict)]
             _valid = [m for m in _metrics if m is not None]
@@ -4430,6 +4494,8 @@ def _execute_paper_outline(
     if iter_ctx_path.exists():
         try:
             ctx = json.loads(iter_ctx_path.read_text(encoding="utf-8"))
+            if not isinstance(ctx, dict):
+                ctx = {}
             iteration = ctx.get("iteration", 1)
             prev_score = ctx.get("quality_score")
             reviews_excerpt = ctx.get("reviews_excerpt", "")
@@ -4547,6 +4613,8 @@ def _collect_raw_experiment_metrics(run_dir: Path) -> str:
     for _rl_path in sorted(run_dir.glob("stage-13*/refinement_log.json")):
         try:
             _rlog = json.loads(_rl_path.read_text(encoding="utf-8"))
+            if not isinstance(_rlog, dict):
+                continue
             _best_ver = _rlog.get("best_version", "")
             for _it in _rlog.get("iterations", []):
                 for _sbx_key in ("sandbox", "sandbox_after_fix"):
@@ -5330,7 +5398,8 @@ def _execute_paper_draft(
         if _fp_path.exists():
             try:
                 _fp_data = json.loads(_fp_path.read_text(encoding="utf-8"))
-                _fa_descriptions = _fp_data.get("figure_descriptions", "")
+                if isinstance(_fp_data, dict):
+                    _fa_descriptions = _fp_data.get("figure_descriptions", "")
             except (json.JSONDecodeError, OSError):
                 pass
             if _fa_descriptions:
@@ -5606,6 +5675,8 @@ def _collect_experiment_evidence(run_dir: Path) -> str:
     if refine_log_text:
         try:
             rlog = json.loads(refine_log_text)
+            if not isinstance(rlog, dict):
+                rlog = {}
             summary = {
                 "iterations_executed": len(rlog.get("iterations", [])),
                 "converged": rlog.get("converged"),
@@ -6195,6 +6266,8 @@ def _execute_export_publish(
                 chart_dir = stage_dir / "charts"
                 chart_dir.mkdir(parents=True, exist_ok=True)
                 sr = json.loads(results_json_path.read_text(encoding="utf-8"))
+                if not isinstance(sr, dict):
+                    sr = {}
                 conditions = sr.get("conditions", sr.get("per_condition", {}))
                 if isinstance(conditions, dict) and conditions:
                     cond_names = list(conditions.keys())

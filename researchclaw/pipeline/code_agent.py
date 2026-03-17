@@ -501,7 +501,7 @@ class CodeAgent:
             resp = self._chat(sp.system, sp.user, max_tokens=4096)
 
             review = self._parse_json(resp.content)
-            if not review:
+            if not isinstance(review, dict):
                 self._log_event(
                     f"  Review round {r + 1}: could not parse JSON, skipping"
                 )
@@ -615,21 +615,30 @@ class CodeAgent:
         """Best-effort JSON extraction from LLM response."""
         # Direct parse
         try:
-            return json.loads(text)
+            result = json.loads(text)
+            if isinstance(result, dict):
+                return result
+            return None
         except (json.JSONDecodeError, ValueError):
             pass
         # ```json``` fenced block
         m = re.search(r"```json\s*\n(.*?)```", text, re.DOTALL)
         if m:
             try:
-                return json.loads(m.group(1))
+                result = json.loads(m.group(1))
+                if isinstance(result, dict):
+                    return result
+                return None
             except (json.JSONDecodeError, ValueError):
                 pass
         # First {...} object
         m = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", text, re.DOTALL)
         if m:
             try:
-                return json.loads(m.group(0))
+                result = json.loads(m.group(0))
+                if isinstance(result, dict):
+                    return result
+                return None
             except (json.JSONDecodeError, ValueError):
                 pass
         return None

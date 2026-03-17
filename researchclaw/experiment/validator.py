@@ -768,10 +768,35 @@ def check_api_correctness(code: str, fname: str = "main.py") -> list[str]:
     - nn.Linear/nn.Conv2d inside forward() (unregistered module)
     - random.seed() without numpy.random.seed() (incomplete seeding)
     - NumPy 2.0 removed APIs (.ptp(), np.bool, etc.)
+    - gurobipy read-only attribute assignment (model.Runtime =, model.ObjVal =, etc.)
     """
     import re as _re
 
     warnings: list[str] = []
+
+    # Gurobipy read-only model attributes that must never be assigned to.
+    # These are solver-populated after optimize(); writing to them raises
+    # ``AttributeError: Attribute 'X' cannot be set``.
+    _GUROBI_READONLY_ATTRS = (
+        "Runtime",
+        "ObjVal",
+        "ObjBound",
+        "ObjBoundC",
+        "MIPGap",
+        "Status",
+        "SolCount",
+        "NodeCount",
+        "BarIterCount",
+        "IterCount",
+        "NumVars",
+        "NumConstrs",
+        "NumSOS",
+        "NumQConstrs",
+        "NumGenConstrs",
+        "NumNZs",
+        "NumIntVars",
+        "NumBinVars",
+    )
 
     lines = code.splitlines()
     for i, line in enumerate(lines, 1):
@@ -809,6 +834,22 @@ def check_api_correctness(code: str, fname: str = "main.py") -> list[str]:
                 f"[{fname}:{i}] Hardcoded RandomState seed inside a loop/function "
                 f"may produce identical results across calls — pass seed as parameter"
             )
+
+        # Gurobipy read-only attribute assignment
+        # Catches patterns like: model.Runtime = ..., m.ObjVal = ...,
+        # grb_model.Status = ...
+        # Uses \w+ to match any model variable name.
+        for attr in _GUROBI_READONLY_ATTRS:
+            if _re.search(
+                rf"\b\w+\.{attr}\s*=[^=]",
+                stripped,
+            ):
+                warnings.append(
+                    f"[{fname}:{i}] Assignment to gurobipy read-only attribute "
+                    f"'.{attr}' — this will raise AttributeError at runtime. "
+                    f"Use 'model.{attr}' to READ the value, never assign to it"
+                )
+                break  # one warning per line is enough
 
     return warnings
 

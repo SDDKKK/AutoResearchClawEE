@@ -11,9 +11,11 @@ Features:
 
 from __future__ import annotations
 
+import errno
 import json
 import logging
 import os
+import random
 import time
 import urllib.error
 import urllib.request
@@ -38,6 +40,15 @@ _NEW_PARAM_MODELS = frozenset(
 _DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+
+# Socket-level errno codes that indicate transient network issues worth retrying.
+_TRANSIENT_ERRNOS = frozenset(
+    {
+        errno.ECONNRESET,  # 104 — Connection reset by peer
+        errno.ETIMEDOUT,  # 110 — Connection timed out
+        errno.ECONNREFUSED,  # 111 — Connection refused
+    }
 )
 
 
@@ -71,17 +82,52 @@ class LLMConfig:
     retry_base_delay: float = 2.0
     timeout_sec: int = 300
     user_agent: str = _DEFAULT_USER_AGENT
+    provider_pool: list[dict[str, Any]] = field(default_factory=list)
 
 
 class LLMClient:
-    """Stateless OpenAI-compatible chat completion client."""
+    """Stateless OpenAI-compatible chat completion client with provider pool support."""
 
     def __init__(self, config: LLMConfig) -> None:
         self.config = config
-        self._model_chain = [config.primary_model] + list(config.fallback_models)
+        self._pool: list[tuple[str, str, str, str]] = []  # (name, base_url, api_key, model)
+        self._pool_index = 0
+
+        # Build provider pool if configured
+        if config.provider_pool:
+            for p in config.provider_pool:
+                name = p.get("name", "unnamed")
+                base_url = p.get("base_url", "")
+                api_key = p.get("api_key", "")
+                for m in p.get("models", []):
+                    self._pool.append((name, base_url, api_key, m))
+
+        # Fallback to single-provider behavior
+        if not self._pool:
+            models = [config.primary_model] + list(config.fallback_models)
+            for m in models:
+                self._pool.append((
+                    "default",
+                    config.base_url,
+                    config.api_key,
+                    m
+                ))
+
+        logger.debug(f"LLMClient initialized with {len(self._pool)} provider-model pairs")
 
     @classmethod
     def from_rc_config(cls, rc_config: Any) -> LLMClient:
+        # Convert provider_pool from dataclass to dict format expected by LLMConfig
+        provider_pool = []
+        if hasattr(rc_config.llm, 'provider_pool') and rc_config.llm.provider_pool:
+            for entry in rc_config.llm.provider_pool:
+                provider_pool.append({
+                    "name": entry.name,
+                    "base_url": entry.base_url,
+                    "api_key": entry.api_key,
+                    "models": list(entry.models),
+                })
+
         return cls(
             LLMConfig(
                 base_url=rc_config.llm.base_url,
@@ -92,6 +138,7 @@ class LLMClient:
                 ),
                 primary_model=rc_config.llm.primary_model,
                 fallback_models=list(rc_config.llm.fallback_models or []),
+                provider_pool=provider_pool,
             )
         )
 
@@ -105,7 +152,7 @@ class LLMClient:
         json_mode: bool = False,
         system: str | None = None,
     ) -> LLMResponse:
-        """Send a chat completion request with retry and fallback.
+        """Send a chat completion request with retry and provider pool rotation.
 
         Args:
             messages: List of {role, content} dicts.
@@ -121,21 +168,59 @@ class LLMClient:
         if system:
             messages = [{"role": "system", "content": system}] + messages
 
-        models = [model] if model else self._model_chain
         max_tok = max_tokens or self.config.max_tokens
         temp = temperature if temperature is not None else self.config.temperature
 
-        last_error: Exception | None = None
+        # If a specific model is requested, filter pool to matching models
+        if model:
+            pool = [(n, b, k, m) for n, b, k, m in self._pool if m == model]
+            if not pool:
+                pool = [("override", self.config.base_url, self.config.api_key, model)]
+        else:
+            pool = self._pool
 
-        for m in models:
+        last_error: Exception | None = None
+        pool_size = len(pool)
+
+        for i in range(pool_size):
+            idx = (self._pool_index + i) % pool_size
+            name, base_url, api_key, m = pool[idx]
+
             try:
-                return self._call_with_retry(m, messages, max_tok, temp, json_mode)
+                logger.debug(f"Trying provider {name} with model {m}")
+                resp = self._call_with_retry(
+                    m, messages, max_tok, temp, json_mode,
+                    base_url=base_url, api_key=api_key
+                )
+                # Success: stick with this provider for next call
+                self._pool_index = idx
+                logger.info(f"Provider {name}/{m} succeeded")
+                return resp
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    logger.warning(f"Provider {name}/{m} rate limited (429). Rotating...")
+                    last_error = e
+                    continue
+                # Non-retryable HTTP errors
+                if e.code in (400, 403, 404):
+                    logger.warning(f"Provider {name}/{m} failed with HTTP {e.code}: {e}")
+                    last_error = e
+                    continue
+                # Other retryable HTTP errors - try next provider
+                logger.warning(f"Provider {name}/{m} failed: {e}. Trying next...")
+                last_error = e
+                continue
+            except (urllib.error.URLError, OSError) as e:
+                logger.warning(f"Provider {name}/{m} connection error: {e}. Rotating...")
+                last_error = e
+                continue
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Model %s failed: %s. Trying next.", m, exc)
+                logger.warning(f"Provider {name}/{m} failed: {exc}. Trying next.", exc_info=True)
                 last_error = exc
+                continue
 
         raise RuntimeError(
-            f"All models failed. Last error: {last_error}"
+            f"All {pool_size} providers failed. Last error: {last_error}"
         ) from last_error
 
     def preflight(self) -> tuple[bool, str]:
@@ -171,6 +256,7 @@ class LLMClient:
             return False, f"Connection failed: {e}"
         except RuntimeError as e:
             return False, f"All models failed: {e}"
+
     def _call_with_retry(
         self,
         model: str,
@@ -178,12 +264,15 @@ class LLMClient:
         max_tokens: int,
         temperature: float,
         json_mode: bool,
+        base_url: str | None = None,
+        api_key: str | None = None,
     ) -> LLMResponse:
         """Call with exponential backoff retry."""
         for attempt in range(self.config.max_retries):
             try:
                 return self._raw_call(
-                    model, messages, max_tokens, temperature, json_mode
+                    model, messages, max_tokens, temperature, json_mode,
+                    base_url=base_url, api_key=api_key
                 )
             except urllib.error.HTTPError as e:
                 status = e.code
@@ -202,10 +291,7 @@ class LLMClient:
                 # Retryable: 429 (rate limit), 500, 502, 503, 504
                 if status in (429, 500, 502, 503, 504):
                     delay = self.config.retry_base_delay * (2**attempt)
-                    # Add jitter
-                    import random
-
-                    delay += random.uniform(0, delay * 0.3)
+                    delay += random.uniform(0, delay * 0.3)  # jitter
                     logger.info(
                         "Retry %d/%d for %s (HTTP %d). Waiting %.1fs.",
                         attempt + 1,
@@ -221,8 +307,36 @@ class LLMClient:
             except urllib.error.URLError:
                 if attempt < self.config.max_retries - 1:
                     delay = self.config.retry_base_delay * (2**attempt)
+                    delay += random.uniform(0, delay * 0.3)
+                    logger.info(
+                        "Retry %d/%d for %s (URLError). Waiting %.1fs.",
+                        attempt + 1,
+                        self.config.max_retries,
+                        model,
+                        delay,
+                    )
                     time.sleep(delay)
                     continue
+                raise
+            except OSError as e:
+                # Transient socket-level errors (e.g. ConnectionResetError,
+                # ConnectionRefusedError, TimeoutError) that are NOT wrapped
+                # in urllib.error.URLError.
+                if getattr(e, "errno", None) in _TRANSIENT_ERRNOS:
+                    if attempt < self.config.max_retries - 1:
+                        delay = self.config.retry_base_delay * (2**attempt)
+                        delay += random.uniform(0, delay * 0.3)
+                        logger.info(
+                            "Retry %d/%d for %s (errno %s: %s). Waiting %.1fs.",
+                            attempt + 1,
+                            self.config.max_retries,
+                            model,
+                            e.errno,
+                            e,
+                            delay,
+                        )
+                        time.sleep(delay)
+                        continue
                 raise
 
         # Should not reach here, but just in case
@@ -235,8 +349,14 @@ class LLMClient:
         max_tokens: int,
         temperature: float,
         json_mode: bool,
+        base_url: str | None = None,
+        api_key: str | None = None,
     ) -> LLMResponse:
         """Make a single API call."""
+        # Use provided base_url/api_key or fall back to config defaults
+        call_base_url = (base_url or self.config.base_url).rstrip('/')
+        call_api_key = api_key or self.config.api_key
+
         body: dict[str, Any] = {
             "model": model,
             "messages": messages,
@@ -258,13 +378,13 @@ class LLMClient:
             body["response_format"] = {"type": "json_object"}
 
         payload = json.dumps(body).encode("utf-8")
-        url = f"{self.config.base_url.rstrip('/')}/chat/completions"
+        url = f"{call_base_url}/chat/completions"
 
         req = urllib.request.Request(
             url,
             data=payload,
             headers={
-                "Authorization": f"Bearer {self.config.api_key}",
+                "Authorization": f"Bearer {call_api_key}",
                 "Content-Type": "application/json",
                 "User-Agent": self.config.user_agent,
             },
@@ -292,6 +412,7 @@ def create_client_from_yaml(yaml_path: str | None = None) -> LLMClient:
     """Create an LLMClient from the ARC config file.
 
     Reads base_url and api_key from config.arc.yaml's llm section.
+    Supports provider_pool for multi-provider rotation.
     """
     import yaml as _yaml
 
@@ -310,6 +431,8 @@ def create_client_from_yaml(yaml_path: str | None = None) -> LLMClient:
         or ""
     )
 
+    provider_pool = llm_section.get("provider_pool", [])
+
     return LLMClient(
         LLMConfig(
             base_url=llm_section.get("base_url", "https://api.openai.com/v1"),
@@ -318,5 +441,6 @@ def create_client_from_yaml(yaml_path: str | None = None) -> LLMClient:
             fallback_models=llm_section.get(
                 "fallback_models", ["gpt-4.1", "gpt-4o-mini"]
             ),
+            provider_pool=provider_pool,
         )
     )

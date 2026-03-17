@@ -728,6 +728,8 @@ stages:
 
       Design an experiment plan as YAML for power system optimization research.
 
+      {dataset_guidance}
+
       Required keys: objectives, test_systems, baselines, proposed_methods, scenarios, solver_settings, ablations, metrics, risks, compute_budget.
 
       NAMING REQUIREMENT (CRITICAL for paper quality):
@@ -829,6 +831,13 @@ stages:
       - Do NOT use `random.uniform()` to simulate objective values
       - Do NOT hardcode metric values or use trivial arithmetic as metrics
       - Do NOT skip solver call and return synthetic results
+      - Do NOT assign to gurobipy read-only attributes. The following are
+        READ-ONLY (populated by the solver after optimize()):
+        model.Runtime, model.ObjVal, model.ObjBound, model.MIPGap,
+        model.Status, model.SolCount, model.NodeCount, model.NumVars,
+        model.NumConstrs, model.NumIntVars, model.NumBinVars.
+        To record solve time, use: `start = time.time(); model.optimize();
+        solve_time = time.time() - start` — NEVER `model.Runtime = ...`
 
       MILP MODELING REQUIREMENTS:
       1. Use gurobipy addMVar for vectorized variables (5-50x faster)
@@ -1117,6 +1126,11 @@ sub_prompts:
       4. **SOLVER CONFIG**: Are TimeLimit, MIPGap set appropriately?
       5. **METRIC REPORTING**: Are all required metrics (ObjVal, MIPGap, Runtime) reported?
       6. **TEST SYSTEMS**: Are IEEE 33-bus/69-bus data correctly hard-coded?
+      7. **GUROBIPY API**: Check for assignment to read-only model attributes.
+         model.Runtime, model.ObjVal, model.ObjBound, model.MIPGap,
+         model.Status, model.SolCount etc. are READ-ONLY — the solver
+         populates them after optimize(). Any line like `model.Runtime = ...`
+         will crash with AttributeError. To measure time use time.time().
 
       ## Output Format (JSON)
       ```json
