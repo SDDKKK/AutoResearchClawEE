@@ -1,0 +1,55 @@
+"""Publication-quality matplotlib defaults for ResearchClaw project.
+
+Import this at the top of any visualization script.
+"""
+
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+
+# Okabe-Ito colorblind-safe palette
+OKABE_ITO = [
+    "#E69F00",  # orange
+    "#56B4E9",  # sky blue
+    "#009E73",  # bluish green
+    "#F0E442",  # yellow
+    "#0072B2",  # blue
+    "#D55E00",  # vermillion
+    "#CC79A7",  # reddish purple
+    "#000000",  # black
+]
+
+
+def apply_publication_style():
+    """Apply publication-ready rcParams."""
+    mpl.rcParams.update(
+        {
+            "font.family": "sans-serif",
+            "font.sans-serif": ["Arial", "SimHei", "Microsoft YaHei"],
+            "font.size": 8,
+            "axes.labelsize": 9,
+            "axes.titlesize": 10,
+            "xtick.labelsize": 7,
+            "ytick.labelsize": 7,
+            "legend.fontsize": 7,
+            "figure.dpi": 150,
+            "savefig.dpi": 300,
+            "savefig.bbox": "tight",
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.unicode_minus": False,
+            "axes.prop_cycle": plt.cycler(color=OKABE_ITO),
+        }
+    )
+
+
+def save_figure(fig, name, formats=("pdf", "png")):
+    """Save figure in multiple formats."""
+    for fmt in formats:
+        fig.savefig(f"figures/{name}.{fmt}", bbox_inches="tight")
+
+
+# Usage:
+# apply_publication_style()
+# fig, ax = plt.subplots(figsize=(3.5, 2.5))
+# ...
+# save_figure(fig, "figure1")

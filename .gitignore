@@ -6,12 +6,12 @@ __pycache__/
 dist/
 build/
 workspaces/
-.claude/*
-!.claude/agents/
-!.claude/agents/*.md
-!.claude/skills/
-!.claude/skills/**/SKILL.md
+# Claude Code - track trellis framework files, ignore local overrides
 .claude/settings.local.json
+
+# Trellis runtime state (gitignored by .trellis/.gitignore too)
+.trellis/.sync-state.json
+.trellis/.sync-config.json
 
 # Experiment run artifacts (local only)
 artifacts/
