@@ -2,7 +2,7 @@
   <img src="image/logo.png" width="700" alt="AutoResearchClaw Logo">
 </p>
 
-<h2 align="center"><b>Chat an Idea. Get a Paper. Fully Autonomous.</b></h2>
+<h2 align="center"><b>Chat an Idea. Get a Paper. Fully Autonomous & Self-Evolving.</b></h2>
 
 
 
