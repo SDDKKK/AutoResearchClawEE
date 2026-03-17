@@ -40,7 +40,7 @@ llm:
   provider: "openai-compatible"
   base_url: "https://open.bigmodel.cn/api/paas/v4"
   api_key_env: "ZHIPU_API_KEY"
-  api_key: "d65b3f21426048849498fd201214c96a.FYEH3Fn2i65K2X9Y"
+  api_key: ""                              # ← 填入 Zhipu API key，或设置 ZHIPU_API_KEY 环境变量
   primary_model: "glm-5-turbo"
   fallback_models:
     - "glm-4.7"
@@ -68,7 +68,7 @@ llm:
     # Browse models: https://openrouter.ai/models
     - name: "OpenRouter"
       base_url: "https://openrouter.ai/api/v1"
-      api_key: "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"                           # ← 填入 OpenRouter API key
+      api_key: ""                           # ← 填入 OpenRouter API key
       models:
         - "openrouter/hunter-alpha"         
         - "openrouter/healer-alpha"
