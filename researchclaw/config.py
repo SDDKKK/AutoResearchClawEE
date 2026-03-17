@@ -173,17 +173,22 @@ class CodeAgentConfig:
     """Configuration for the advanced multi-phase code generation agent."""
 
     enabled: bool = True
-    # Phase 1: Architecture planning before code generation
+    # Phase 1: Blueprint planning (deep implementation blueprint)
     architecture_planning: bool = True
-    # Phase 2: Execution-in-the-loop (run → parse error → fix)
+    # Phase 2: Sequential file generation (one-by-one following blueprint)
+    sequential_generation: bool = True
+    # Phase 2.5: Hard validation gates (AST-based)
+    hard_validation: bool = True
+    hard_validation_max_repairs: int = 2
+    # Phase 3: Execution-in-the-loop (run → parse error → fix)
     exec_fix_max_iterations: int = 3
     exec_fix_timeout_sec: int = 60
-    # Phase 3: Solution tree search (off by default — higher cost)
+    # Phase 4: Solution tree search (off by default — higher cost)
     tree_search_enabled: bool = False
     tree_search_candidates: int = 3
     tree_search_max_depth: int = 2
     tree_search_eval_timeout_sec: int = 120
-    # Phase 4: Multi-agent review dialog
+    # Phase 5: Multi-agent review dialog
     review_max_rounds: int = 2
 
 
@@ -578,6 +583,11 @@ def _parse_code_agent_config(data: dict[str, Any]) -> CodeAgentConfig:
     return CodeAgentConfig(
         enabled=bool(data.get("enabled", True)),
         architecture_planning=bool(data.get("architecture_planning", True)),
+        sequential_generation=bool(data.get("sequential_generation", True)),
+        hard_validation=bool(data.get("hard_validation", True)),
+        hard_validation_max_repairs=int(
+            data.get("hard_validation_max_repairs", 2)
+        ),
         exec_fix_max_iterations=int(data.get("exec_fix_max_iterations", 3)),
         exec_fix_timeout_sec=int(data.get("exec_fix_timeout_sec", 60)),
         tree_search_enabled=bool(data.get("tree_search_enabled", False)),
