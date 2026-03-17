@@ -234,6 +234,18 @@ class ColabDriveSandbox:
     def _submit_and_wait(
         self, staging: Path, task_id: str, timeout_sec: int,
     ) -> SandboxResult:
+        """Submit an experiment task and wait for the Colab worker to complete it.
+
+        Protocol:
+          1. Copy experiment files to ``pending/<task_id>/`` in the shared Drive
+          2. The Colab worker notebook polls ``pending/``, moves task to
+             ``running/``, executes it, writes ``result.json``, moves to ``done/``
+          3. This method polls ``done/<task_id>/`` until result appears or timeout
+
+        Google Drive sync latency (typically 5-30s) is handled by the
+        configurable poll_interval_sec. If the worker never picks up the task,
+        the pending directory is cleaned up on timeout.
+        """
         # Ensure directories exist
         self.pending_dir.mkdir(parents=True, exist_ok=True)
         self.done_dir.mkdir(parents=True, exist_ok=True)
@@ -276,7 +288,14 @@ class ColabDriveSandbox:
     def _collect_result(
         self, task_done: Path, elapsed: float,
     ) -> SandboxResult:
-        """Read result.json from the done task directory."""
+        """Read result.json from the done task directory and clean up.
+
+        The result.json schema (written by the Colab worker):
+          {"returncode": int, "stdout": str, "stderr": str, "timed_out"?: bool}
+
+        Metrics are parsed from stdout using the same ``metric_name: value``
+        format as the local and Docker sandboxes.
+        """
         result_file = task_done / "result.json"
         if not result_file.exists():
             return SandboxResult(

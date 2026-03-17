@@ -138,6 +138,16 @@ class SshRemoteSandbox:
     def _execute(
         self, staging_dir: Path, *, entry_point: str, timeout_sec: int
     ) -> SandboxResult:
+        """Core execution flow for remote experiments.
+
+        Steps:
+          1. Create a unique temporary directory on the remote host
+          2. Upload experiment files via scp
+          3. Run any user-defined setup commands (pip install, etc.)
+          4. Execute the experiment (bare Python or Docker container)
+          5. Parse metrics from stdout (same format as local sandbox)
+          6. Clean up the remote directory regardless of outcome
+        """
         cfg = self.config
         run_id = f"rc-{uuid.uuid4().hex[:8]}"
         remote_dir = f"{cfg.remote_workdir}/{run_id}"
