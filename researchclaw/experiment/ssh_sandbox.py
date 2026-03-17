@@ -216,18 +216,23 @@ class SshRemoteSandbox:
         if cfg.gpu_ids:
             gpu_env = f"CUDA_VISIBLE_DEVICES={','.join(str(g) for g in cfg.gpu_ids)} "
 
-        # HOME is overridden so the script can't read ~/.ssh, ~/.bashrc, etc.
-        # unshare --net drops network access (Linux only).
-        # Falls back to plain exec if unshare is unavailable.
+        # Security layers:
+        # 1. HOME override — prevents reading ~/.ssh, ~/.bashrc, etc.
+        # 2. unshare --net — drops network access (Linux only).
+        # 3. If unshare unavailable, still runs with HOME override but
+        #    logs a warning so the user knows network isolation is missing.
         return (
             f"cd {remote_dir} && "
+            f"if command -v unshare >/dev/null 2>&1; then "
             f"HOME={remote_dir} "
             f"{gpu_env}"
-            f"unshare --net {cfg.remote_python} -u {entry_point} "
-            f"2>&1 || "
+            f"unshare --net {cfg.remote_python} -u {entry_point}; "
+            f"else "
+            f"echo 'WARNING: unshare not available, running without network isolation' >&2; "
             f"HOME={remote_dir} "
             f"{gpu_env}"
-            f"{cfg.remote_python} -u {entry_point}"
+            f"{cfg.remote_python} -u {entry_point}; "
+            f"fi"
         )
 
     def _build_docker_exec_cmd(
