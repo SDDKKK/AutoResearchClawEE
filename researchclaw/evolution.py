@@ -40,12 +40,12 @@ logger = logging.getLogger(__name__)
 class LessonCategory(str, Enum):
     """Issue classification for extracted lessons."""
 
-    SYSTEM = "system"          # Environment / network / timeout
+    SYSTEM = "system"  # Environment / network / timeout
     EXPERIMENT = "experiment"  # Code validation, sandbox timeout
-    WRITING = "writing"        # Paper quality issues
-    ANALYSIS = "analysis"      # Weak analysis, missing comparison
+    WRITING = "writing"  # Paper quality issues
+    ANALYSIS = "analysis"  # Weak analysis, missing comparison
     LITERATURE = "literature"  # Search / verification failures
-    PIPELINE = "pipeline"      # Stage orchestration issues
+    PIPELINE = "pipeline"  # Stage orchestration issues
 
 
 @dataclass
@@ -82,23 +82,51 @@ class LessonEntry:
 
 _CATEGORY_KEYWORDS: dict[str, list[str]] = {
     LessonCategory.SYSTEM: [
-        "timeout", "connection", "network", "oom", "memory",
-        "permission", "ssh", "socket", "dns",
+        "timeout",
+        "connection",
+        "network",
+        "oom",
+        "memory",
+        "permission",
+        "ssh",
+        "socket",
+        "dns",
     ],
     LessonCategory.EXPERIMENT: [
-        "sandbox", "validation", "import", "syntax", "subprocess",
-        "experiment", "code", "execution",
+        "sandbox",
+        "validation",
+        "import",
+        "syntax",
+        "subprocess",
+        "experiment",
+        "code",
+        "execution",
     ],
     LessonCategory.WRITING: [
-        "paper", "draft", "outline", "revision", "review",
-        "template", "latex",
+        "paper",
+        "draft",
+        "outline",
+        "revision",
+        "review",
+        "template",
+        "latex",
     ],
     LessonCategory.ANALYSIS: [
-        "analysis", "metric", "statistic", "comparison", "baseline",
+        "analysis",
+        "metric",
+        "statistic",
+        "comparison",
+        "baseline",
     ],
     LessonCategory.LITERATURE: [
-        "search", "citation", "verify", "hallucin", "arxiv",
-        "semantic_scholar", "literature", "collect",
+        "search",
+        "citation",
+        "verify",
+        "hallucin",
+        "arxiv",
+        "semantic_scholar",
+        "literature",
+        "collect",
     ],
 }
 
@@ -122,14 +150,29 @@ def _classify_error(stage_name: str, error_text: str) -> str:
 
 # Stage name mapping (import-free to avoid circular deps)
 _STAGE_NAMES: dict[int, str] = {
-    1: "topic_init", 2: "problem_decompose", 3: "search_strategy",
-    4: "literature_collect", 5: "literature_screen", 6: "knowledge_extract",
-    7: "synthesis", 8: "hypothesis_gen", 9: "experiment_design",
-    10: "code_generation", 11: "resource_planning", 12: "experiment_run",
-    13: "iterative_refine", 14: "result_analysis", 15: "research_decision",
-    16: "paper_outline", 17: "paper_draft", 18: "peer_review",
-    19: "paper_revision", 20: "quality_gate", 21: "knowledge_archive",
-    22: "export_publish", 23: "citation_verify",
+    1: "topic_init",
+    2: "problem_decompose",
+    3: "search_strategy",
+    4: "literature_collect",
+    5: "literature_screen",
+    6: "knowledge_extract",
+    7: "synthesis",
+    8: "hypothesis_gen",
+    9: "experiment_design",
+    10: "code_generation",
+    11: "resource_planning",
+    12: "experiment_run",
+    13: "iterative_refine",
+    14: "result_analysis",
+    15: "research_decision",
+    16: "paper_outline",
+    17: "paper_draft",
+    18: "peer_review",
+    19: "paper_revision",
+    20: "quality_gate",
+    21: "knowledge_archive",
+    22: "export_publish",
+    23: "citation_verify",
 }
 
 
@@ -160,27 +203,31 @@ def extract_lessons(
         # Failed stages
         if "failed" in status.lower() and error:
             category = _classify_error(stage_name, str(error))
-            lessons.append(LessonEntry(
-                stage_name=stage_name,
-                stage_num=stage_num,
-                category=category,
-                severity="error",
-                description=f"Stage {stage_name} failed: {str(error)[:300]}",
-                timestamp=now,
-                run_id=run_id,
-            ))
+            lessons.append(
+                LessonEntry(
+                    stage_name=stage_name,
+                    stage_num=stage_num,
+                    category=category,
+                    severity="error",
+                    description=f"Stage {stage_name} failed: {str(error)[:300]}",
+                    timestamp=now,
+                    run_id=run_id,
+                )
+            )
 
         # Blocked stages
         if "blocked" in status.lower():
-            lessons.append(LessonEntry(
-                stage_name=stage_name,
-                stage_num=stage_num,
-                category=LessonCategory.PIPELINE,
-                severity="warning",
-                description=f"Stage {stage_name} blocked awaiting approval",
-                timestamp=now,
-                run_id=run_id,
-            ))
+            lessons.append(
+                LessonEntry(
+                    stage_name=stage_name,
+                    stage_num=stage_num,
+                    category=LessonCategory.PIPELINE,
+                    severity="warning",
+                    description=f"Stage {stage_name} blocked awaiting approval",
+                    timestamp=now,
+                    run_id=run_id,
+                )
+            )
 
         # PIVOT / REFINE decisions — extract rationale if available
         if decision in ("pivot", "refine"):
@@ -190,15 +237,17 @@ def extract_lessons(
                 desc += f": {rationale[:200]}"
             else:
                 desc += " — prior hypotheses/experiments were insufficient"
-            lessons.append(LessonEntry(
-                stage_name=stage_name,
-                stage_num=stage_num,
-                category=LessonCategory.PIPELINE,
-                severity="warning",
-                description=desc,
-                timestamp=now,
-                run_id=run_id,
-            ))
+            lessons.append(
+                LessonEntry(
+                    stage_name=stage_name,
+                    stage_num=stage_num,
+                    category=LessonCategory.PIPELINE,
+                    severity="warning",
+                    description=desc,
+                    timestamp=now,
+                    run_id=run_id,
+                )
+            )
 
     # --- Extract lessons from experiment artifacts ---
     if run_dir is not None:
@@ -250,7 +299,8 @@ def _parse_justification_from_excerpt(text: str) -> str:
     lines = [l.strip() for l in text.splitlines() if l.strip()]
     # Skip heading lines starting with ## or **
     content_lines = [
-        l for l in lines
+        l
+        for l in lines
         if not l.startswith("##") and not (l.startswith("**") and l.endswith("**"))
     ]
     if content_lines:
@@ -281,17 +331,20 @@ def _extract_runtime_lessons(
             # Check stderr for runtime warnings
             stderr = payload.get("stderr", "")
             if stderr and any(
-                kw in stderr for kw in ("Warning", "Error", "divide", "overflow", "invalid value")
+                kw in stderr
+                for kw in ("Warning", "Error", "divide", "overflow", "invalid value")
             ):
-                lessons.append(LessonEntry(
-                    stage_name="experiment_run",
-                    stage_num=12,
-                    category=LessonCategory.EXPERIMENT,
-                    severity="warning",
-                    description=f"Runtime warning in experiment: {stderr[:200]}",
-                    timestamp=timestamp,
-                    run_id=run_id,
-                ))
+                lessons.append(
+                    LessonEntry(
+                        stage_name="experiment_run",
+                        stage_num=12,
+                        category=LessonCategory.EXPERIMENT,
+                        severity="warning",
+                        description=f"Runtime warning in experiment: {stderr[:200]}",
+                        timestamp=timestamp,
+                        run_id=run_id,
+                    )
+                )
 
             # Check metrics for NaN/Inf
             metrics = payload.get("metrics", {})
@@ -300,15 +353,17 @@ def _extract_runtime_lessons(
                     try:
                         fval = float(val)
                         if math.isnan(fval) or math.isinf(fval):
-                            lessons.append(LessonEntry(
-                                stage_name="experiment_run",
-                                stage_num=12,
-                                category=LessonCategory.EXPERIMENT,
-                                severity="error",
-                                description=f"Metric '{key}' was {val} — code bug (division by zero or overflow)",
-                                timestamp=timestamp,
-                                run_id=run_id,
-                            ))
+                            lessons.append(
+                                LessonEntry(
+                                    stage_name="experiment_run",
+                                    stage_num=12,
+                                    category=LessonCategory.EXPERIMENT,
+                                    severity="error",
+                                    description=f"Metric '{key}' was {val} — code bug (division by zero or overflow)",
+                                    timestamp=timestamp,
+                                    run_id=run_id,
+                                )
+                            )
                     except (TypeError, ValueError):
                         pass
 
@@ -442,9 +497,7 @@ class EvolutionStore:
                 parts.append(
                     f"{i}. {severity_icon} [{lesson.category}] {lesson.description}"
                 )
-            parts.append(
-                "\nUse these lessons to avoid repeating past mistakes."
-            )
+            parts.append("\nUse these lessons to avoid repeating past mistakes.")
 
         # --- Section 2: cross-run MetaClaw arc-* skills ---
         if skills_dir:
@@ -467,9 +520,7 @@ class EvolutionStore:
                     parts.append("\n## Learned Skills from Prior Runs")
                     for skill_text in arc_skills[:5]:
                         parts.append(skill_text)
-                    parts.append(
-                        "\nApply these skills proactively to improve quality."
-                    )
+                    parts.append("\nApply these skills proactively to improve quality.")
 
         return "\n".join(parts)
 

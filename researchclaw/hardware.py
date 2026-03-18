@@ -13,14 +13,39 @@ logger = logging.getLogger(__name__)
 _HIGH_VRAM_THRESHOLD_MB = 8192
 
 # Words that indicate a log/status line rather than a metric
-LOG_WORDS: frozenset[str] = frozenset({
-    "running", "loading", "saving", "processing", "starting",
-    "finished", "completed", "initializing", "downloading",
-    "training", "evaluating", "epoch", "step", "iteration",
-    "experiment", "warning", "error", "info", "debug",
-    "experiments", "using", "setting", "creating", "building",
-    "computing", "reading", "writing", "opening", "closing",
-})
+LOG_WORDS: frozenset[str] = frozenset(
+    {
+        "running",
+        "loading",
+        "saving",
+        "processing",
+        "starting",
+        "finished",
+        "completed",
+        "initializing",
+        "downloading",
+        "training",
+        "evaluating",
+        "epoch",
+        "step",
+        "iteration",
+        "experiment",
+        "warning",
+        "error",
+        "info",
+        "debug",
+        "experiments",
+        "using",
+        "setting",
+        "creating",
+        "building",
+        "computing",
+        "reading",
+        "writing",
+        "opening",
+        "closing",
+    }
+)
 
 # Maximum word count for a plausible metric name
 _MAX_METRIC_NAME_WORDS = 6

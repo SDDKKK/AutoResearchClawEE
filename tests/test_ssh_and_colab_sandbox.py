@@ -1,5 +1,6 @@
 # pyright: reportPrivateUsage=false, reportUnknownParameterType=false
 """Tests for ssh_remote and colab_drive experiment backends."""
+
 from __future__ import annotations
 
 import json
@@ -36,6 +37,7 @@ from researchclaw.experiment.factory import create_sandbox
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_experiment_config(**overrides) -> ExperimentConfig:
     defaults = dict(
         sandbox=SandboxConfig(),
@@ -53,6 +55,7 @@ def _make_experiment_config(**overrides) -> ExperimentConfig:
 # ===========================================================================
 # SSH Remote: unit tests
 # ===========================================================================
+
 
 class TestSshTarget:
     def test_with_user(self):
@@ -87,7 +90,9 @@ class TestBuildSshBase:
 class TestSshRemoteSandboxCommands:
     def test_bare_exec_cmd(self, tmp_path: Path):
         cfg = SshRemoteConfig(
-            host="server", user="test", gpu_ids=(0, 1),
+            host="server",
+            user="test",
+            gpu_ids=(0, 1),
             remote_python="python3",
         )
         sb = SshRemoteSandbox(cfg, tmp_path)
@@ -105,7 +110,8 @@ class TestSshRemoteSandboxCommands:
 
     def test_docker_exec_cmd(self, tmp_path: Path):
         cfg = SshRemoteConfig(
-            host="server", user="test",
+            host="server",
+            user="test",
             use_docker=True,
             docker_image="myimage:latest",
             docker_network_policy="none",
@@ -126,7 +132,8 @@ class TestSshRemoteSandboxCommands:
 
     def test_docker_exec_full_network(self, tmp_path: Path):
         cfg = SshRemoteConfig(
-            host="server", use_docker=True,
+            host="server",
+            use_docker=True,
             docker_network_policy="full",
         )
         sb = SshRemoteSandbox(cfg, tmp_path)
@@ -155,14 +162,17 @@ class TestSshSandboxRun:
         sb = SshRemoteSandbox(cfg, tmp_path)
 
         fake_results = [
-            mock.Mock(returncode=0, stdout="", stderr=""),      # mkdir
-            mock.Mock(returncode=0, stdout="accuracy: 0.95\nloss: 0.05", stderr=""),  # exec
-            mock.Mock(returncode=0, stdout="", stderr=""),      # cleanup
+            mock.Mock(returncode=0, stdout="", stderr=""),  # mkdir
+            mock.Mock(
+                returncode=0, stdout="accuracy: 0.95\nloss: 0.05", stderr=""
+            ),  # exec
+            mock.Mock(returncode=0, stdout="", stderr=""),  # cleanup
         ]
         call_count = [0]
 
         def fake_ssh_run(command, *, timeout_sec=60):
             from researchclaw.experiment.ssh_sandbox import _SshResult
+
             idx = min(call_count[0], len(fake_results) - 1)
             r = fake_results[idx]
             call_count[0] += 1
@@ -175,8 +185,8 @@ class TestSshSandboxRun:
         def fake_scp(local_dir, remote_dir):
             return True
 
-        with mock.patch.object(sb, '_ssh_run', side_effect=fake_ssh_run):
-            with mock.patch.object(sb, '_scp_upload', side_effect=fake_scp):
+        with mock.patch.object(sb, "_ssh_run", side_effect=fake_ssh_run):
+            with mock.patch.object(sb, "_scp_upload", side_effect=fake_scp):
                 result = sb.run("print('hello')", timeout_sec=60)
 
         assert result.returncode == 0
@@ -189,8 +199,8 @@ class TestSshSandboxRun:
 
         from researchclaw.experiment.ssh_sandbox import _SshResult
 
-        with mock.patch.object(sb, '_ssh_run', return_value=_SshResult(0, "", "")):
-            with mock.patch.object(sb, '_scp_upload', return_value=False):
+        with mock.patch.object(sb, "_ssh_run", return_value=_SshResult(0, "", "")):
+            with mock.patch.object(sb, "_scp_upload", return_value=False):
                 result = sb.run("print('hello')")
 
         assert result.returncode == -1
@@ -200,6 +210,7 @@ class TestSshSandboxRun:
 # ===========================================================================
 # Colab Drive: unit tests
 # ===========================================================================
+
 
 class TestColabDriveCheck:
     def test_empty_root(self):
@@ -246,11 +257,15 @@ class TestColabDriveSandbox:
                             done.mkdir(parents=True, exist_ok=True)
                             done_dir = done / task_dir.name
                             task_dir.rename(done_dir)
-                            (done_dir / "result.json").write_text(json.dumps({
-                                "returncode": 0,
-                                "stdout": "primary_metric: 42.0\naccuracy: 0.99",
-                                "stderr": "",
-                            }))
+                            (done_dir / "result.json").write_text(
+                                json.dumps(
+                                    {
+                                        "returncode": 0,
+                                        "stdout": "primary_metric: 42.0\naccuracy: 0.99",
+                                        "stderr": "",
+                                    }
+                                )
+                            )
                             return
                 time.sleep(0.5)
 
@@ -320,6 +335,7 @@ class TestColabWorkerTemplate:
 # Factory integration tests
 # ===========================================================================
 
+
 class TestFactoryIntegration:
     def test_ssh_remote_requires_host(self, tmp_path: Path):
         cfg = _make_experiment_config(
@@ -367,6 +383,7 @@ class TestFactoryIntegration:
 # ===========================================================================
 # ACP timeout fix test
 # ===========================================================================
+
 
 class TestAcpTimeoutFix:
     def test_timeout_passed_from_config(self):

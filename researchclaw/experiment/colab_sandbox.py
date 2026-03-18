@@ -31,7 +31,7 @@ from researchclaw.experiment.sandbox import SandboxResult, parse_metrics
 logger = logging.getLogger(__name__)
 
 # Template for the Colab worker notebook
-COLAB_WORKER_TEMPLATE = '''\
+COLAB_WORKER_TEMPLATE = """\
 # === ResearchClaw Colab Worker ===
 # Run this cell in Google Colab with GPU enabled.
 # It polls Google Drive for experiment tasks and executes them.
@@ -114,7 +114,7 @@ while True:
         print(f"[{task_id}] Done (exit {result['returncode']})")
 
     time.sleep(10)
-'''
+"""
 
 
 class ColabDriveSandbox:
@@ -180,9 +180,11 @@ class ColabDriveSandbox:
 
         if not (staging / entry_point).exists():
             return SandboxResult(
-                returncode=-1, stdout="",
+                returncode=-1,
+                stdout="",
                 stderr=f"Entry point {entry_point} not found",
-                elapsed_sec=0.0, metrics={},
+                elapsed_sec=0.0,
+                metrics={},
             )
 
         self._write_setup_script(staging)
@@ -220,9 +222,7 @@ class ColabDriveSandbox:
         harness_src = Path(__file__).parent / "harness_template.py"
         if harness_src.exists():
             dest = target_dir / "experiment_harness.py"
-            dest.write_text(
-                harness_src.read_text(encoding="utf-8"), encoding="utf-8"
-            )
+            dest.write_text(harness_src.read_text(encoding="utf-8"), encoding="utf-8")
 
     def _write_setup_script(self, staging: Path) -> None:
         """Write setup.sh if setup_script is configured."""
@@ -238,7 +238,10 @@ class ColabDriveSandbox:
     # ------------------------------------------------------------------
 
     def _submit_and_wait(
-        self, staging: Path, task_id: str, timeout_sec: int,
+        self,
+        staging: Path,
+        task_id: str,
+        timeout_sec: int,
     ) -> SandboxResult:
         """Submit an experiment task and wait for the Colab worker to complete it.
 
@@ -292,7 +295,9 @@ class ColabDriveSandbox:
         )
 
     def _collect_result(
-        self, task_done: Path, elapsed: float,
+        self,
+        task_done: Path,
+        elapsed: float,
     ) -> SandboxResult:
         """Read result.json from the done task directory and clean up.
 
@@ -305,18 +310,22 @@ class ColabDriveSandbox:
         result_file = task_done / "result.json"
         if not result_file.exists():
             return SandboxResult(
-                returncode=-1, stdout="",
+                returncode=-1,
+                stdout="",
                 stderr="Colab worker did not write result.json",
-                elapsed_sec=elapsed, metrics={},
+                elapsed_sec=elapsed,
+                metrics={},
             )
 
         try:
             data = json.loads(result_file.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as exc:
             return SandboxResult(
-                returncode=-1, stdout="",
+                returncode=-1,
+                stdout="",
                 stderr=f"Failed to read result.json: {exc}",
-                elapsed_sec=elapsed, metrics={},
+                elapsed_sec=elapsed,
+                metrics={},
             )
 
         stdout = data.get("stdout", "")

@@ -453,11 +453,13 @@ def verify_by_openalex(title: str) -> CitationResult | None:
 
     Returns *None* only on network failure (allows fallthrough to S2).
     """
-    params = urllib.parse.urlencode({
-        "filter": f"title.search:{title}",
-        "per_page": "5",
-        "mailto": _OPENALEX_EMAIL,
-    })
+    params = urllib.parse.urlencode(
+        {
+            "filter": f"title.search:{title}",
+            "per_page": "5",
+            "mailto": _OPENALEX_EMAIL,
+        }
+    )
     url = f"{_OPENALEX_API}?{params}"
 
     try:
@@ -684,9 +686,9 @@ def verify_citations(
     report = VerificationReport(total=len(entries))
 
     # Adaptive delays: OpenAlex/CrossRef can be queried much faster than arXiv
-    _DELAY_ARXIV = inter_verify_delay       # arXiv: conservative (1.5s default)
-    _DELAY_CROSSREF = 0.3                   # CrossRef: 50 req/s polite pool
-    _DELAY_OPENALEX = 0.2                   # OpenAlex: 10K/day
+    _DELAY_ARXIV = inter_verify_delay  # arXiv: conservative (1.5s default)
+    _DELAY_CROSSREF = 0.3  # CrossRef: 50 req/s polite pool
+    _DELAY_OPENALEX = 0.2  # OpenAlex: 10K/day
     api_call_count = 0
 
     # BUG-22: Global timeout — stop verifying after 5 minutes total
@@ -699,19 +701,23 @@ def verify_citations(
             logger.warning(
                 "Verification timeout (%.0fs). Marking remaining %d/%d "
                 "citations as SKIPPED.",
-                _VERIFY_TIMEOUT_SEC, len(entries) - i, len(entries),
+                _VERIFY_TIMEOUT_SEC,
+                len(entries) - i,
+                len(entries),
             )
             for remaining_entry in entries[i:]:
                 _rkey = remaining_entry.get("key", f"unknown_{i}")
                 _rtitle = remaining_entry.get("title", "")
-                report.results.append(CitationResult(
-                    cite_key=_rkey,
-                    title=_rtitle,
-                    status=VerifyStatus.SKIPPED,
-                    confidence=0.0,
-                    method="skipped",
-                    details="Verification timeout exceeded",
-                ))
+                report.results.append(
+                    CitationResult(
+                        cite_key=_rkey,
+                        title=_rtitle,
+                        status=VerifyStatus.SKIPPED,
+                        confidence=0.0,
+                        method="skipped",
+                        details="Verification timeout exceeded",
+                    )
+                )
                 report.skipped += 1
             break
 
@@ -747,7 +753,9 @@ def verify_citations(
                 report.hallucinated += 1
             else:
                 report.skipped += 1
-            logger.debug("[cache] verify HIT [%s] %r → %s", key, title[:50], cached.status.value)
+            logger.debug(
+                "[cache] verify HIT [%s] %r → %s", key, title[:50], cached.status.value
+            )
             continue
 
         result: CitationResult | None = None
@@ -826,7 +834,6 @@ def verify_citations(
                 method="skipped",
                 details="All verification methods failed (network error?)",
             )
-
 
         result = CitationResult(
             cite_key=key,

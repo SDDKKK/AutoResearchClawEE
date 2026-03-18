@@ -232,7 +232,9 @@ def test_cmd_init_creates_config(
     monkeypatch.chdir(tmp_path)
     _write_example_config(tmp_path / "config.researchclaw.example.yaml")
     # Simulate non-TTY (stdin not a tty) → defaults to openai
-    monkeypatch.setattr("sys.stdin", type("FakeStdin", (), {"isatty": lambda self: False})())
+    monkeypatch.setattr(
+        "sys.stdin", type("FakeStdin", (), {"isatty": lambda self: False})()
+    )
     args = argparse.Namespace(force=False)
     code = rc_cli.cmd_init(args)
     assert code == 0
@@ -262,7 +264,9 @@ def test_cmd_init_force_overwrites(
     monkeypatch.chdir(tmp_path)
     _write_example_config(tmp_path / "config.researchclaw.example.yaml")
     (tmp_path / "config.arc.yaml").write_text("old\n")
-    monkeypatch.setattr("sys.stdin", type("FakeStdin", (), {"isatty": lambda self: False})())
+    monkeypatch.setattr(
+        "sys.stdin", type("FakeStdin", (), {"isatty": lambda self: False})()
+    )
     args = argparse.Namespace(force=True)
     code = rc_cli.cmd_init(args)
     assert code == 0

@@ -13,7 +13,12 @@ import yaml
 
 from researchclaw.adapters import AdapterBundle
 from researchclaw.config import RCConfig
-from researchclaw.hardware import HardwareProfile, detect_hardware, ensure_torch_available, is_metric_name
+from researchclaw.hardware import (
+    HardwareProfile,
+    detect_hardware,
+    ensure_torch_available,
+    is_metric_name,
+)
 from researchclaw.llm import create_llm_client
 from researchclaw.llm.client import LLMClient
 from researchclaw.prompts import PromptManager
@@ -43,66 +48,174 @@ logger = logging.getLogger(__name__)
 _DOMAIN_KEYWORDS: dict[str, tuple[list[str], str, str]] = {
     # domain_id: (keywords, display_name, top_venues)
     "ml": (
-        ["machine learning", "deep learning", "neural network", "transformer",
-         "reinforcement learning", "GAN", "diffusion model", "LLM", "language model",
-         "computer vision", "NLP", "representation learning", "self-supervised",
-         "federated learning", "meta-learning", "continual learning", "few-shot",
-         "knowledge distillation", "attention mechanism", "fine-tuning", "RLHF",
-         "vision transformer", "ViT", "BERT", "GPT", "autoencoder"],
+        [
+            "machine learning",
+            "deep learning",
+            "neural network",
+            "transformer",
+            "reinforcement learning",
+            "GAN",
+            "diffusion model",
+            "LLM",
+            "language model",
+            "computer vision",
+            "NLP",
+            "representation learning",
+            "self-supervised",
+            "federated learning",
+            "meta-learning",
+            "continual learning",
+            "few-shot",
+            "knowledge distillation",
+            "attention mechanism",
+            "fine-tuning",
+            "RLHF",
+            "vision transformer",
+            "ViT",
+            "BERT",
+            "GPT",
+            "autoencoder",
+        ],
         "machine learning",
         "NeurIPS, ICML, ICLR",
     ),
     "physics": (
-        ["quantum", "thermodynamic", "electrodynamic", "particle physics",
-         "condensed matter", "statistical mechanics", "cosmology", "astrophysics",
-         "plasma", "optics", "photonics", "relativity", "gravitational"],
+        [
+            "quantum",
+            "thermodynamic",
+            "electrodynamic",
+            "particle physics",
+            "condensed matter",
+            "statistical mechanics",
+            "cosmology",
+            "astrophysics",
+            "plasma",
+            "optics",
+            "photonics",
+            "relativity",
+            "gravitational",
+        ],
         "physics",
         "Physical Review Letters, Nature Physics, JHEP",
     ),
     "chemistry": (
-        ["molecular", "catalysis", "polymer", "organic chemistry", "inorganic",
-         "electrochemistry", "spectroscopy", "crystallography", "drug discovery",
-         "protein folding", "computational chemistry", "DFT", "force field"],
+        [
+            "molecular",
+            "catalysis",
+            "polymer",
+            "organic chemistry",
+            "inorganic",
+            "electrochemistry",
+            "spectroscopy",
+            "crystallography",
+            "drug discovery",
+            "protein folding",
+            "computational chemistry",
+            "DFT",
+            "force field",
+        ],
         "chemistry",
         "JACS, Nature Chemistry, Angewandte Chemie",
     ),
     "economics": (
-        ["econometric", "macroeconomic", "microeconomic", "game theory",
-         "market", "fiscal policy", "monetary", "behavioral economics",
-         "causal inference", "panel data", "regression discontinuity",
-         "instrumental variable", "supply chain", "auction"],
+        [
+            "econometric",
+            "macroeconomic",
+            "microeconomic",
+            "game theory",
+            "market",
+            "fiscal policy",
+            "monetary",
+            "behavioral economics",
+            "causal inference",
+            "panel data",
+            "regression discontinuity",
+            "instrumental variable",
+            "supply chain",
+            "auction",
+        ],
         "economics",
         "AER, Econometrica, QJE, Review of Economic Studies",
     ),
     "mathematics": (
-        ["theorem", "proof", "conjecture", "topology", "algebra",
-         "number theory", "combinatorics", "differential equation",
-         "stochastic process", "functional analysis", "manifold",
-         "Riemannian", "category theory", "graph theory"],
+        [
+            "theorem",
+            "proof",
+            "conjecture",
+            "topology",
+            "algebra",
+            "number theory",
+            "combinatorics",
+            "differential equation",
+            "stochastic process",
+            "functional analysis",
+            "manifold",
+            "Riemannian",
+            "category theory",
+            "graph theory",
+        ],
         "mathematics",
         "Annals of Mathematics, Inventiones Mathematicae, JAMS",
     ),
     "engineering": (
-        ["robotics", "control system", "signal processing", "FPGA",
-         "embedded system", "VLSI", "antenna", "fluid dynamics", "CFD",
-         "finite element", "structural", "mechatronics", "autonomous"],
+        [
+            "robotics",
+            "control system",
+            "signal processing",
+            "FPGA",
+            "embedded system",
+            "VLSI",
+            "antenna",
+            "fluid dynamics",
+            "CFD",
+            "finite element",
+            "structural",
+            "mechatronics",
+            "autonomous",
+        ],
         "engineering",
         "IEEE Transactions, ASME journals, AIAA",
     ),
     "biology": (
-        ["genomics", "proteomics", "transcriptomics", "CRISPR",
-         "single-cell", "phylogenetic", "ecology", "neuroscience",
-         "bioinformatics", "sequencing", "gene expression", "epigenetic"],
+        [
+            "genomics",
+            "proteomics",
+            "transcriptomics",
+            "CRISPR",
+            "single-cell",
+            "phylogenetic",
+            "ecology",
+            "neuroscience",
+            "bioinformatics",
+            "sequencing",
+            "gene expression",
+            "epigenetic",
+        ],
         "biology",
         "Nature, Science, Cell, PNAS",
     ),
     "power_systems": (
-        ["power systems", "smart grid", "distribution network",
-         "transmission", "electrical grid", "power flow",
-         "optimal power flow", "OPF", "unit commitment",
-         "gurobipy", "MILP", "convex optimization", "CVXPY",
-         "pandapower", "PyPOWER", "state estimation",
-         "load flow", "economic dispatch", "voltage stability"],
+        [
+            "power systems",
+            "smart grid",
+            "distribution network",
+            "transmission",
+            "electrical grid",
+            "power flow",
+            "optimal power flow",
+            "OPF",
+            "unit commitment",
+            "gurobipy",
+            "MILP",
+            "convex optimization",
+            "CVXPY",
+            "pandapower",
+            "PyPOWER",
+            "state estimation",
+            "load flow",
+            "economic dispatch",
+            "voltage stability",
+        ],
         "power systems engineering",
         "IEEE Transactions on Power Systems, IEEE TPWRS",
     ),
@@ -178,8 +291,16 @@ def _write_stage_meta(
 
 
 _SANDBOX_SAFE_PACKAGES = {
-    "numpy", "scipy", "torch", "sklearn", "matplotlib",
-    "pandas", "seaborn", "tqdm", "gymnasium", "gym",
+    "numpy",
+    "scipy",
+    "torch",
+    "sklearn",
+    "matplotlib",
+    "pandas",
+    "seaborn",
+    "tqdm",
+    "gymnasium",
+    "gym",
 }
 
 
@@ -207,14 +328,16 @@ def _ensure_sandbox_deps(code: str, python_path: str) -> list[str]:
         try:
             r = _sp.run(
                 [str(py_path), "-c", f"import {pkg}"],
-                capture_output=True, timeout=10,
+                capture_output=True,
+                timeout=10,
             )
             if r.returncode != 0:
                 pip_name = "scikit-learn" if pkg == "sklearn" else pkg
                 logger.info("Sandbox: installing missing dependency '%s'", pip_name)
                 _sp.run(
                     [str(py_path), "-m", "pip", "install", pip_name, "--quiet"],
-                    capture_output=True, timeout=120,
+                    capture_output=True,
+                    timeout=120,
                 )
                 installed.append(pip_name)
         except Exception as exc:
@@ -239,7 +362,9 @@ def _read_prior_artifact(run_dir: Path, filename: str) -> str | None:
                 return (name, -999)
         return (name, 0)  # Non-versioned: highest priority
 
-    for stage_subdir in sorted(run_dir.glob("stage-*"), key=_stage_sort_key, reverse=True):
+    for stage_subdir in sorted(
+        run_dir.glob("stage-*"), key=_stage_sort_key, reverse=True
+    ):
         candidate = stage_subdir / filename
         if candidate.is_file():
             return candidate.read_text(encoding="utf-8")
@@ -250,6 +375,7 @@ def _read_prior_artifact(run_dir: Path, filename: str) -> str | None:
 
 def _find_prior_file(run_dir: Path, filename: str) -> Path | None:
     """Like ``_read_prior_artifact`` but returns the *Path* instead of content."""
+
     def _stage_sort_key(p: Path) -> tuple[str, int]:
         name = p.name
         if "_v" in name:
@@ -260,7 +386,9 @@ def _find_prior_file(run_dir: Path, filename: str) -> Path | None:
                 return (name, -999)
         return (name, 0)
 
-    for stage_subdir in sorted(run_dir.glob("stage-*"), key=_stage_sort_key, reverse=True):
+    for stage_subdir in sorted(
+        run_dir.glob("stage-*"), key=_stage_sort_key, reverse=True
+    ):
         candidate = stage_subdir / filename
         if candidate.is_file():
             return candidate
@@ -357,11 +485,27 @@ def _chat_with_prompt(
     for attempt in range(1 + retries):
         try:
             if json_mode and max_tokens is not None:
-                return llm.chat(messages, system=system, json_mode=True, max_tokens=max_tokens, strip_thinking=strip_thinking)
+                return llm.chat(
+                    messages,
+                    system=system,
+                    json_mode=True,
+                    max_tokens=max_tokens,
+                    strip_thinking=strip_thinking,
+                )
             if json_mode:
-                return llm.chat(messages, system=system, json_mode=True, strip_thinking=strip_thinking)
+                return llm.chat(
+                    messages,
+                    system=system,
+                    json_mode=True,
+                    strip_thinking=strip_thinking,
+                )
             if max_tokens is not None:
-                return llm.chat(messages, system=system, max_tokens=max_tokens, strip_thinking=strip_thinking)
+                return llm.chat(
+                    messages,
+                    system=system,
+                    max_tokens=max_tokens,
+                    strip_thinking=strip_thinking,
+                )
             return llm.chat(messages, system=system, strip_thinking=strip_thinking)
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
@@ -391,25 +535,55 @@ def _generate_neurips_checklist(
     It is appended to the paper before LaTeX conversion.
     """
     items = [
-        ("Claims", "Do the main claims accurately reflect the paper's contributions and scope?", "Yes"),
+        (
+            "Claims",
+            "Do the main claims accurately reflect the paper's contributions and scope?",
+            "Yes",
+        ),
         ("Limitations", "Does the paper discuss limitations of the work?", "Yes"),
     ]
     if has_theory:
         items.append(
             ("Theory", "Are all assumptions stated and proofs included?", "Yes")
         )
-    items.extend([
-        ("Experiments reproducibility", "Does the paper fully disclose experimental settings?", "Yes" if has_experiments else "NA"),
-        ("Code and data", "Is code or data provided for reproducibility?", "Yes" if has_code else "No"),
-        ("Experimental details", "Are training details and hyperparameters specified?", "Yes" if has_experiments else "NA"),
-        ("Error bars", "Are error bars or confidence intervals reported?", "Yes" if has_experiments else "NA"),
-        ("Compute resources", "Are compute requirements documented?", "Yes" if has_experiments else "NA"),
-        ("Code of ethics", "Does the work comply with the code of ethics?", "Yes"),
-        ("Broader impacts", "Are potential negative societal impacts discussed?", "Yes"),
-        ("Licenses", "Are licenses for used assets respected?", "Yes"),
-        ("New assets", "Are newly released assets documented?", "NA"),
-        ("Human subjects", "Were IRB approvals obtained if applicable?", "NA"),
-    ])
+    items.extend(
+        [
+            (
+                "Experiments reproducibility",
+                "Does the paper fully disclose experimental settings?",
+                "Yes" if has_experiments else "NA",
+            ),
+            (
+                "Code and data",
+                "Is code or data provided for reproducibility?",
+                "Yes" if has_code else "No",
+            ),
+            (
+                "Experimental details",
+                "Are training details and hyperparameters specified?",
+                "Yes" if has_experiments else "NA",
+            ),
+            (
+                "Error bars",
+                "Are error bars or confidence intervals reported?",
+                "Yes" if has_experiments else "NA",
+            ),
+            (
+                "Compute resources",
+                "Are compute requirements documented?",
+                "Yes" if has_experiments else "NA",
+            ),
+            ("Code of ethics", "Does the work comply with the code of ethics?", "Yes"),
+            (
+                "Broader impacts",
+                "Are potential negative societal impacts discussed?",
+                "Yes",
+            ),
+            ("Licenses", "Are licenses for used assets respected?", "Yes"),
+            ("New assets", "Are newly released assets documented?", "NA"),
+            ("Human subjects", "Were IRB approvals obtained if applicable?", "NA"),
+        ]
+    )
 
     lines = [
         "## NeurIPS Paper Checklist",
@@ -433,9 +607,7 @@ def _extract_paper_title(md_text: str) -> str:
     import re as _re
 
     # Limit search to content before Abstract heading
-    abstract_pos = _re.search(
-        r"^#{1,2}\s+(Abstract|ABSTRACT)", md_text, _re.MULTILINE
-    )
+    abstract_pos = _re.search(r"^#{1,2}\s+(Abstract|ABSTRACT)", md_text, _re.MULTILINE)
     search_region = md_text[: abstract_pos.start()] if abstract_pos else md_text[:3000]
 
     _SKIP = {"title", "abstract", "references", "appendix"}
@@ -495,7 +667,9 @@ def _generate_framework_diagram_prompt(
         r"(?:^#{1,3}\s+(?:Method(?:ology)?|Approach|Proposed\s+(?:Method|Framework|Approach)|Our\s+Method|Technical\s+Approach|Model\s+Architecture).*?)(?=^#{1,3}\s+|\Z)",
     ]
     for _pat in _method_patterns:
-        _match = _re.search(_pat, paper_text, _re.MULTILINE | _re.DOTALL | _re.IGNORECASE)
+        _match = _re.search(
+            _pat, paper_text, _re.MULTILINE | _re.DOTALL | _re.IGNORECASE
+        )
         if _match:
             _method_section = _match.group(0)[:3000]
             break
@@ -504,9 +678,12 @@ def _generate_framework_diagram_prompt(
         # Fallback: use abstract + first 1500 chars
         _abs_match = _re.search(
             r"(?:^#{1,2}\s+Abstract\s*\n)(.*?)(?=^#{1,2}\s+|\Z)",
-            paper_text, _re.MULTILINE | _re.DOTALL | _re.IGNORECASE,
+            paper_text,
+            _re.MULTILINE | _re.DOTALL | _re.IGNORECASE,
         )
-        _method_section = (_abs_match.group(1)[:1500] if _abs_match else paper_text[:2000])
+        _method_section = (
+            _abs_match.group(1)[:1500] if _abs_match else paper_text[:2000]
+        )
 
     title = _extract_paper_title(paper_text)
     topic = config.research.topic
@@ -559,8 +736,14 @@ def _generate_framework_diagram_prompt(
     # Fallback: template-based prompt without LLM
     _components = []
     _component_patterns = [
-        (r"(?:encoder|decoder|transformer|attention|convolution|MLP|GNN|ResNet|ViT)", "Neural Network Module"),
-        (r"(?:loss|objective|criterion|training|optimization)", "Training/Optimization"),
+        (
+            r"(?:encoder|decoder|transformer|attention|convolution|MLP|GNN|ResNet|ViT)",
+            "Neural Network Module",
+        ),
+        (
+            r"(?:loss|objective|criterion|training|optimization)",
+            "Training/Optimization",
+        ),
         (r"(?:data|dataset|input|preprocessing|augmentation)", "Data Pipeline"),
         (r"(?:output|prediction|inference|evaluation)", "Output/Evaluation"),
     ]
@@ -577,7 +760,7 @@ def _generate_framework_diagram_prompt(
         f"**Paper**: {title}\n\n"
         f"## Image Generation Prompt\n\n"
         f"Create a clean, academic-style methodology framework diagram for a research paper "
-        f"titled \"{title}\". "
+        f'titled "{title}". '
         f"The diagram should show a left-to-right data flow pipeline with these main components: "
         f"{', '.join(_components)}. "
         f"Use a professional color palette with muted blues (#4477AA), teals (#44AA99), "
@@ -645,7 +828,12 @@ def _collect_experiment_results(
                 runs_data.append(parsed)
 
     if not runs_data:
-        result: dict[str, Any] = {"runs": [], "metrics_summary": {}, "best_run": None, "latex_table": ""}
+        result: dict[str, Any] = {
+            "runs": [],
+            "metrics_summary": {},
+            "best_run": None,
+            "latex_table": "",
+        }
         if structured_results is not None:
             result["structured_results"] = structured_results
         return result
@@ -965,9 +1153,13 @@ def _detect_runtime_issues(sandbox_result: Any) -> str:
         try:
             fval = float(val)
             if math.isnan(fval):
-                issues.append(f"METRIC NaN: '{key}' returned NaN — likely a division by zero or invalid computation in code")
+                issues.append(
+                    f"METRIC NaN: '{key}' returned NaN — likely a division by zero or invalid computation in code"
+                )
             elif math.isinf(fval):
-                issues.append(f"METRIC Inf: '{key}' returned Infinity — likely overflow or unbounded computation")
+                issues.append(
+                    f"METRIC Inf: '{key}' returned Infinity — likely overflow or unbounded computation"
+                )
         except (TypeError, ValueError):
             pass
 
@@ -976,9 +1168,7 @@ def _detect_runtime_issues(sandbox_result: Any) -> str:
     _nan_re = re.compile(r"\bnan\b", re.IGNORECASE)
     if _nan_re.search(stdout):
         nan_lines = [
-            line.strip()
-            for line in stdout.splitlines()
-            if _nan_re.search(line)
+            line.strip() for line in stdout.splitlines() if _nan_re.search(line)
         ]
         if nan_lines:
             issues.append(
@@ -1011,8 +1201,7 @@ def _detect_runtime_issues(sandbox_result: Any) -> str:
                 warning_lines.append(line_stripped)
         if warning_lines:
             issues.append(
-                "Runtime warnings/errors from stderr:\n"
-                + "\n".join(warning_lines[:15])
+                "Runtime warnings/errors from stderr:\n" + "\n".join(warning_lines[:15])
             )
 
     # Check for identical metric values across all entries in stdout
@@ -1233,7 +1422,10 @@ def _collect_json_context(
         if isinstance(data, dict):
             for key in ("stderr", "stdout", "raw_output", "traceback"):
                 if key in data and isinstance(data[key], str) and len(data[key]) > 500:
-                    data[key] = data[key][:500] + f"\n... [truncated, {len(data[key])} chars total]"
+                    data[key] = (
+                        data[key][:500]
+                        + f"\n... [truncated, {len(data[key])} chars total]"
+                    )
         chunk = json.dumps(data, indent=2, ensure_ascii=False)
         if total + len(chunk) > max_total_chars:
             remaining = max_total_chars - total
@@ -1405,15 +1597,24 @@ Investigate the topic with emphasis on reproducible methods and measurable outco
     if hw.warning:
         logger.warning("Hardware advisory: %s", hw.warning)
     else:
-        logger.info("Hardware detected: %s (%s, %s MB VRAM)", hw.gpu_name, hw.gpu_type, hw.vram_mb)
+        logger.info(
+            "Hardware detected: %s (%s, %s MB VRAM)",
+            hw.gpu_name,
+            hw.gpu_type,
+            hw.vram_mb,
+        )
 
     # --- Optionally ensure PyTorch is available ---
     if hw.has_gpu and config.experiment.mode == "sandbox":
-        torch_ok = ensure_torch_available(config.experiment.sandbox.python_path, hw.gpu_type)
+        torch_ok = ensure_torch_available(
+            config.experiment.sandbox.python_path, hw.gpu_type
+        )
         if torch_ok:
             logger.info("PyTorch is available for sandbox experiments")
         else:
-            logger.warning("PyTorch could not be installed; sandbox will use CPU-only packages")
+            logger.warning(
+                "PyTorch could not be installed; sandbox will use CPU-only packages"
+            )
     elif hw.has_gpu and config.experiment.mode == "docker":
         logger.info("Docker sandbox: PyTorch pre-installed in container image")
 
@@ -1490,8 +1691,8 @@ Derived from `goal.md` for topic: {config.research.topic}
                             "Score 1-10 on: (a) novelty, (b) specificity, (c) feasibility. "
                             "If overall score < 5, suggest a refined topic.\n\n"
                             f"Topic: {config.research.topic}\n\n"
-                            "Reply as JSON: {\"novelty\": N, \"specificity\": N, "
-                            "\"feasibility\": N, \"overall\": N, \"suggestion\": \"...\"}"
+                            'Reply as JSON: {"novelty": N, "specificity": N, '
+                            '"feasibility": N, "overall": N, "suggestion": "..."}'
                         ),
                     }
                 ],
@@ -1541,7 +1742,12 @@ def _execute_search_strategy(
     if llm is not None:
         _pm = prompts or PromptManager()
         _overlay = _get_evolution_overlay(run_dir, "search_strategy")
-        sp = _pm.for_stage("search_strategy", evolution_overlay=_overlay, topic=topic, problem_tree=problem_tree)
+        sp = _pm.for_stage(
+            "search_strategy",
+            evolution_overlay=_overlay,
+            topic=topic,
+            problem_tree=problem_tree,
+        )
         resp = _chat_with_prompt(
             llm,
             sp.system,
@@ -1654,17 +1860,49 @@ def _execute_search_strategy(
     # LLMs often produce the full topic title as a query, which is too long for
     # arXiv and Semantic Scholar (they work best with 3-8 keyword queries).
     _stop = {
-        "a", "an", "the", "of", "for", "in", "on", "and", "or", "with",
-        "to", "by", "from", "its", "is", "are", "was", "be", "as", "at",
-        "via", "using", "based", "study", "analysis", "empirical",
-        "towards", "toward", "into", "exploring", "comparison", "tasks",
-        "effectiveness", "investigation", "comprehensive", "novel",
+        "a",
+        "an",
+        "the",
+        "of",
+        "for",
+        "in",
+        "on",
+        "and",
+        "or",
+        "with",
+        "to",
+        "by",
+        "from",
+        "its",
+        "is",
+        "are",
+        "was",
+        "be",
+        "as",
+        "at",
+        "via",
+        "using",
+        "based",
+        "study",
+        "analysis",
+        "empirical",
+        "towards",
+        "toward",
+        "into",
+        "exploring",
+        "comparison",
+        "tasks",
+        "effectiveness",
+        "investigation",
+        "comprehensive",
+        "novel",
     }
 
     def _extract_keywords(text: str) -> list[str]:
         """Extract meaningful keywords from text, removing stop words."""
         return [
-            w for w in re.split(r"[^a-zA-Z0-9]+", text)
+            w
+            for w in re.split(r"[^a-zA-Z0-9]+", text)
             if w.lower() not in _stop and len(w) > 1
         ]
 
@@ -1848,9 +2086,7 @@ def _execute_literature_collect(
                 candidates.append(d)
                 bibtex_entries.append(p.to_bibtex())
             src_str = ", ".join(f"{s}: {n}" for s, n in src_counts.items())
-            logger.info(
-                "[literature] Found %d papers (%s)", len(papers), src_str
-            )
+            logger.info("[literature] Found %d papers (%s)", len(papers), src_str)
     except Exception:  # noqa: BLE001
         logger.warning(
             "[rate-limit] Literature search failed — falling back to LLM",
@@ -1860,27 +2096,32 @@ def _execute_literature_collect(
     # --- Inject foundational/seminal papers ---
     try:
         from researchclaw.data import load_seminal_papers
+
         seminal = load_seminal_papers(topic)
         if seminal:
             _existing_titles = {c.get("title", "").lower() for c in candidates}
             _injected = 0
             for sp in seminal:
                 if sp.get("title", "").lower() not in _existing_titles:
-                    candidates.append({
-                        "id": f"seminal-{sp.get('cite_key', '')}",
-                        "title": sp.get("title", ""),
-                        "source": "seminal_library",
-                        "url": "",
-                        "year": sp.get("year", 2020),
-                        "abstract": f"Foundational paper on {', '.join(sp.get('keywords', [])[:3])}.",
-                        "authors": [{"name": sp.get("authors", "")}],
-                        "cite_key": sp.get("cite_key", ""),
-                        "venue": sp.get("venue", ""),
-                        "collected_at": _utcnow_iso(),
-                    })
+                    candidates.append(
+                        {
+                            "id": f"seminal-{sp.get('cite_key', '')}",
+                            "title": sp.get("title", ""),
+                            "source": "seminal_library",
+                            "url": "",
+                            "year": sp.get("year", 2020),
+                            "abstract": f"Foundational paper on {', '.join(sp.get('keywords', [])[:3])}.",
+                            "authors": [{"name": sp.get("authors", "")}],
+                            "cite_key": sp.get("cite_key", ""),
+                            "venue": sp.get("venue", ""),
+                            "collected_at": _utcnow_iso(),
+                        }
+                    )
                     _injected += 1
             if _injected:
-                logger.info("Stage 4: Injected %d seminal papers from seed library", _injected)
+                logger.info(
+                    "Stage 4: Injected %d seminal papers from seed library", _injected
+                )
     except Exception:  # noqa: BLE001
         logger.debug("Seminal paper injection skipped", exc_info=True)
 
@@ -1889,7 +2130,12 @@ def _execute_literature_collect(
         plan_text = _read_prior_artifact(run_dir, "search_plan.yaml") or ""
         _pm = prompts or PromptManager()
         _overlay = _get_evolution_overlay(run_dir, "literature_collect")
-        sp = _pm.for_stage("literature_collect", evolution_overlay=_overlay, topic=topic, plan_text=plan_text)
+        sp = _pm.for_stage(
+            "literature_collect",
+            evolution_overlay=_overlay,
+            topic=topic,
+            plan_text=plan_text,
+        )
         resp = _chat_with_prompt(
             llm,
             sp.system,
@@ -1904,7 +2150,9 @@ def _execute_literature_collect(
     # --- Ultimate fallback: placeholder data ---
     real_search_succeeded = bool(candidates)
     if not candidates:
-        logger.warning("Stage 4: All literature searches failed — using placeholder papers")
+        logger.warning(
+            "Stage 4: All literature searches failed — using placeholder papers"
+        )
         candidates = [
             {
                 "id": f"candidate-{idx + 1}",
@@ -1935,7 +2183,15 @@ def _execute_literature_collect(
                 _authors = c.get("authors", [])
                 _surname = "unknown"
                 if isinstance(_authors, list) and _authors:
-                    _a0 = _authors[0] if isinstance(_authors[0], str) else (_authors[0].get("name", "") if isinstance(_authors[0], dict) else "")
+                    _a0 = (
+                        _authors[0]
+                        if isinstance(_authors[0], str)
+                        else (
+                            _authors[0].get("name", "")
+                            if isinstance(_authors[0], dict)
+                            else ""
+                        )
+                    )
                     _surname = _a0.split()[-1].lower() if _a0.strip() else "unknown"
                 _yr = c.get("year", 2024)
                 _title_word = "".join(
@@ -2090,9 +2346,7 @@ def _execute_literature_screen(
             shortlist.append(item)
     elif len(shortlist) < _MIN_SHORTLIST:
         # T2.2: LLM returned too few — supplement from filtered candidates
-        existing_titles = {
-            str(s.get("title", "")).lower().strip() for s in shortlist
-        }
+        existing_titles = {str(s.get("title", "")).lower().strip() for s in shortlist}
         for row in filtered_rows:
             if len(shortlist) >= _MIN_SHORTLIST:
                 break
@@ -2105,7 +2359,8 @@ def _execute_literature_screen(
                 existing_titles.add(title_lower)
         logger.info(
             "Stage 5: Supplemented shortlist to %d papers (minimum: %d)",
-            len(shortlist), _MIN_SHORTLIST,
+            len(shortlist),
+            _MIN_SHORTLIST,
         )
     out = stage_dir / "shortlist.jsonl"
     _write_jsonl(out, shortlist)
@@ -2133,7 +2388,9 @@ def _execute_knowledge_extract(
     if llm is not None:
         _pm = prompts or PromptManager()
         _overlay = _get_evolution_overlay(run_dir, "knowledge_extract")
-        sp = _pm.for_stage("knowledge_extract", evolution_overlay=_overlay, shortlist=shortlist)
+        sp = _pm.for_stage(
+            "knowledge_extract", evolution_overlay=_overlay, shortlist=shortlist
+        )
         resp = _chat_with_prompt(
             llm,
             sp.system,
@@ -2275,11 +2532,19 @@ def _multi_perspective_generate(
             (perspectives_dir / f"{role_name}.md").write_text(
                 resp.content, encoding="utf-8"
             )
-            logger.info("Debate perspective '%s' generated (%d chars)", role_name, len(resp.content))
+            logger.info(
+                "Debate perspective '%s' generated (%d chars)",
+                role_name,
+                len(resp.content),
+            )
         except Exception as exc:  # noqa: BLE001
             logger.warning("Debate perspective '%s' failed: %s", role_name, exc)
     if len(results) < 2:
-        logger.error("Multi-perspective debate: only %d/%d roles succeeded", len(results), len(roles))
+        logger.error(
+            "Multi-perspective debate: only %d/%d roles succeeded",
+            len(results),
+            len(roles),
+        )
     return results
 
 
@@ -2387,9 +2652,19 @@ def _execute_experiment_design(
         except (KeyError, Exception):  # noqa: BLE001
             _dg_block = ""
         # I-08: Inject RL step guidance for RL topics
-        _rl_kws = ("reinforcement learning", "ppo", "sac", "td3", "ddpg",
-                    "dqn", "mujoco", "continuous control", "actor-critic",
-                    "policy gradient", "exploration bonus")
+        _rl_kws = (
+            "reinforcement learning",
+            "ppo",
+            "sac",
+            "td3",
+            "ddpg",
+            "dqn",
+            "mujoco",
+            "continuous control",
+            "actor-critic",
+            "policy gradient",
+            "exploration bonus",
+        )
         if any(kw in config.research.topic.lower() for kw in _rl_kws):
             try:
                 _dg_block += _pm.block("rl_step_guidance")
@@ -2398,6 +2673,7 @@ def _execute_experiment_design(
         # F-01: Inject framework docs for experiment design
         try:
             from researchclaw.data import detect_frameworks, load_framework_docs
+
             _fw_ids = detect_frameworks(config.research.topic, hypotheses)
             if _fw_ids:
                 _fw_docs = load_framework_docs(_fw_ids, max_chars=4000)
@@ -2500,26 +2776,31 @@ def _execute_experiment_design(
         _hyp_text = _read_prior_artifact(run_dir, "hypotheses.md") or ""
         if _hyp_text:
             import re as _re_hyp
+
             # Extract method-like names from hypothesis text
             _method_candidates = _re_hyp.findall(
                 r"(?:proposed|our|novel|new)\s+(?:method|approach|algorithm|framework|model)[:\s]+[\"']?([A-Za-z][\w-]+)",
-                _hyp_text, _re_hyp.IGNORECASE,
+                _hyp_text,
+                _re_hyp.IGNORECASE,
             )
             _baseline_candidates = _re_hyp.findall(
                 r"(?:baseline|compare|existing|standard|traditional)\s+(?:method|approach|model)?[:\s]+[\"']?([A-Za-z][\w-]+)",
-                _hyp_text, _re_hyp.IGNORECASE,
+                _hyp_text,
+                _re_hyp.IGNORECASE,
             )
             if _method_candidates or _baseline_candidates:
                 logger.info(
                     "Stage 09: Extracted names from hypotheses: methods=%s, baselines=%s",
-                    _method_candidates[:3], _baseline_candidates[:3],
+                    _method_candidates[:3],
+                    _baseline_candidates[:3],
                 )
                 plan = {
                     "topic": config.research.topic,
                     "generated": _utcnow_iso(),
                     "objectives": ["Evaluate hypotheses with controlled experiments"],
                     "datasets": ["primary_dataset"],
-                    "baselines": _baseline_candidates[:3] or ["baseline_1", "baseline_2"],
+                    "baselines": _baseline_candidates[:3]
+                    or ["baseline_1", "baseline_2"],
                     "proposed_methods": _method_candidates[:3] or ["proposed_method"],
                     "ablations": ["without_key_component", "simplified_version"],
                     "metrics": [config.experiment.metric_key, "secondary_metric"],
@@ -2529,7 +2810,9 @@ def _execute_experiment_design(
 
     if plan is None:
         # BUG-12: Use domain-aware names instead of fully generic placeholders
-        _topic_prefix = config.research.topic.split()[0] if config.research.topic else "method"
+        _topic_prefix = (
+            config.research.topic.split()[0] if config.research.topic else "method"
+        )
         logger.warning(
             "Stage 09: LLM failed to produce valid experiment plan YAML. "
             "Using topic-derived fallback."
@@ -2540,7 +2823,10 @@ def _execute_experiment_design(
             "objectives": ["Evaluate hypotheses with controlled experiments"],
             "datasets": ["primary_dataset", "secondary_dataset"],
             "baselines": [f"{_topic_prefix}_baseline_1", f"{_topic_prefix}_baseline_2"],
-            "proposed_methods": [f"{_topic_prefix}_proposed", f"{_topic_prefix}_variant"],
+            "proposed_methods": [
+                f"{_topic_prefix}_proposed",
+                f"{_topic_prefix}_variant",
+            ],
             "ablations": ["without_key_component", "simplified_version"],
             "metrics": [config.experiment.metric_key, "secondary_metric"],
             "risks": ["validity threats", "confounding variables"],
@@ -2575,9 +2861,7 @@ def _execute_experiment_design(
             _ba = BenchmarkOrchestrator(
                 llm,
                 config=_ba_cfg,
-                gpu_memory_mb=(
-                    _hw.get("gpu_memory_mb", 49000) if _hw else 49000
-                ),
+                gpu_memory_mb=(_hw.get("gpu_memory_mb", 49000) if _hw else 49000),
                 time_budget_sec=config.experiment.time_budget_sec,
                 network_policy=(
                     config.experiment.docker.network_policy
@@ -2586,11 +2870,15 @@ def _execute_experiment_design(
                 ),
                 stage_dir=stage_dir / "benchmark_agent",
             )
-            _benchmark_plan = _ba.orchestrate({
-                "topic": config.research.topic,
-                "hypothesis": hypotheses,
-                "experiment_plan": plan.get("objectives", "") if isinstance(plan, dict) else "",
-            })
+            _benchmark_plan = _ba.orchestrate(
+                {
+                    "topic": config.research.topic,
+                    "hypothesis": hypotheses,
+                    "experiment_plan": plan.get("objectives", "")
+                    if isinstance(plan, dict)
+                    else "",
+                }
+            )
 
             # Inject BenchmarkAgent selections into experiment plan
             if isinstance(plan, dict) and _benchmark_plan.selected_benchmarks:
@@ -2680,11 +2968,20 @@ def _execute_code_generation(
                 "timm, einops, torchmetrics, h5py"
             )
             if _net_policy == "none":
-                pkg_extras = _base_pkgs + " (ONLY pre-installed packages — NO pip install available)"
+                pkg_extras = (
+                    _base_pkgs
+                    + " (ONLY pre-installed packages — NO pip install available)"
+                )
             elif _net_policy in ("setup_only", "pip_only"):
-                pkg_extras = _base_pkgs + ", and additional pip-installable packages via requirements.txt"
+                pkg_extras = (
+                    _base_pkgs
+                    + ", and additional pip-installable packages via requirements.txt"
+                )
             else:
-                pkg_extras = _base_pkgs + ", and additional pip-installable packages (auto-detected from imports)"
+                pkg_extras = (
+                    _base_pkgs
+                    + ", and additional pip-installable packages (auto-detected from imports)"
+                )
         else:
             pkg_prefix = "sandbox mode"
             pkg_extras = ""
@@ -2731,7 +3028,9 @@ def _execute_code_generation(
 
     # --- Dataset guidance + setup script + HP reporting (docker/sandbox modes) ---
     extra_guidance = ""
-    _net_policy = getattr(getattr(config, "docker", None), "network_policy", "setup_only")
+    _net_policy = getattr(
+        getattr(config, "docker", None), "network_policy", "setup_only"
+    )
     if config.experiment.mode in ("sandbox", "docker"):
         _net_policy = (
             config.experiment.docker.network_policy
@@ -2781,9 +3080,11 @@ def _execute_code_generation(
     if _bp_path is not None:
         try:
             import json as _json_bp
+
             _bp_data = _json_bp.loads(_bp_path.read_text(encoding="utf-8"))
             # Reconstruct the prompt block
             from researchclaw.agents.benchmark_agent.orchestrator import BenchmarkPlan
+
             _bp = BenchmarkPlan(
                 selected_benchmarks=_bp_data.get("selected_benchmarks", []),
                 selected_baselines=_bp_data.get("selected_baselines", []),
@@ -2802,28 +3103,66 @@ def _execute_code_generation(
                 )
                 logger.info(
                     "BA: Injected benchmark plan (%d benchmarks, %d baselines)",
-                    len(_bp.selected_benchmarks), len(_bp.selected_baselines),
+                    len(_bp.selected_benchmarks),
+                    len(_bp.selected_baselines),
                 )
         except Exception as _bp_exc:
             logger.debug("BA: Failed to load benchmark plan: %s", _bp_exc)
 
     # --- P2.2+P2.3: LLM training topic detection and guidance ---
     _llm_keywords = (
-        "language model", "llm", "fine-tun", "lora", "qlora", "peft",
-        "instruction tun", "rlhf", "dpo", "sft", "alignment",
-        "transformer train", "causal lm", "chat model", "qwen", "llama",
-        "mistral", "phi-", "gemma", "pretraining", "tokeniz",
+        "language model",
+        "llm",
+        "fine-tun",
+        "lora",
+        "qlora",
+        "peft",
+        "instruction tun",
+        "rlhf",
+        "dpo",
+        "sft",
+        "alignment",
+        "transformer train",
+        "causal lm",
+        "chat model",
+        "qwen",
+        "llama",
+        "mistral",
+        "phi-",
+        "gemma",
+        "pretraining",
+        "tokeniz",
     )
     topic_lower = config.research.topic.lower()
     is_llm_topic = any(kw in topic_lower for kw in _llm_keywords)
 
     # --- I-08: RL topic detection and step guidance ---
     _rl_keywords = (
-        "reinforcement learning", "policy gradient", "ppo", "sac", "td3",
-        "ddpg", "dqn", "a2c", "a3c", "mujoco", "locomotion", "continuous control",
-        "reward shaping", "exploration", "multi-agent rl", "marl", "curriculum rl",
-        "imitation learning", "inverse rl", "offline rl", "model-based rl",
-        "actor-critic", "reinforce", "gym", "gymnasium",
+        "reinforcement learning",
+        "policy gradient",
+        "ppo",
+        "sac",
+        "td3",
+        "ddpg",
+        "dqn",
+        "a2c",
+        "a3c",
+        "mujoco",
+        "locomotion",
+        "continuous control",
+        "reward shaping",
+        "exploration",
+        "multi-agent rl",
+        "marl",
+        "curriculum rl",
+        "imitation learning",
+        "inverse rl",
+        "offline rl",
+        "model-based rl",
+        "actor-critic",
+        "reinforce",
+        "gym",
+        "gymnasium",
     )
     is_rl_topic = any(kw in topic_lower for kw in _rl_keywords)
     if is_rl_topic:
@@ -2835,6 +3174,7 @@ def _execute_code_generation(
     # --- F-01: Framework API doc injection (auto-detected) ---
     try:
         from researchclaw.data import detect_frameworks, load_framework_docs
+
         _hypothesis_text = _read_prior_artifact(run_dir, "hypotheses.md") or ""
         _fw_ids = detect_frameworks(
             config.research.topic, _hypothesis_text, exp_plan or ""
@@ -2885,6 +3225,7 @@ def _execute_code_generation(
             from researchclaw.pipeline.code_agent import (
                 CodeAgentConfig as _CAConfig,
             )
+
             _ca_cfg = _CAConfig()
 
         # Sandbox factory (only for sandbox/docker modes)
@@ -2893,12 +3234,10 @@ def _execute_code_generation(
             from researchclaw.experiment.factory import (
                 create_sandbox as _csb,
             )
+
             _sandbox_factory = _csb
 
-        if any(
-            config.llm.primary_model.startswith(p)
-            for p in ("gpt-5", "o3", "o4")
-        ):
+        if any(config.llm.primary_model.startswith(p) for p in ("gpt-5", "o3", "o4")):
             _code_max_tokens = 16384
 
         _agent = _CodeAgent(
@@ -2936,7 +3275,8 @@ def _execute_code_generation(
         )
         if _agent_result.architecture_spec:
             (stage_dir / "architecture_spec.yaml").write_text(
-                _agent_result.architecture_spec, encoding="utf-8",
+                _agent_result.architecture_spec,
+                encoding="utf-8",
             )
         logger.info(
             "CodeAgent: %d LLM calls, %d sandbox runs, score=%.2f",
@@ -3069,7 +3409,9 @@ def _execute_code_generation(
             # BUG-14: Log remaining issues prominently
             logger.warning(
                 "Code validation FAILED for %s after %d repair attempts: %s",
-                fname, max_repair, validation.summary(),
+                fname,
+                max_repair,
+                validation.summary(),
             )
 
     # BUG-14: Block on critical validation failures (syntax/import errors)
@@ -3080,13 +3422,15 @@ def _execute_code_generation(
             if not _v.ok:
                 for issue in _v.issues:
                     if issue.severity == "error" and issue.category in (
-                        "syntax", "import",
+                        "syntax",
+                        "import",
                     ):
                         _has_critical = True
         if _has_critical:
             logger.error(
                 "Stage 10: CRITICAL validation issues remain after %d repair "
-                "attempts. Blocking stage.", max_repair,
+                "attempts. Blocking stage.",
+                max_repair,
             )
             (stage_dir / "validation_report.md").write_text(
                 "# Code Validation Report\n\n"
@@ -3140,7 +3484,8 @@ def _execute_code_generation(
                 _total_ub_fixes += n_fixes
                 logger.info(
                     "Stage 10: auto-fixed %d UnboundLocalError risk(s) in %s",
-                    n_fixes, fname,
+                    n_fixes,
+                    fname,
                 )
     if _total_ub_fixes:
         logger.info(
@@ -3162,14 +3507,28 @@ def _execute_code_generation(
     complexity_warnings.extend(deep_warnings)
 
     # --- P1.2: If critical deep issues found, attempt one repair cycle ---
-    critical_deep = [w for w in deep_warnings if any(
-        kw in w for kw in ("UnboundLocalError", "unregistered", "does not exist",
-                           "empty or trivial subclass", "does NOT override",
-                           "Import-usage mismatch", "NameError",
-                           "was removed", "ptp()",
-                           "copy-paste", "identical method signatures",
-                           "identical AST", "NOT a real ablation")
-    )]
+    critical_deep = [
+        w
+        for w in deep_warnings
+        if any(
+            kw in w
+            for kw in (
+                "UnboundLocalError",
+                "unregistered",
+                "does not exist",
+                "empty or trivial subclass",
+                "does NOT override",
+                "Import-usage mismatch",
+                "NameError",
+                "was removed",
+                "ptp()",
+                "copy-paste",
+                "identical method signatures",
+                "identical AST",
+                "NOT a real ablation",
+            )
+        )
+    ]
     if critical_deep and llm is not None:
         logger.info(
             "Stage 10: %d critical code issues found — triggering repair cycle",
@@ -3219,20 +3578,34 @@ def _execute_code_generation(
                     (exp_dir / fname).write_text(code, encoding="utf-8")
                 # Re-check after repair
                 deep_warnings_after = deep_validate_files(files)
-                fixed = len(critical_deep) - len([
-                    w for w in deep_warnings_after
-                    if any(kw in w for kw in (
-                        "UnboundLocalError", "unregistered", "does not exist",
-                        "empty or trivial subclass", "does NOT override",
-                        "Import-usage mismatch", "NameError",
-                        "was removed", "ptp()",
-                        "copy-paste", "identical method signatures",
-                        "identical AST", "NOT a real ablation"
-                    ))
-                ])
+                fixed = len(critical_deep) - len(
+                    [
+                        w
+                        for w in deep_warnings_after
+                        if any(
+                            kw in w
+                            for kw in (
+                                "UnboundLocalError",
+                                "unregistered",
+                                "does not exist",
+                                "empty or trivial subclass",
+                                "does NOT override",
+                                "Import-usage mismatch",
+                                "NameError",
+                                "was removed",
+                                "ptp()",
+                                "copy-paste",
+                                "identical method signatures",
+                                "identical AST",
+                                "NOT a real ablation",
+                            )
+                        )
+                    ]
+                )
                 logger.info(
                     "Stage 10: Deep repair fixed %d/%d critical issues",
-                    fixed, len(critical_deep),
+                    fixed,
+                    len(critical_deep),
                 )
                 complexity_warnings.append(
                     f"[REPAIR] Deep repair fixed {fixed}/{len(critical_deep)} "
@@ -3288,7 +3661,11 @@ def _execute_code_generation(
                 max_tokens=2048,
             )
             # Extract JSON from LLM response (may be wrapped in markdown fences)
-            _review_text = review_resp.content if hasattr(review_resp, "content") else str(review_resp)
+            _review_text = (
+                review_resp.content
+                if hasattr(review_resp, "content")
+                else str(review_resp)
+            )
             # Strip markdown JSON fences if present
             _review_text = _review_text.strip()
             if _review_text.startswith("```"):
@@ -3315,15 +3692,16 @@ def _execute_code_generation(
 
                 # If critical issues found and score low, attempt fix
                 critical_issues = [
-                    i for i in review_issues
-                    if isinstance(i, dict)
-                    and i.get("severity") == "critical"
+                    i
+                    for i in review_issues
+                    if isinstance(i, dict) and i.get("severity") == "critical"
                 ]
                 if critical_issues and review_score <= 4:
                     logger.warning(
                         "Stage 10 code review: score=%d, %d critical issues — "
                         "attempting fix",
-                        review_score, len(critical_issues),
+                        review_score,
+                        len(critical_issues),
                     )
                     fix_descriptions = "\n".join(
                         f"- [{i.get('severity', '?')}] {i.get('description', '?')}: "
@@ -3355,7 +3733,8 @@ def _execute_code_generation(
                             logger.info(
                                 "Stage 10: Code fixed after review "
                                 "(was %d/10, %d critical issues)",
-                                review_score, len(critical_issues),
+                                review_score,
+                                len(critical_issues),
                             )
                     except Exception as exc:
                         logger.debug("Review-fix failed: %s", exc)
@@ -3520,7 +3899,9 @@ def _execute_resource_planning(
     if llm is not None:
         _pm = prompts or PromptManager()
         _overlay = _get_evolution_overlay(run_dir, "resource_planning")
-        sp = _pm.for_stage("resource_planning", evolution_overlay=_overlay, exp_plan=exp_plan)
+        sp = _pm.for_stage(
+            "resource_planning", evolution_overlay=_overlay, exp_plan=exp_plan
+        )
         resp = _chat_with_prompt(
             llm,
             sp.system,
@@ -3659,7 +4040,11 @@ def _execute_experiment_run(
                 )
 
         # P1: Warn if experiment completed suspiciously fast (trivially easy benchmark)
-        if run_status == "completed" and result.elapsed_sec and result.elapsed_sec < 5.0:
+        if (
+            run_status == "completed"
+            and result.elapsed_sec
+            and result.elapsed_sec < 5.0
+        ):
             logger.warning(
                 "Stage 12: Experiment completed in %.2fs — benchmark may be trivially easy. "
                 "Consider increasing task difficulty.",
@@ -3685,13 +4070,19 @@ def _execute_experiment_run(
             (runs_dir / "results.json").write_text(
                 json.dumps(auto_results, indent=2), encoding="utf-8"
             )
-            logger.info("Stage 12: Auto-generated results.json from stdout metrics (%d keys)", len(effective_metrics))
+            logger.info(
+                "Stage 12: Auto-generated results.json from stdout metrics (%d keys)",
+                len(effective_metrics),
+            )
         (runs_dir / "run-1.json").write_text(
             json.dumps(run_payload, indent=2), encoding="utf-8"
         )
 
         # R11-6: Time budget adequacy check
-        if result.timed_out or (result.elapsed_sec and result.elapsed_sec > config.experiment.time_budget_sec * 0.9):
+        if result.timed_out or (
+            result.elapsed_sec
+            and result.elapsed_sec > config.experiment.time_budget_sec * 0.9
+        ):
             # Parse stdout to estimate how many conditions/seeds completed
             _stdout = result.stdout or ""
             _completed_conditions = set()
@@ -3716,16 +4107,16 @@ def _execute_experiment_run(
                     f"time_budget_sec for more complete results."
                 ),
             }
-            logger.warning(
-                "Stage 12: %s", _time_budget_warning["warning"]
-            )
+            logger.warning("Stage 12: %s", _time_budget_warning["warning"])
             (stage_dir / "time_budget_warning.json").write_text(
                 json.dumps(_time_budget_warning, indent=2), encoding="utf-8"
             )
 
         # FIX-8: Validate seed count from structured results
         if structured_results and isinstance(structured_results, dict):
-            _sr_conditions = structured_results.get("conditions", structured_results.get("per_condition", {}))
+            _sr_conditions = structured_results.get(
+                "conditions", structured_results.get("per_condition", {})
+            )
             if isinstance(_sr_conditions, dict):
                 for _cname, _cdata in _sr_conditions.items():
                     if isinstance(_cdata, dict):
@@ -3734,7 +4125,8 @@ def _execute_experiment_run(
                             logger.warning(
                                 "Stage 12: Condition '%s' ran only %d seed(s) — "
                                 "minimum 3 required for statistical validity",
-                                _cname, int(_seeds_run),
+                                _cname,
+                                int(_seeds_run),
                             )
 
     elif mode == "simulated":
@@ -3981,9 +4373,7 @@ def _execute_iterative_refine(
                     else {}
                 )
             metric_val = (
-                _find_metric(metrics, metric_key)
-                if isinstance(metrics, dict)
-                else None
+                _find_metric(metrics, metric_key) if isinstance(metrics, dict) else None
             )
             if metric_val is None:
                 metric_val = _to_float(payload.get("primary_metric"))
@@ -4122,7 +4512,9 @@ def _execute_iterative_refine(
             _last_two = _valid_metrics[-2:]
             _saturated = False
             # Use relative change rate instead of hard-coded thresholds
-            _change_rate = abs(_last_two[-1] - _last_two[-2]) / max(abs(_last_two[-2]), 1e-8)
+            _change_rate = abs(_last_two[-1] - _last_two[-2]) / max(
+                abs(_last_two[-2]), 1e-8
+            )
             if metric_direction == "minimize":
                 _saturated = all(m <= 0.001 for m in _last_two) or (
                     _change_rate < 0.001 and _last_two[-1] < 0.01
@@ -4145,7 +4537,9 @@ def _execute_iterative_refine(
                     "6. Ensure random search achieves < 50% success rate\n"
                     "Without this change, the experiment produces meaningless results.\n"
                 )
-                logger.warning("Stage 13: metric saturation detected, injecting difficulty upgrade hint")
+                logger.warning(
+                    "Stage 13: metric saturation detected, injecting difficulty upgrade hint"
+                )
 
         files_context = _files_to_context(best_files)
         # BUG-10 fix: anchor refinement to original experiment plan
@@ -4251,7 +4645,9 @@ def _execute_iterative_refine(
             # P7: Ensure deps for refined code (subprocess sandbox only)
             if config.experiment.mode == "sandbox":
                 _refine_code = "\n".join(candidate_files.values())
-                _ensure_sandbox_deps(_refine_code, config.experiment.sandbox.python_path)
+                _ensure_sandbox_deps(
+                    _refine_code, config.experiment.sandbox.python_path
+                )
 
             sandbox = create_sandbox(
                 config.experiment,
@@ -4285,7 +4681,10 @@ def _execute_iterative_refine(
                 )
                 # If still no metrics after timeout, use partial stdout metrics
                 if not rerun.metrics and rerun.stdout:
-                    from researchclaw.experiment.sandbox import parse_metrics as _parse_sb_metrics
+                    from researchclaw.experiment.sandbox import (
+                        parse_metrics as _parse_sb_metrics,
+                    )
+
                     partial = _parse_sb_metrics(rerun.stdout)
                     if partial:
                         iter_record["sandbox"]["metrics"] = partial
@@ -4365,7 +4764,10 @@ def _execute_iterative_refine(
 
         if consecutive_no_metrics >= 3:
             log["stop_reason"] = "consecutive_no_metrics"
-            logger.warning("Stage 13: Aborting after %d consecutive iterations without metrics", consecutive_no_metrics)
+            logger.warning(
+                "Stage 13: Aborting after %d consecutive iterations without metrics",
+                consecutive_no_metrics,
+            )
             break
 
         if no_improve_streak >= 2:
@@ -4473,9 +4875,7 @@ def _execute_result_analysis(
                             "run_id": "iterative-refine-best",
                             "task_id": "sandbox-main",
                             "status": "completed",
-                            "metrics": {
-                                k: v for k, v in _refine_metrics.items()
-                            },
+                            "metrics": {k: v for k, v in _refine_metrics.items()},
                             "elapsed_sec": _sbx.get("elapsed_sec", 0),
                             "stdout": "",  # omit for brevity
                             "stderr": _sbx.get("stderr", ""),
@@ -4483,10 +4883,13 @@ def _execute_result_analysis(
                         }
                         # Rebuild latex table
                         _ltx = [
-                            r"\begin{table}[h]", r"\centering",
+                            r"\begin{table}[h]",
+                            r"\centering",
                             r"\caption{Experiment Results (Best Refinement Iteration)}",
-                            r"\begin{tabular}{lrrrr}", r"\hline",
-                            r"Metric & Min & Max & Mean & N \\", r"\hline",
+                            r"\begin{tabular}{lrrrr}",
+                            r"\hline",
+                            r"Metric & Min & Max & Mean & N \\",
+                            r"\hline",
                         ]
                         for _col in sorted(_new_summary.keys()):
                             _s = _new_summary[_col]
@@ -4498,7 +4901,8 @@ def _execute_result_analysis(
                         exp_data["latex_table"] = "\n".join(_ltx)
                         # Count unique conditions (keys without 'seed' and not ending in _mean/_std)
                         _conditions = {
-                            k for k in _refine_metrics
+                            k
+                            for k in _refine_metrics
                             if "seed" not in k and not k.endswith("_std")
                         }
                         exp_data["runs"] = [exp_data["best_run"]]
@@ -4507,7 +4911,8 @@ def _execute_result_analysis(
                         if not context:
                             context = json.dumps(
                                 {"refinement_best_metrics": _refine_metrics},
-                                indent=2, default=str,
+                                indent=2,
+                                default=str,
                             )
                         logger.info(
                             "R13-1: Merged %d metrics from refinement_log (best_metric=%.4f)",
@@ -4515,10 +4920,14 @@ def _execute_result_analysis(
                             _refine_data.get("best_metric", 0),
                         )
         except (json.JSONDecodeError, OSError, KeyError):
-            logger.warning("R13-1: Failed to parse refinement_log.json, using Stage 12 data")
+            logger.warning(
+                "R13-1: Failed to parse refinement_log.json, using Stage 12 data"
+            )
 
     # --- R19-2: Extract PAIRED comparisons from refinement stdout ---
-    from researchclaw.experiment.sandbox import extract_paired_comparisons as _extract_paired
+    from researchclaw.experiment.sandbox import (
+        extract_paired_comparisons as _extract_paired,
+    )
 
     _all_paired: list[dict[str, object]] = []
     # First: from _collect_experiment_results (Stage 12 runs/)
@@ -4622,6 +5031,7 @@ def _execute_result_analysis(
         if _ck in _seed_data and len(_seed_data[_ck]) >= 3:
             _vals = list(_seed_data[_ck].values())
             import statistics as _stats_mod
+
             _mean = _stats_mod.mean(_vals)
             _std = _stats_mod.stdev(_vals)
             _cv["metrics"][f"{config.experiment.metric_key}_mean"] = round(_mean, 6)
@@ -4629,6 +5039,7 @@ def _execute_result_analysis(
             _cv["n_seeds"] = len(_vals)
             # Bootstrap 95% CI
             import random as _rng
+
             _rng.seed(42)
             _boot_means = []
             for _ in range(1000):
@@ -4642,7 +5053,10 @@ def _execute_result_analysis(
                 logger.warning(
                     "Bootstrap CI [%.4f, %.4f] does not contain mean %.4f "
                     "for condition %s — replacing CI with mean ± 1.96*SE",
-                    _ci_low, _ci_high, _mean, _ck,
+                    _ci_low,
+                    _ci_high,
+                    _mean,
+                    _ck,
                 )
                 _se = _std / (len(_vals) ** 0.5)
                 _ci_low = round(_mean - 1.96 * _se, 6)
@@ -4676,38 +5090,47 @@ def _execute_result_analysis(
                     )
                 if _diffs:
                     import statistics
+
                     _n = len(_diffs)
                     _mean_d = statistics.mean(_diffs)
                     _std_d = statistics.stdev(_diffs) if _n > 1 else 0.0
-                    _t = (_mean_d / (_std_d / (_n ** 0.5))) if _std_d > 0 else 0.0
+                    _t = (_mean_d / (_std_d / (_n**0.5))) if _std_d > 0 else 0.0
                     _df = _n - 1
                     # Two-tailed p-value using t-distribution
                     import math
+
                     try:
                         from scipy.stats import t as _t_dist
+
                         _p = float(2 * _t_dist.sf(abs(_t), _df))
                     except ImportError:
-                        _p = 2 * (1 - 0.5 * (1 + math.erf(abs(_t) / (2 ** 0.5))))
+                        _p = 2 * (1 - 0.5 * (1 + math.erf(abs(_t) / (2**0.5))))
                         if _df < 30:
                             _p = min(1.0, _p * (1 + 2.5 / max(_df, 1)))
-                    _pipeline_paired.append({
-                        "method": _other_cond,
-                        "baseline": _baseline_cond,
-                        "mean_diff": round(_mean_d, 6),
-                        "std_diff": round(_std_d, 6),
-                        "t_stat": round(_t, 4),
-                        "p_value": round(_p, 6),
-                        "n_seeds": _n,
-                        "source": "pipeline_computed",
-                    })
+                    _pipeline_paired.append(
+                        {
+                            "method": _other_cond,
+                            "baseline": _baseline_cond,
+                            "mean_diff": round(_mean_d, 6),
+                            "std_diff": round(_std_d, 6),
+                            "t_stat": round(_t, 4),
+                            "p_value": round(_p, 6),
+                            "n_seeds": _n,
+                            "source": "pipeline_computed",
+                        }
+                    )
 
             # Use pipeline-computed if experiment code's are suspicious
             _exp_t_stats = {round(p.get("t_stat", 0), 4) for p in _all_paired}
             _all_identical = len(_exp_t_stats) <= 1 and len(_all_paired) > 1
-            if _pipeline_paired and (_all_identical or len(_all_paired) < len(_pipeline_paired)):
+            if _pipeline_paired and (
+                _all_identical or len(_all_paired) < len(_pipeline_paired)
+            ):
                 logger.info(
                     "R33: Using %d pipeline-computed paired tests (experiment code had %d, identical=%s)",
-                    len(_pipeline_paired), len(_all_paired), _all_identical,
+                    len(_pipeline_paired),
+                    len(_all_paired),
+                    _all_identical,
                 )
                 _all_paired = _pipeline_paired
 
@@ -4726,8 +5149,12 @@ def _execute_result_analysis(
                     continue
                 _all_equal = True
                 for _sk in _shared_keys:
-                    _v1 = _s1[_sk].get("mean") if isinstance(_s1[_sk], dict) else _s1[_sk]
-                    _v2 = _s2[_sk].get("mean") if isinstance(_s2[_sk], dict) else _s2[_sk]
+                    _v1 = (
+                        _s1[_sk].get("mean") if isinstance(_s1[_sk], dict) else _s1[_sk]
+                    )
+                    _v2 = (
+                        _s2[_sk].get("mean") if isinstance(_s2[_sk], dict) else _s2[_sk]
+                    )
                     if _v1 != _v2:
                         _all_equal = False
                         break
@@ -4782,7 +5209,9 @@ def _execute_result_analysis(
         summary_payload["paired_comparisons"] = _all_paired
     if _condition_summaries:
         summary_payload["condition_summaries"] = _condition_summaries
-        summary_payload["condition_metrics"] = _condition_summaries  # alias for quality gate
+        summary_payload["condition_metrics"] = (
+            _condition_summaries  # alias for quality gate
+        )
         summary_payload["total_conditions"] = _total_conditions
     if _total_metrics:
         summary_payload["total_metric_keys"] = _total_metrics
@@ -4894,7 +5323,9 @@ Generated: {_utcnow_iso()}
     if config.experiment.figure_agent.enabled and llm is not None:
         try:
             from researchclaw.agents.figure_agent import FigureOrchestrator
-            from researchclaw.agents.figure_agent.orchestrator import FigureAgentConfig as _FACfg
+            from researchclaw.agents.figure_agent.orchestrator import (
+                FigureAgentConfig as _FACfg,
+            )
 
             _fa_cfg = _FACfg(
                 enabled=True,
@@ -4914,7 +5345,9 @@ Generated: {_utcnow_iso()}
             _fa = FigureOrchestrator(llm, _fa_cfg, stage_dir=stage_dir)
 
             # Build conditions list from condition_summaries
-            _fa_conditions = list(_condition_summaries.keys()) if _condition_summaries else []
+            _fa_conditions = (
+                list(_condition_summaries.keys()) if _condition_summaries else []
+            )
 
             # BUG-09 fix: pass best_run metrics as fallback data if
             # structured_results is empty, so Planner has some data to chart
@@ -4929,17 +5362,20 @@ Generated: {_utcnow_iso()}
                 or ""
             )
 
-            _fa_plan = _fa.orchestrate({
-                "experiment_results": _fa_exp_results,
-                "condition_summaries": _condition_summaries,
-                "metrics_summary": exp_data.get("metrics_summary", {}),
-                "metric_key": config.experiment.metric_key,
-                "conditions": _fa_conditions,
-                "topic": _read_prior_artifact(run_dir, "topic.md") or config.research.topic,
-                "hypothesis": _read_prior_artifact(run_dir, "hypotheses.md") or "",
-                "paper_draft": _paper_draft,
-                "output_dir": str(stage_dir / "charts"),
-            })
+            _fa_plan = _fa.orchestrate(
+                {
+                    "experiment_results": _fa_exp_results,
+                    "condition_summaries": _condition_summaries,
+                    "metrics_summary": exp_data.get("metrics_summary", {}),
+                    "metric_key": config.experiment.metric_key,
+                    "conditions": _fa_conditions,
+                    "topic": _read_prior_artifact(run_dir, "topic.md")
+                    or config.research.topic,
+                    "hypothesis": _read_prior_artifact(run_dir, "hypotheses.md") or "",
+                    "paper_draft": _paper_draft,
+                    "output_dir": str(stage_dir / "charts"),
+                }
+            )
 
             if _fa_plan.figure_count > 0:
                 # Save figure plan for Stage 17 to read
@@ -4959,7 +5395,10 @@ Generated: {_utcnow_iso()}
             else:
                 logger.warning("Stage 14: FigureAgent produced no charts, falling back")
         except Exception as _fa_exc:
-            logger.warning("Stage 14: FigureAgent failed (%s), falling back to visualize.py", _fa_exc)
+            logger.warning(
+                "Stage 14: FigureAgent failed (%s), falling back to visualize.py",
+                _fa_exc,
+            )
 
     # Fallback: legacy visualize.py chart generation
     if not _figure_plan_saved:
@@ -5072,14 +5511,18 @@ def _execute_research_decision(
                     "easy/hard. You SHOULD choose PROCEED with a quality caveat rather "
                     "than REFINE again.\n"
                 )
-                logger.warning("P6: Degenerate refine cycle detected, injecting PROCEED hint")
+                logger.warning(
+                    "P6: Degenerate refine cycle detected, injecting PROCEED hint"
+                )
         except (json.JSONDecodeError, OSError):
             pass
 
     if llm is not None:
         _pm = prompts or PromptManager()
         _overlay = _get_evolution_overlay(run_dir, "research_decision")
-        sp = _pm.for_stage("research_decision", evolution_overlay=_overlay, analysis=analysis)
+        sp = _pm.for_stage(
+            "research_decision", evolution_overlay=_overlay, analysis=analysis
+        )
         _user = sp.user + _degenerate_hint
         resp = llm.chat(
             [{"role": "user", "content": _user}],
@@ -5111,9 +5554,19 @@ Generated: {_utcnow_iso()}
     _dec_lower = decision_md.lower()
     if "baseline" not in _dec_lower and "control" not in _dec_lower:
         _quality_warnings.append("Decision text does not mention baselines")
-    if "seed" not in _dec_lower and "replicat" not in _dec_lower and "run" not in _dec_lower:
-        _quality_warnings.append("Decision text does not mention multi-seed/replicate runs")
-    if "metric" not in _dec_lower and "accuracy" not in _dec_lower and "loss" not in _dec_lower:
+    if (
+        "seed" not in _dec_lower
+        and "replicat" not in _dec_lower
+        and "run" not in _dec_lower
+    ):
+        _quality_warnings.append(
+            "Decision text does not mention multi-seed/replicate runs"
+        )
+    if (
+        "metric" not in _dec_lower
+        and "accuracy" not in _dec_lower
+        and "loss" not in _dec_lower
+    ):
         _quality_warnings.append("Decision text does not mention evaluation metrics")
     if _quality_warnings:
         logger.warning("T3.1: Decision quality warnings: %s", _quality_warnings)
@@ -5265,10 +5718,18 @@ def _collect_raw_experiment_metrics(run_dir: Path) -> tuple[str, bool]:
             # Also extract from stdout for full detail
             # BUG-23: Filter out infrastructure lines that are NOT experiment results
             _INFRA_KEYS = {
-                "SEED_COUNT", "TIME_ESTIMATE", "TRAINING_STEPS",
-                "REGISTERED_CONDITIONS", "METRIC_DEF", "GPU_MEMORY",
-                "BATCH_SIZE", "NUM_WORKERS", "TOTAL_PARAMS",
-                "time_budget_sec", "max_epochs", "num_seeds",
+                "SEED_COUNT",
+                "TIME_ESTIMATE",
+                "TRAINING_STEPS",
+                "REGISTERED_CONDITIONS",
+                "METRIC_DEF",
+                "GPU_MEMORY",
+                "BATCH_SIZE",
+                "NUM_WORKERS",
+                "TOTAL_PARAMS",
+                "time_budget_sec",
+                "max_epochs",
+                "num_seeds",
             }
             stdout = payload.get("stdout", "")
             if stdout:
@@ -5303,7 +5764,9 @@ def _collect_raw_experiment_metrics(run_dir: Path) -> tuple[str, bool]:
                     if not isinstance(_sbx, dict):
                         continue
                     _sbx_metrics = _sbx.get("metrics", {})
-                    if isinstance(_sbx_metrics, dict) and len(_sbx_metrics) > len(_best_refine_metrics):
+                    if isinstance(_sbx_metrics, dict) and len(_sbx_metrics) > len(
+                        _best_refine_metrics
+                    ):
                         _best_refine_metrics = _sbx_metrics
                         _best_refine_stdout = _sbx.get("stdout", "")
         except (json.JSONDecodeError, OSError):
@@ -5375,9 +5838,7 @@ def _collect_raw_experiment_metrics(run_dir: Path) -> tuple[str, bool]:
 
     return (
         f"\n\nACTUAL EXPERIMENT DATA (from {run_count} run(s) — use ONLY these numbers):\n"
-        "```\n"
-        + "\n".join(formatted_lines[:200])
-        + "\n```\n"
+        "```\n" + "\n".join(formatted_lines[:200]) + "\n```\n"
         "CRITICAL: Every number in the Results table MUST come from the data above. "
         "Do NOT round excessively, do NOT invent numbers, do NOT change values. "
         f"The experiment ran {run_count} time(s) — state this accurately in the methodology.\n"
@@ -5489,7 +5950,9 @@ def _write_paper_sections(
 
     # T3.5: Retry once on failure, use placeholder if still fails
     try:
-        resp1 = _chat_with_prompt(llm, system, call1_user, max_tokens=_paper_max_tokens, retries=1)
+        resp1 = _chat_with_prompt(
+            llm, system, call1_user, max_tokens=_paper_max_tokens, retries=1
+        )
         part1 = resp1.content.strip()
     except Exception:  # noqa: BLE001
         logger.error("Stage 17: Part 1 LLM call failed after retry — using placeholder")
@@ -5501,7 +5964,9 @@ def _write_paper_sections(
             "## Related Work\n[PLACEHOLDER]"
         )
     sections.append(part1)
-    logger.info("Stage 17: Part 1 (Title+Abstract+Intro+Related Work) — %d chars", len(part1))
+    logger.info(
+        "Stage 17: Part 1 (Title+Abstract+Intro+Related Work) — %d chars", len(part1)
+    )
 
     # --- Call 2: Method + Experiments ---
     call2_user = (
@@ -5532,7 +5997,9 @@ def _write_paper_sections(
         "Output markdown with ## headers. Continue from where Part 1 ended."
     )
     try:
-        resp2 = _chat_with_prompt(llm, system, call2_user, max_tokens=_paper_max_tokens, retries=1)
+        resp2 = _chat_with_prompt(
+            llm, system, call2_user, max_tokens=_paper_max_tokens, retries=1
+        )
         part2 = resp2.content.strip()
     except Exception:  # noqa: BLE001
         logger.error("Stage 17: Part 2 LLM call failed after retry — using placeholder")
@@ -5588,7 +6055,9 @@ def _write_paper_sections(
         "Output markdown with ## headers. Do NOT include a References section."
     )
     try:
-        resp3 = _chat_with_prompt(llm, system, call3_user, max_tokens=_paper_max_tokens, retries=1)
+        resp3 = _chat_with_prompt(
+            llm, system, call3_user, max_tokens=_paper_max_tokens, retries=1
+        )
         part3 = resp3.content.strip()
     except Exception:  # noqa: BLE001
         logger.error("Stage 17: Part 3 LLM call failed after retry — using placeholder")
@@ -5599,7 +6068,10 @@ def _write_paper_sections(
             "## Conclusion\n[PLACEHOLDER]"
         )
     sections.append(part3)
-    logger.info("Stage 17: Part 3 (Results+Discussion+Limitations+Conclusion) — %d chars", len(part3))
+    logger.info(
+        "Stage 17: Part 3 (Results+Discussion+Limitations+Conclusion) — %d chars",
+        len(part3),
+    )
 
     # Combine all sections
     draft = "\n\n".join(sections)
@@ -5608,9 +6080,10 @@ def _write_paper_sections(
     # the actual paper.  The preamble typically starts with "## Tested Conditions"
     # or similar headings and ends before "## Title".
     import re as _re_strip
+
     _title_match = _re_strip.search(r"^## Title\b", draft, _re_strip.MULTILINE)
     if _title_match and _title_match.start() > 200:
-        _stripped = draft[_title_match.start():]
+        _stripped = draft[_title_match.start() :]
         logger.info(
             "R32: Stripped %d-char preamble before '## Title'",
             _title_match.start(),
@@ -5628,16 +6101,27 @@ def _write_paper_sections(
 # ---------------------------------------------------------------------------
 
 # Sections where bullets/numbered lists are acceptable.
-_BULLET_LENIENT_SECTIONS = frozenset({
-    "introduction", "limitations", "limitation",
-    "limitations and future work", "abstract",
-})
+_BULLET_LENIENT_SECTIONS = frozenset(
+    {
+        "introduction",
+        "limitations",
+        "limitation",
+        "limitations and future work",
+        "abstract",
+    }
+)
 
 # Main body sections used for balance ratio check.
-_BALANCE_SECTIONS = frozenset({
-    "introduction", "related work", "method", "experiments", "results",
-    "discussion",
-})
+_BALANCE_SECTIONS = frozenset(
+    {
+        "introduction",
+        "related work",
+        "method",
+        "experiments",
+        "results",
+        "discussion",
+    }
+)
 
 
 def _validate_draft_quality(
@@ -5667,12 +6151,14 @@ def _validate_draft_quality(
         start = m.end()
         end = matches[i + 1].start() if i + 1 < len(matches) else len(draft)
         body = draft[start:end].strip()
-        sections_data.append({
-            "heading": heading,
-            "heading_lower": heading.strip().lower(),
-            "level": level,
-            "body": body,
-        })
+        sections_data.append(
+            {
+                "heading": heading,
+                "heading_lower": heading.strip().lower(),
+                "level": level,
+                "body": body,
+            }
+        )
 
     section_analysis: list[dict[str, Any]] = []
     overall_warnings: list[str] = []
@@ -5691,9 +6177,9 @@ def _validate_draft_quality(
             _subsection_words.setdefault(_current_parent, 0)
         else:
             # Add subsection words to parent
-            _subsection_words[_current_parent] = (
-                _subsection_words.get(_current_parent, 0) + len(sec["body"].split())
-            )
+            _subsection_words[_current_parent] = _subsection_words.get(
+                _current_parent, 0
+            ) + len(sec["body"].split())
 
     for sec in sections_data:
         if sec["level"] > 2:
@@ -5745,7 +6231,9 @@ def _validate_draft_quality(
                 entry["status"] = "ok"
         if body:
             total_lines = len([ln for ln in body.splitlines() if ln.strip()])
-            bullet_lines = len(_bullet_re.findall(body)) + len(_numbered_re.findall(body))
+            bullet_lines = len(_bullet_re.findall(body)) + len(
+                _numbered_re.findall(body)
+            )
             density = bullet_lines / total_lines if total_lines > 0 else 0.0
             entry["bullet_density"] = round(density, 2)
             threshold = 0.50 if heading_lower in _BULLET_LENIENT_SECTIONS else 0.25
@@ -5799,9 +6287,11 @@ def _validate_draft_quality(
         # Check recency: count citations with year >= current_year - 2
         _year_pat = re.compile(r"(\d{4})")
         import datetime as _dt_cit
+
         _cur_year = _dt_cit.datetime.now().year
         recent_count = sum(
-            1 for k in cited_keys
+            1
+            for k in cited_keys
             for m in [_year_pat.search(k)]
             if m and int(m.group(1)) >= _cur_year - 2
         )
@@ -5877,40 +6367,62 @@ def _validate_draft_quality(
             f"Duplicate adjacent words found: {dup_count} instance(s) "
             f"(e.g., 'the the', 'is is')"
         )
-        revision_directives.append(
-            "Fix duplicate adjacent words (likely typos)."
-        )
+        revision_directives.append("Fix duplicate adjacent words (likely typos).")
 
     # --- AI-slop / boilerplate detection ---
     _BOILERPLATE_PHRASES = [
-        "delves into", "delve into", "it is worth noting",
-        "it should be noted", "it is important to note",
-        "leverage the power of", "leverages the power of",
-        "in this paper, we propose", "in this work, we propose",
+        "delves into",
+        "delve into",
+        "it is worth noting",
+        "it should be noted",
+        "it is important to note",
+        "leverage the power of",
+        "leverages the power of",
+        "in this paper, we propose",
+        "in this work, we propose",
         "to the best of our knowledge",
-        "in the realm of", "in the landscape of",
-        "plays a crucial role", "plays a pivotal role",
-        "groundbreaking", "cutting-edge", "state-of-the-art",
-        "game-changing", "paradigm shift",
-        "a myriad of", "a plethora of",
-        "aims to bridge the gap", "bridge the gap",
-        "shed light on", "sheds light on",
-        "pave the way", "paves the way",
-        "the advent of", "with the advent of",
-        "in recent years", "in recent times",
+        "in the realm of",
+        "in the landscape of",
+        "plays a crucial role",
+        "plays a pivotal role",
+        "groundbreaking",
+        "cutting-edge",
+        "state-of-the-art",
+        "game-changing",
+        "paradigm shift",
+        "a myriad of",
+        "a plethora of",
+        "aims to bridge the gap",
+        "bridge the gap",
+        "shed light on",
+        "sheds light on",
+        "pave the way",
+        "paves the way",
+        "the advent of",
+        "with the advent of",
+        "in recent years",
+        "in recent times",
         "has gained significant attention",
         "has attracted considerable interest",
         "has emerged as a promising",
         "a comprehensive overview",
-        "a holistic approach", "holistic understanding",
-        "showcasing the efficacy", "demonstrate the efficacy",
-        "multifaceted", "underscores the importance",
+        "a holistic approach",
+        "holistic understanding",
+        "showcasing the efficacy",
+        "demonstrate the efficacy",
+        "multifaceted",
+        "underscores the importance",
         "navigate the complexities",
-        "harness the potential", "harnessing the power",
-        "it is imperative to", "it is crucial to",
-        "a nuanced understanding", "nuanced approach",
-        "robust and scalable", "seamlessly integrates",
-        "the intricacies of", "intricate interplay",
+        "harness the potential",
+        "harnessing the power",
+        "it is imperative to",
+        "it is crucial to",
+        "a nuanced understanding",
+        "nuanced approach",
+        "robust and scalable",
+        "seamlessly integrates",
+        "the intricacies of",
+        "intricate interplay",
         "facilitate a deeper understanding",
         "a testament to",
     ]
@@ -5969,9 +6481,27 @@ def _validate_draft_quality(
         if sec["heading_lower"] in _results_headings and sec["level"] <= 2:
             results_body += sec["body"] + "\n"
     if results_body and len(results_body.split()) > 100:
-        has_std = bool(re.search(r"±|\\pm|\bstd\b|\\std\b|standard deviation", results_body, re.IGNORECASE))
-        has_ci = bool(re.search(r"confidence interval|\bCI\b|95%|p-value|p\s*<", results_body, re.IGNORECASE))
-        has_seeds = bool(re.search(r"(?:seed|run|trial)s?\s*[:=]\s*\d|averaged?\s+over\s+\d+\s+(?:seed|run|trial)", results_body, re.IGNORECASE))
+        has_std = bool(
+            re.search(
+                r"±|\\pm|\bstd\b|\\std\b|standard deviation",
+                results_body,
+                re.IGNORECASE,
+            )
+        )
+        has_ci = bool(
+            re.search(
+                r"confidence interval|\bCI\b|95%|p-value|p\s*<",
+                results_body,
+                re.IGNORECASE,
+            )
+        )
+        has_seeds = bool(
+            re.search(
+                r"(?:seed|run|trial)s?\s*[:=]\s*\d|averaged?\s+over\s+\d+\s+(?:seed|run|trial)",
+                results_body,
+                re.IGNORECASE,
+            )
+        )
         if not has_std and not has_ci and not has_seeds:
             overall_warnings.append(
                 "No statistical measures found in results (no std, CI, p-values, or multi-seed reporting)"
@@ -6091,12 +6621,20 @@ def _review_compiled_pdf(
             dim_scores = {
                 k: review_data.get(k, 0)
                 for k in (
-                    "soundness", "presentation", "contribution",
-                    "originality", "clarity", "significance",
+                    "soundness",
+                    "presentation",
+                    "contribution",
+                    "originality",
+                    "clarity",
+                    "significance",
                     "reproducibility",
                 )
             }
-            valid = {k: v for k, v in dim_scores.items() if isinstance(v, (int, float)) and v > 0}
+            valid = {
+                k: v
+                for k, v in dim_scores.items()
+                if isinstance(v, (int, float)) and v > 0
+            }
             if valid:
                 review_data["mean_score"] = round(sum(valid.values()) / len(valid), 2)
             return review_data
@@ -6126,7 +6664,9 @@ def _check_ablation_effectiveness(
         if not isinstance(data, dict):
             continue
         name_lower = name.lower()
-        if any(tag in name_lower for tag in ("baseline", "control", "vanilla", "standard")):
+        if any(
+            tag in name_lower for tag in ("baseline", "control", "vanilla", "standard")
+        ):
             metrics = data.get("metrics", {})
             # Use the first metric that has a _mean suffix or the first available
             for mk, mv in metrics.items():
@@ -6155,7 +6695,9 @@ def _check_ablation_effectiveness(
         name_lower = name.lower()
         if name == baseline_name:
             continue
-        if not any(tag in name_lower for tag in ("ablation", "no_", "without", "reduced")):
+        if not any(
+            tag in name_lower for tag in ("ablation", "no_", "without", "reduced")
+        ):
             continue
         metrics = data.get("metrics", {})
         for mk, mv in metrics.items():
@@ -6229,7 +6771,9 @@ def _detect_result_contradictions(
     proposed_name = None
     for name, val in means.items():
         name_lower = name.lower()
-        if any(tag in name_lower for tag in ("baseline", "control", "random", "vanilla")):
+        if any(
+            tag in name_lower for tag in ("baseline", "control", "random", "vanilla")
+        ):
             if baseline_val is None or val > (baseline_val or 0):
                 baseline_val = val
                 baseline_name = name
@@ -6291,7 +6835,10 @@ def _execute_paper_draft(
                     exp_summary_text = _text
                     logger.info(
                         "R21-1: Selected %s (metric_keys=%d, paired=%d, score=%d)",
-                        _s14_dir.name, _mcount, _paired_count, _score,
+                        _s14_dir.name,
+                        _mcount,
+                        _paired_count,
+                        _score,
                     )
     # Fallback to standard artifact read
     if exp_summary_text is None:
@@ -6315,9 +6862,9 @@ def _execute_paper_draft(
         # BUG-23: Raw stdout alone is not sufficient — require either
         # metrics_summary data, parsed metrics from run JSONs,
         # OR at least 3 condition= patterns in raw block
-        _has_condition_pattern = len(re.findall(
-            r"condition[=:]", raw_metrics_block, re.IGNORECASE
-        )) >= 3
+        _has_condition_pattern = (
+            len(re.findall(r"condition[=:]", raw_metrics_block, re.IGNORECASE)) >= 3
+        )
         if has_real_metrics or _has_parsed_metrics or _has_condition_pattern:
             has_real_metrics = True
         exp_metrics_instruction += raw_metrics_block
@@ -6358,7 +6905,9 @@ def _execute_paper_draft(
                     ci_lo = cdata.get("ci95_low")
                     ci_hi = cdata.get("ci95_high")
                     if ci_lo is not None and ci_hi is not None:
-                        cond_block += f"- Bootstrap 95% CI: [{ci_lo:.4f}, {ci_hi:.4f}]\n"
+                        cond_block += (
+                            f"- Bootstrap 95% CI: [{ci_lo:.4f}, {ci_hi:.4f}]\n"
+                        )
                     cm = cdata.get("metrics", {})
                     if cm:
                         for mk, mv in sorted(cm.items()):
@@ -6368,7 +6917,9 @@ def _execute_paper_draft(
             # R18-1: Inject paired statistical comparisons
             paired = exp_summary_parsed.get("paired_comparisons", [])
             if paired:
-                paired_block = "\n\n## PAIRED STATISTICAL COMPARISONS (use these in Results)\n"
+                paired_block = (
+                    "\n\n## PAIRED STATISTICAL COMPARISONS (use these in Results)\n"
+                )
                 paired_block += f"Total: {len(paired)} paired tests computed.\n"
                 for pc in paired:
                     if not isinstance(pc, dict):
@@ -6382,7 +6933,11 @@ def _execute_paper_draft(
                     pv = pc.get("p_value", "?")
                     ci_lo = pc.get("ci95_low")
                     ci_hi = pc.get("ci95_high")
-                    ci_str = f", 95% CI [{ci_lo:.3f}, {ci_hi:.3f}]" if ci_lo is not None else ""
+                    ci_str = (
+                        f", 95% CI [{ci_lo:.3f}, {ci_hi:.3f}]"
+                        if ci_lo is not None
+                        else ""
+                    )
                     paired_block += (
                         f"- {method} vs {baseline} (regime={regime}): "
                         f"mean_diff={md}, std_diff={sd}, "
@@ -6391,7 +6946,11 @@ def _execute_paper_draft(
                 exp_metrics_instruction += paired_block
 
             # R24: Method naming map — translate generic condition labels
-            _cond_names = list(cond_summaries.keys()) if isinstance(cond_summaries, dict) and cond_summaries else []
+            _cond_names = (
+                list(cond_summaries.keys())
+                if isinstance(cond_summaries, dict) and cond_summaries
+                else []
+            )
             if _cond_names:
                 naming_block = (
                     "\n\n## METHOD NAMING (CRITICAL — do NOT use generic labels in the paper)\n"
@@ -6452,10 +7011,14 @@ def _execute_paper_draft(
             )
 
             # R27: Multi-seed framing enforcement
-            _any_seeds = any(
-                (cond_summaries.get(c) or {}).get("n_seed_metrics", 0) > 1
-                for c in _cond_names
-            ) if _cond_names else False
+            _any_seeds = (
+                any(
+                    (cond_summaries.get(c) or {}).get("n_seed_metrics", 0) > 1
+                    for c in _cond_names
+                )
+                if _cond_names
+                else False
+            )
             if _any_seeds:
                 exp_metrics_instruction += (
                     "\n\n## MULTI-SEED EXPERIMENT FRAMING (CRITICAL)\n"
@@ -6490,9 +7053,7 @@ def _execute_paper_draft(
         if isinstance(_exp_parsed_p10, dict):
             _contradictions = _detect_result_contradictions(_exp_parsed_p10)
             if _contradictions:
-                _contra_block = (
-                    "\n\n## RESULT INTERPRETATION ADVISORIES (CRITICAL — read before writing)\n"
-                )
+                _contra_block = "\n\n## RESULT INTERPRETATION ADVISORIES (CRITICAL — read before writing)\n"
                 for _ca in _contradictions:
                     _contra_block += f"- {_ca}\n"
                 exp_metrics_instruction += _contra_block
@@ -6575,6 +7136,7 @@ def _execute_paper_draft(
 
     # Check 1: Was the analysis quality rating very low?
     import re as _re_q
+
     _rating_match = _re_q.search(
         r"(?:quality\s+rating|result\s+quality)[:\s]*\**(\d+)\s*/\s*10",
         analysis_text,
@@ -6599,25 +7161,41 @@ def _execute_paper_draft(
     # Check 2: Are baselines missing?
     _analysis_lower = analysis_text.lower()
     if "no" in _analysis_lower and "baseline" in _analysis_lower:
-        if any(phrase in _analysis_lower for phrase in [
-            "no baseline", "no bo", "no random", "baselines are missing",
-            "missing baselines", "baseline coverage is missing",
-        ]):
+        if any(
+            phrase in _analysis_lower
+            for phrase in [
+                "no baseline",
+                "no bo",
+                "no random",
+                "baselines are missing",
+                "missing baselines",
+                "baseline coverage is missing",
+            ]
+        ):
             _quality_warnings.append("Baselines appear to be missing from results")
 
     # Check 3: Is the metric undefined?
-    if any(phrase in _analysis_lower for phrase in [
-        "metric is undefined", "primary_metric is undefined",
-        "undefined metric", "metric undefined",
-    ]):
-        _quality_warnings.append("Primary metric is undefined (direction/units/formula unknown)")
+    if any(
+        phrase in _analysis_lower
+        for phrase in [
+            "metric is undefined",
+            "primary_metric is undefined",
+            "undefined metric",
+            "metric undefined",
+        ]
+    ):
+        _quality_warnings.append(
+            "Primary metric is undefined (direction/units/formula unknown)"
+        )
 
     # Check 4: Very few conditions completed
-    _condition_count = len(_re_q.findall(
-        r"condition[=:\s]+\w+.*?(?:mean|primary_metric)",
-        raw_metrics_block or "",
-        _re_q.IGNORECASE,
-    ))
+    _condition_count = len(
+        _re_q.findall(
+            r"condition[=:\s]+\w+.*?(?:mean|primary_metric)",
+            raw_metrics_block or "",
+            _re_q.IGNORECASE,
+        )
+    )
 
     if _quality_warnings:
         _warning_block = "\n".join(f"  - {w}" for w in _quality_warnings)
@@ -6697,7 +7275,9 @@ def _execute_paper_draft(
 
     if _fa_descriptions:
         exp_metrics_instruction += "\n\n" + _fa_descriptions
-        logger.info("Stage 17: Injected FigureAgent figure descriptions into paper draft prompt")
+        logger.info(
+            "Stage 17: Injected FigureAgent figure descriptions into paper draft prompt"
+        )
     else:
         # Fallback: scan for chart files
         _chart_files: list[str] = []
@@ -6797,6 +7377,7 @@ def _execute_paper_draft(
             filter_verified_bibtex,
             verify_citations as _verify_cit,
         )
+
         try:
             _pre_report = _verify_cit(bib_text, inter_verify_delay=0.5)
             _kept = _pre_report.verified + _pre_report.suspicious
@@ -6810,7 +7391,9 @@ def _execute_paper_draft(
                 )
                 logger.info(
                     "P3: Pre-verification kept %d/%d citations (removed %d hallucinated)",
-                    _kept, _pre_report.total, _removed,
+                    _kept,
+                    _pre_report.total,
+                    _removed,
                 )
         except Exception as exc:
             logger.warning("P3: Pre-verification failed, using original bib: %s", exc)
@@ -6834,7 +7417,7 @@ def _execute_paper_draft(
                         authors_info += " et al."
                 title = row.get("title", "")
                 cite_lines.append(
-                    f"- [{row['cite_key']}] → TITLE: \"{title}\" "
+                    f'- [{row["cite_key"]}] → TITLE: "{title}" '
                     f"| {authors_info} "
                     f"({row.get('venue', '')}, {row.get('year', '')}, "
                     f"cited {row.get('citation_count', 0)} times) "
@@ -6886,12 +7469,13 @@ def _execute_paper_draft(
 
         # R7: Strip LLM-generated References section — it often fabricates arXiv IDs.
         import re as _re_r7
+
         ref_pattern = _re_r7.compile(
-            r'^(#{1,2}\s*References.*)', _re_r7.MULTILINE | _re_r7.DOTALL
+            r"^(#{1,2}\s*References.*)", _re_r7.MULTILINE | _re_r7.DOTALL
         )
         ref_match = ref_pattern.search(draft)
         if ref_match:
-            draft = draft[:ref_match.start()].rstrip()
+            draft = draft[: ref_match.start()].rstrip()
             logger.info("Stage 17: Stripped LLM-generated References section (R7 fix)")
     else:
         # Build template with real data if available
@@ -6962,7 +7546,9 @@ def _collect_experiment_evidence(run_dir: Path) -> str:
         main_py = Path(exp_dir) / "main.py"
         if main_py.exists():
             code = main_py.read_text(encoding="utf-8")
-            evidence_parts.append(f"### Actual Experiment Code (main.py)\n```python\n{code[:3000]}\n```")
+            evidence_parts.append(
+                f"### Actual Experiment Code (main.py)\n```python\n{code[:3000]}\n```"
+            )
 
     # 2. Read sandbox run results (actual metrics, runtime, stderr)
     runs_text = _read_prior_artifact(run_dir, "runs/")
@@ -7107,7 +7693,11 @@ def _execute_paper_revision(
     # R4-2: Collect real metrics for anti-fabrication guard in revision
     # BUG-47: _collect_raw_experiment_metrics returns tuple[str, bool], must unpack
     _raw_metrics_tuple = _collect_raw_experiment_metrics(run_dir)
-    raw_metrics_revision = _raw_metrics_tuple[0] if isinstance(_raw_metrics_tuple, tuple) else (_raw_metrics_tuple or "")
+    raw_metrics_revision = (
+        _raw_metrics_tuple[0]
+        if isinstance(_raw_metrics_tuple, tuple)
+        else (_raw_metrics_tuple or "")
+    )
     data_integrity_revision = ""
     if raw_metrics_revision:
         data_integrity_revision = (
@@ -7126,8 +7716,12 @@ def _execute_paper_revision(
             _ws_revision = ""
         # IMP-20/25/31/24: Load style blocks for revision prompt
         _rev_blocks: dict[str, str] = {}
-        for _bname in ("academic_style_guide", "narrative_writing_rules",
-                        "anti_hedging_rules", "anti_repetition_rules"):
+        for _bname in (
+            "academic_style_guide",
+            "narrative_writing_rules",
+            "anti_hedging_rules",
+            "anti_repetition_rules",
+        ):
             try:
                 _rev_blocks[_bname] = _pm.block(_bname)
             except (KeyError, Exception):  # noqa: BLE001
@@ -7199,8 +7793,11 @@ def _execute_paper_revision(
                 + sp.user
             )
             resp2 = _chat_with_prompt(
-                llm, sp.system, retry_user,
-                json_mode=sp.json_mode, max_tokens=revision_max_tokens,
+                llm,
+                sp.system,
+                retry_user,
+                json_mode=sp.json_mode,
+                max_tokens=revision_max_tokens,
             )
             revised2 = resp2.content
             revised2_word_count = len(revised2.split())
@@ -7225,7 +7822,8 @@ def _execute_paper_revision(
                 # Extract useful revision points as appendix
                 revision_words = revised.split()
                 revision_summary = (
-                    " ".join(revision_words[:500]) + "\n\n*(Revision summary truncated)*"
+                    " ".join(revision_words[:500])
+                    + "\n\n*(Revision summary truncated)*"
                     if len(revision_words) > 500
                     else revised
                 )
@@ -7265,9 +7863,8 @@ def _execute_quality_gate(
     if isinstance(_exp_summary, dict):
         _best_run = _exp_summary.get("best_run", {})
         if isinstance(_best_run, dict):
-            _exp_failed = (
-                _best_run.get("status") == "failed"
-                and not _best_run.get("metrics")
+            _exp_failed = _best_run.get("status") == "failed" and not _best_run.get(
+                "metrics"
             )
         # Also check if metrics_summary is empty
         if not _exp_summary.get("metrics_summary"):
@@ -7283,14 +7880,19 @@ def _execute_quality_gate(
         _exp_context = ""
         if _exp_summary and isinstance(_exp_summary, dict):
             _exp_status_keys = {
-                k: _exp_summary.get(k) for k in (
-                    "total_conditions", "total_metric_keys",
+                k: _exp_summary.get(k)
+                for k in (
+                    "total_conditions",
+                    "total_metric_keys",
                     "metrics_summary",
-                ) if _exp_summary.get(k) is not None
+                )
+                if _exp_summary.get(k) is not None
             }
             if _best_run := _exp_summary.get("best_run"):
                 _exp_status_keys["best_run_status"] = (
-                    _best_run.get("status") if isinstance(_best_run, dict) else str(_best_run)
+                    _best_run.get("status")
+                    if isinstance(_best_run, dict)
+                    else str(_best_run)
                 )
             _exp_context = (
                 "\n\nExperiment summary (for cross-checking reported numbers):\n"
@@ -7345,7 +7947,9 @@ def _execute_quality_gate(
     if isinstance(score, (int, float)) and score < threshold:
         logger.warning(
             "Quality gate FAILED: score %.1f < threshold %.1f (verdict=%s)",
-            score, threshold, verdict,
+            score,
+            threshold,
+            verdict,
         )
         return StageResult(
             stage=Stage.QUALITY_GATE,
@@ -7353,12 +7957,13 @@ def _execute_quality_gate(
             artifacts=("quality_report.json",),
             evidence_refs=("stage-20/quality_report.json",),
             error=f"Quality score {score:.1f}/10 below threshold {threshold:.1f}. "
-                  f"Paper needs revision before export.",
+            f"Paper needs revision before export.",
         )
 
     logger.info(
         "Quality gate PASSED: score %.1f >= threshold %.1f",
-        score, threshold,
+        score,
+        threshold,
     )
     return StageResult(
         stage=Stage.QUALITY_GATE,
@@ -7453,7 +8058,9 @@ def _execute_export_publish(
     if llm is not None:
         _pm = prompts or PromptManager()
         _overlay = _get_evolution_overlay(run_dir, "export_publish")
-        sp = _pm.for_stage("export_publish", evolution_overlay=_overlay, revised=revised)
+        sp = _pm.for_stage(
+            "export_publish", evolution_overlay=_overlay, revised=revised
+        )
         resp = _chat_with_prompt(
             llm,
             sp.system,
@@ -7476,6 +8083,7 @@ def _execute_export_publish(
 
     # IMP-3: Deduplicate "due to computational constraints" — keep at most 1
     import re as _re_imp3
+
     _CONSTRAINT_PAT = _re_imp3.compile(
         r"[Dd]ue to computational constraints", _re_imp3.IGNORECASE
     )
@@ -7494,13 +8102,13 @@ def _execute_export_publish(
                 final_paper = final_paper[:start] + final_paper[end:]
         final_paper = _re_imp3.sub(r"\s{2,}", " ", final_paper)
         logger.info(
-            "Stage 22: Removed %d duplicate 'computational constraints' "
-            "disclaimers",
+            "Stage 22: Removed %d duplicate 'computational constraints' disclaimers",
             len(_matches) - 1,
         )
 
     # IMP-19 Layer 2: Ensure at least figures are referenced in the paper
     import re as _re_fig
+
     chart_files = []
     for _chart_src_dir in [stage_dir / "charts", run_dir / "stage-14" / "charts"]:
         if _chart_src_dir.is_dir():
@@ -7508,9 +8116,9 @@ def _execute_export_publish(
     if chart_files and "![" not in final_paper:
         # Distribute figures to relevant sections based on filename keywords
         _fig_placement: dict[str, list[str]] = {
-            "method": [],       # architecture, method, model, pipeline diagrams
-            "result": [],       # experiment, comparison, ablation charts
-            "intro": [],        # concept, overview, illustration
+            "method": [],  # architecture, method, model, pipeline diagrams
+            "result": [],  # experiment, comparison, ablation charts
+            "intro": [],  # concept, overview, illustration
         }
         _fig_counter = 0
         for cf in chart_files[:6]:
@@ -7518,23 +8126,48 @@ def _execute_export_publish(
             stem_lower = cf.stem.lower()
             label = cf.stem.replace("_", " ").title()
             fig_md = f"![Figure {_fig_counter}: {label}](charts/{cf.name})"
-            if any(k in stem_lower for k in ("architecture", "model", "pipeline", "method", "flowchart")):
+            if any(
+                k in stem_lower
+                for k in ("architecture", "model", "pipeline", "method", "flowchart")
+            ):
                 _fig_placement["method"].append(fig_md)
-            elif any(k in stem_lower for k in ("experiment", "comparison", "ablation", "result", "metric")):
+            elif any(
+                k in stem_lower
+                for k in ("experiment", "comparison", "ablation", "result", "metric")
+            ):
                 _fig_placement["result"].append(fig_md)
-            elif any(k in stem_lower for k in ("concept", "overview", "illustration", "threat", "attack")):
+            elif any(
+                k in stem_lower
+                for k in ("concept", "overview", "illustration", "threat", "attack")
+            ):
                 _fig_placement["intro"].append(fig_md)
             else:
                 _fig_placement["result"].append(fig_md)  # default to results
 
         # Insert figures at relevant section boundaries
         _section_markers = {
-            "method": ["## Method", "## Methodology", "## Approach", "## Framework",
-                        "## 3. Method", "## 3 Method"],
-            "result": ["## Results", "## Experiments", "## Evaluation",
-                        "## 5. Results", "## 4. Experiments", "## 5 Results"],
-            "intro": ["## Related Work", "## Background", "## 2. Related",
-                       "## 2 Related Work"],
+            "method": [
+                "## Method",
+                "## Methodology",
+                "## Approach",
+                "## Framework",
+                "## 3. Method",
+                "## 3 Method",
+            ],
+            "result": [
+                "## Results",
+                "## Experiments",
+                "## Evaluation",
+                "## 5. Results",
+                "## 4. Experiments",
+                "## 5 Results",
+            ],
+            "intro": [
+                "## Related Work",
+                "## Background",
+                "## 2. Related",
+                "## 2 Related Work",
+            ],
         }
         _total_inserted = 0
         for category, figs in _fig_placement.items():
@@ -7553,7 +8186,9 @@ def _execute_export_publish(
                 # Fallback: insert before Conclusion/Limitations/Discussion
                 for fallback in ["## Conclusion", "## Limitations", "## Discussion"]:
                     if fallback in final_paper:
-                        final_paper = final_paper.replace(fallback, fig_block + fallback, 1)
+                        final_paper = final_paper.replace(
+                            fallback, fig_block + fallback, 1
+                        )
                         inserted = True
                         _total_inserted += len(figs)
                         break
@@ -7569,6 +8204,7 @@ def _execute_export_publish(
     # IMP-24: Detect excessive number repetition
     _numbers_found = _re_fig.findall(r"\b\d+\.\d{2,}\b", final_paper)
     from collections import Counter as _Counter
+
     _num_counts = _Counter(_numbers_found)
     _repeated = {n: c for n, c in _num_counts.items() if c > 3}
     if _repeated:
@@ -7607,6 +8243,7 @@ def _execute_export_publish(
                     final_paper = final_paper.replace(f"[{bad_key}]", "")
                 # Clean up whitespace artifacts from removed citations
                 import re as _re_imp29
+
                 final_paper = _re_imp29.sub(r"  +", " ", final_paper)
                 final_paper = _re_imp29.sub(r" ([.,;:)])", r"\1", final_paper)
                 (stage_dir / "paper_final.md").write_text(final_paper, encoding="utf-8")
@@ -7663,24 +8300,19 @@ def _execute_export_publish(
         if valid_keys:
             _all_cited: set[str] = set()
             # Bracket-format citations [key]
-            _all_cited.update(
-                _re.findall(r"\[([a-z]+\d{4}[a-z]*)\]", final_paper)
-            )
+            _all_cited.update(_re.findall(r"\[([a-z]+\d{4}[a-z]*)\]", final_paper))
             # \cite{key, key2} format (original + latex-converted)
             for _src in (
                 final_paper,
                 locals().get("final_paper_latex", ""),
             ):
                 for _cm in _re.finditer(r"\\cite\{([^}]+)\}", _src):
-                    _all_cited.update(
-                        k.strip() for k in _cm.group(1).split(",")
-                    )
+                    _all_cited.update(k.strip() for k in _cm.group(1).split(","))
             uncited_keys = valid_keys - _all_cited
             if uncited_keys:
                 bib_text = _remove_bibtex_entries(bib_text, uncited_keys)
                 logger.info(
-                    "Stage 22: Pruned %d uncited bibliography entries "
-                    "(kept %d)",
+                    "Stage 22: Pruned %d uncited bibliography entries (kept %d)",
                     len(uncited_keys),
                     len(valid_keys) - len(uncited_keys),
                 )
@@ -7701,8 +8333,14 @@ def _execute_export_publish(
         # Use the latex-citation-processed version if available
         tex_source = locals().get("final_paper_latex", final_paper)
         # Append NeurIPS-style checklist if target is a ML conference
-        if tpl.name in ("neurips_2024", "neurips_2025", "icml_2025", "icml_2026",
-                         "iclr_2025", "iclr_2026"):
+        if tpl.name in (
+            "neurips_2024",
+            "neurips_2025",
+            "icml_2025",
+            "icml_2026",
+            "iclr_2025",
+            "iclr_2026",
+        ):
             _has_exp = bool(_read_prior_artifact(run_dir, "experiment_summary.json"))
             _checklist = _generate_neurips_checklist(
                 has_experiments=_has_exp,
@@ -7727,10 +8365,12 @@ def _execute_export_publish(
         # Copy bundled style files alongside paper.tex
         for sf in tpl.get_style_files():
             import shutil as _shutil_sty
+
             _shutil_sty.copy2(sf, stage_dir / sf.name)
         # Compile verification
         try:
             from researchclaw.templates.compiler import compile_latex
+
             _compile_result = compile_latex(stage_dir / "paper.tex", max_attempts=2)
             if _compile_result.success:
                 logger.info("Stage 22: LaTeX compilation verification PASSED")
@@ -7765,6 +8405,7 @@ def _execute_export_publish(
                 # Post-compilation quality checks
                 try:
                     from researchclaw.templates.compiler import check_compiled_quality
+
                     _qc = check_compiled_quality(stage_dir / "paper.tex")
                     if _qc.warnings_summary:
                         logger.warning(
@@ -7772,15 +8413,18 @@ def _execute_export_publish(
                             "; ".join(_qc.warnings_summary),
                         )
                     (stage_dir / "compilation_quality.json").write_text(
-                        json.dumps({
-                            "page_count": _qc.page_count,
-                            "unresolved_refs": _qc.unresolved_refs,
-                            "unresolved_cites": _qc.unresolved_cites,
-                            "overfull_hboxes": len(_qc.overfull_hboxes),
-                            "orphan_figures": _qc.orphan_figures,
-                            "orphan_labels": _qc.orphan_labels,
-                            "warnings": _qc.warnings_summary,
-                        }, indent=2),
+                        json.dumps(
+                            {
+                                "page_count": _qc.page_count,
+                                "unresolved_refs": _qc.unresolved_refs,
+                                "unresolved_cites": _qc.unresolved_cites,
+                                "overfull_hboxes": len(_qc.overfull_hboxes),
+                                "orphan_figures": _qc.orphan_figures,
+                                "orphan_labels": _qc.orphan_labels,
+                                "warnings": _qc.warnings_summary,
+                            },
+                            indent=2,
+                        ),
                         encoding="utf-8",
                     )
                     artifacts.append("compilation_quality.json")
@@ -7790,12 +8434,16 @@ def _execute_export_publish(
                         logger.warning(
                             "BUG-27: Paper is %d pages (limit %d). "
                             "Consider tightening content in revision.",
-                            _qc.page_count, _page_limit,
+                            _qc.page_count,
+                            _page_limit,
                         )
                 except Exception as _qc_exc:  # noqa: BLE001
                     logger.debug("Stage 22: Quality checks skipped: %s", _qc_exc)
             else:
-                logger.warning("Stage 22: LaTeX compilation verification FAILED: %s", _compile_result.errors[:3])
+                logger.warning(
+                    "Stage 22: LaTeX compilation verification FAILED: %s",
+                    _compile_result.errors[:3],
+                )
                 # Add compilation failure comment to .tex
                 _tex_path = stage_dir / "paper.tex"
                 if _tex_path.exists():
@@ -7825,6 +8473,7 @@ def _execute_export_publish(
             _fa_pngs = list(_fa_dir.glob("fig_*.png"))
             if _fa_pngs:
                 import shutil
+
                 for _fa_png in _fa_pngs:
                     dest = chart_dir / _fa_png.name
                     shutil.copy2(_fa_png, dest)
@@ -7832,12 +8481,14 @@ def _execute_export_publish(
                 _fa_charts_found = True
                 logger.info(
                     "Stage 22: Copied %d FigureAgent charts from %s",
-                    len(_fa_pngs), _fa_dir,
+                    len(_fa_pngs),
+                    _fa_dir,
                 )
                 break
 
         # Always generate structured charts from visualize.py (different names)
         from researchclaw.experiment.visualize import generate_all_charts
+
         _metric_dir = getattr(config.experiment, "metric_direction", "minimize")
         _viz_charts = generate_all_charts(
             run_dir,
@@ -7998,7 +8649,9 @@ def _execute_export_publish(
             (_chart_dir / "framework_diagram_prompt.md").write_text(
                 _framework_prompt, encoding="utf-8"
             )
-            logger.info("Stage 22: Generated framework diagram prompt → charts/framework_diagram_prompt.md")
+            logger.info(
+                "Stage 22: Generated framework diagram prompt → charts/framework_diagram_prompt.md"
+            )
     except Exception as exc:  # noqa: BLE001
         logger.debug("Stage 22: Framework diagram prompt generation skipped: %s", exc)
 
@@ -8022,7 +8675,7 @@ def _check_citation_relevance(
     """
     citation_lines = []
     for cr in results:
-        citation_lines.append(f"- [{cr.cite_key}] \"{cr.title}\"")
+        citation_lines.append(f'- [{cr.cite_key}] "{cr.title}"')
     if not citation_lines:
         return {}
 
@@ -8030,7 +8683,7 @@ def _check_citation_relevance(
     _BATCH_SIZE = 30
 
     for batch_start in range(0, len(citation_lines), _BATCH_SIZE):
-        batch = citation_lines[batch_start:batch_start + _BATCH_SIZE]
+        batch = citation_lines[batch_start : batch_start + _BATCH_SIZE]
         citations_text = "\n".join(batch)
 
         prompt = (
@@ -8038,7 +8691,7 @@ def _check_citation_relevance(
             f"Rate the relevance of each citation to the research topic "
             f"on a scale of 0.0 to 1.0.\n"
             f"Return ONLY a JSON object mapping cite_key to relevance score.\n"
-            f"Example: {{\"smith2020\": 0.9, \"jones2019\": 0.2}}\n\n"
+            f'Example: {{"smith2020": 0.9, "jones2019": 0.2}}\n\n'
             f"Citations:\n{citations_text}"
         )
 
@@ -8056,7 +8709,8 @@ def _check_citation_relevance(
         except Exception:  # noqa: BLE001
             logger.debug(
                 "Citation relevance check failed for batch %d–%d, skipping",
-                batch_start, batch_start + len(batch),
+                batch_start,
+                batch_start + len(batch),
             )
 
     return all_scores
@@ -8154,6 +8808,7 @@ def _execute_citation_verify(
     s2_api_key = getattr(config.llm, "s2_api_key", "") or ""
 
     from researchclaw.literature.verify import parse_bibtex_entries
+
     _n_entries = len(parse_bibtex_entries(bib_text))
     logger.info(
         "[citation-verify] Verifying %d references "
@@ -8195,15 +8850,20 @@ def _execute_citation_verify(
     # Previously they defaulted to 0.0 which caused mass-deletion.
     _DEFAULT_RELEVANCE = 0.7
     remaining = [
-        cr for cr in report.results
+        cr
+        for cr in report.results
         if cr.cite_key not in low_relevance_keys
         and cr.status != VerifyStatus.HALLUCINATED
     ]
     if len(remaining) > MAX_CITATIONS:
         remaining.sort(
-            key=lambda c: c.relevance_score if c.relevance_score is not None else _DEFAULT_RELEVANCE,
+            key=lambda c: (
+                c.relevance_score
+                if c.relevance_score is not None
+                else _DEFAULT_RELEVANCE
+            ),
         )
-        overflow = remaining[:len(remaining) - MAX_CITATIONS]
+        overflow = remaining[: len(remaining) - MAX_CITATIONS]
         for cr in overflow:
             low_relevance_keys.add(cr.cite_key)
         logger.info(
@@ -8237,7 +8897,8 @@ def _execute_citation_verify(
         logger.warning(
             "Stage 23: Verification stripped %d→%d entries (>50%% loss). "
             "Keeping original bib to avoid breaking references.",
-            original_count, verified_count,
+            original_count,
+            verified_count,
         )
         verified_bib = bib_text
 
@@ -8245,19 +8906,14 @@ def _execute_citation_verify(
     if paper_text.strip():
         _vbib_keys = set(re.findall(r"@\w+\{([^,]+),", verified_bib))
         _cited_in_paper: set[str] = set()
-        _cited_in_paper.update(
-            re.findall(r"\[([a-z]+\d{4}[a-z]*)\]", paper_text)
-        )
+        _cited_in_paper.update(re.findall(r"\[([a-z]+\d{4}[a-z]*)\]", paper_text))
         for _cm in re.finditer(r"\\cite\{([^}]+)\}", paper_text):
-            _cited_in_paper.update(
-                k.strip() for k in _cm.group(1).split(",")
-            )
+            _cited_in_paper.update(k.strip() for k in _cm.group(1).split(","))
         _uncited_vbib = _vbib_keys - _cited_in_paper
         if _uncited_vbib:
             verified_bib = _remove_bibtex_entries(verified_bib, _uncited_vbib)
             logger.info(
-                "Stage 23: Pruned %d uncited entries from verified bib "
-                "(kept %d)",
+                "Stage 23: Pruned %d uncited entries from verified bib (kept %d)",
                 len(_uncited_vbib),
                 len(_vbib_keys) - len(_uncited_vbib),
             )
@@ -8442,7 +9098,9 @@ def execute_stage(
                             art_path = stage_dir / art
                             if art_path.exists() and art_path.is_file():
                                 try:
-                                    output_text += art_path.read_text(encoding="utf-8")[:4000]
+                                    output_text += art_path.read_text(encoding="utf-8")[
+                                        :4000
+                                    ]
                                 except (UnicodeDecodeError, OSError):
                                     pass
                         if output_text:

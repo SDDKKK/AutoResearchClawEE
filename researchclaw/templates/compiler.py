@@ -136,9 +136,7 @@ def compile_latex(
     return result
 
 
-def fix_common_latex_errors(
-    tex_text: str, errors: list[str]
-) -> tuple[str, list[str]]:
+def fix_common_latex_errors(tex_text: str, errors: list[str]) -> tuple[str, list[str]]:
     """Apply automated fixes for common LaTeX errors.
 
     Returns ``(fixed_text, list_of_fix_descriptions)``.
@@ -157,14 +155,16 @@ def fix_common_latex_errors(
                 cmd = m.group(1)
                 # Don't remove standard commands
                 _safe_to_remove = {
-                    "textsc", "textsl", "mathbb", "mathcal",
-                    "bm", "boldsymbol",
+                    "textsc",
+                    "textsl",
+                    "mathbb",
+                    "mathcal",
+                    "bm",
+                    "boldsymbol",
                 }
                 if cmd in _safe_to_remove:
                     # Replace \cmd{text} → text
-                    fixed = re.sub(
-                        rf"\\{cmd}\{{([^}}]*)\}}", r"\1", fixed
-                    )
+                    fixed = re.sub(rf"\\{cmd}\{{([^}}]*)\}}", r"\1", fixed)
                     fixes.append(f"Removed undefined \\{cmd}")
 
         # Missing $ inserted — likely unescaped underscore or caret

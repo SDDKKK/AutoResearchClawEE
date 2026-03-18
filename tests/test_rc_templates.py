@@ -633,12 +633,24 @@ class TestHitlStageValidation:
 
     def test_get_style_files_returns_bundled_sty(self) -> None:
         """Each conference template bundles at least one .sty or .cls file."""
-        for name in ["neurips_2025", "neurips_2024", "iclr_2026", "iclr_2025", "icml_2026", "icml_2025", "ieee_transactions", "ieee_tpwrs", "ieee_conference"]:
+        for name in [
+            "neurips_2025",
+            "neurips_2024",
+            "iclr_2026",
+            "iclr_2025",
+            "icml_2026",
+            "icml_2025",
+            "ieee_transactions",
+            "ieee_tpwrs",
+            "ieee_conference",
+        ]:
             tpl = get_template(name)
             files = tpl.get_style_files()
             assert len(files) >= 1, f"No style files for {name}"
             style_names = [f.name for f in files]
-            assert any(f.endswith((".sty", ".cls")) for f in style_names), f"No .sty or .cls file for {name}"
+            assert any(f.endswith((".sty", ".cls")) for f in style_names), (
+                f"No .sty or .cls file for {name}"
+            )
 
     def test_iclr_icml_have_bst_files(self) -> None:
         """ICLR and ICML templates bundle custom .bst files."""
@@ -679,43 +691,51 @@ class TestCompletenessWordCountAndBullets:
             else:
                 body = " ".join(["word"] * wc)
             results.append(
-                type("_Section", (), {
-                    "level": 1,
-                    "heading": heading,
-                    "heading_lower": heading.lower(),
-                    "body": body,
-                })()
+                type(
+                    "_Section",
+                    (),
+                    {
+                        "level": 1,
+                        "heading": heading,
+                        "heading_lower": heading.lower(),
+                        "body": body,
+                    },
+                )()
             )
         return results
 
     def test_completeness_section_word_count_short(self) -> None:
         """A Method section with only 100 words triggers a warning."""
-        secs = self._make_sections([
-            ("Title", 5, False),
-            ("Abstract", 200, False),
-            ("Introduction", 900, False),
-            ("Related Work", 700, False),
-            ("Method", 100, False),
-            ("Experiments", 1000, False),
-            ("Results", 700, False),
-            ("Conclusion", 250, False),
-        ])
+        secs = self._make_sections(
+            [
+                ("Title", 5, False),
+                ("Abstract", 200, False),
+                ("Introduction", 900, False),
+                ("Related Work", 700, False),
+                ("Method", 100, False),
+                ("Experiments", 1000, False),
+                ("Results", 700, False),
+                ("Conclusion", 250, False),
+            ]
+        )
         warns = check_paper_completeness(secs)
         method_warns = [w for w in warns if "Method" in w and "words" in w]
         assert len(method_warns) >= 1, f"Expected word count warning, got: {warns}"
 
     def test_completeness_bullet_density(self) -> None:
         """A Method section full of bullet points triggers a warning."""
-        secs = self._make_sections([
-            ("Title", 5, False),
-            ("Abstract", 200, False),
-            ("Introduction", 900, False),
-            ("Related Work", 700, False),
-            ("Method", 300, True),
-            ("Experiments", 1000, False),
-            ("Results", 700, False),
-            ("Conclusion", 250, False),
-        ])
+        secs = self._make_sections(
+            [
+                ("Title", 5, False),
+                ("Abstract", 200, False),
+                ("Introduction", 900, False),
+                ("Related Work", 700, False),
+                ("Method", 300, True),
+                ("Experiments", 1000, False),
+                ("Results", 700, False),
+                ("Conclusion", 250, False),
+            ]
+        )
         warns = check_paper_completeness(secs)
         bullet_warns = [w for w in warns if "bullet" in w.lower() and "Method" in w]
         assert len(bullet_warns) >= 1, f"Expected bullet warning, got: {warns}"

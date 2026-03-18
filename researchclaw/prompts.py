@@ -1397,12 +1397,12 @@ _DEFAULT_SUB_PROMPTS: dict[str, dict[str, Any]] = {
             "issues — they indicate the condition is not truly different.\n\n"
             "## Output Format (JSON)\n"
             "```json\n"
-            '{{\n'
+            "{{\n"
             '  "verdict": "APPROVE or REVISE",\n'
             '  "score": 1-10,\n'
             '  "critical_issues": ["issue1", "issue2"],\n'
             '  "suggestions": ["suggestion1", "suggestion2"]\n'
-            '}}\n'
+            "}}\n"
             "```\n\n"
             "Only use verdict REVISE if there are critical issues that would "
             "cause the code to crash or produce scientifically invalid results."

@@ -45,6 +45,7 @@ def create_llm_client(config: RCConfig) -> LLMClient | ACPClient:
     """
     if config.llm.provider == "acp":
         from researchclaw.llm.acp_client import ACPClient as _ACP
+
         return _ACP.from_rc_config(config)
 
     from researchclaw.llm.client import LLMClient as _LLM

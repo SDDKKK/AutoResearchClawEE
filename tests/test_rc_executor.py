@@ -593,7 +593,6 @@ class TestStageHealth:
             assert "timestamp" in data
             assert data["duration_sec"] >= 0
 
-
     def test_stage_health_duration_positive(self, tmp_path: Path) -> None:
         from unittest.mock import MagicMock, patch
 
@@ -625,6 +624,7 @@ class TestStageHealth:
         if health_path.exists():
             data = json.loads(health_path.read_text(encoding="utf-8"))
             assert data["duration_sec"] >= 0
+
 
 # Contracts import for Stage 13/22 preservation features.
 from researchclaw.pipeline.contracts import CONTRACTS
@@ -669,6 +669,7 @@ class TestIterativeRefine:
         stage_dir.mkdir(parents=True, exist_ok=True)
         # Force simulated mode to test the skip behavior
         import copy
+
         sim_cfg = copy.deepcopy(rc_config)
         object.__setattr__(sim_cfg.experiment, "mode", "simulated")
 
@@ -1129,7 +1130,9 @@ class TestExtractTopicKeywords:
 
 class TestTopicConstraintBlock:
     def test_contains_topic(self) -> None:
-        block = rc_executor._topic_constraint_block("Transformer attention for time series")
+        block = rc_executor._topic_constraint_block(
+            "Transformer attention for time series"
+        )
         assert "Transformer attention for time series" in block
 
     def test_contains_prohibition(self) -> None:
@@ -1192,6 +1195,7 @@ class TestResearchDecisionStructured:
         assert result.decision == "proceed"
         assert "decision_structured.json" in result.artifacts
         import json
+
         data = json.loads((stage_dir / "decision_structured.json").read_text())
         assert data["decision"] == "proceed"
 
@@ -1385,7 +1389,9 @@ class TestParseMetricsFromStdout:
 
         stdout = "UCB (Adversarial) cumulative_regret: -3877.5323"
         metrics = _parse_metrics_from_stdout(stdout)
-        assert metrics["UCB (Adversarial) cumulative_regret"] == pytest.approx(-3877.5323)
+        assert metrics["UCB (Adversarial) cumulative_regret"] == pytest.approx(
+            -3877.5323
+        )
 
     def test_filters_log_lines(self) -> None:
         from researchclaw.pipeline.executor import _parse_metrics_from_stdout
@@ -1508,15 +1514,15 @@ class TestRemoveBibtexEntries:
 
     def test_removes_specified_keys(self) -> None:
         bib = (
-            '@article{smith2024,\n  title={Good Paper},\n  author={Smith},\n}\n\n'
-            '@article{venus2024,\n  title={Venus Exploration},\n  author={NASA},\n}\n'
+            "@article{smith2024,\n  title={Good Paper},\n  author={Smith},\n}\n\n"
+            "@article{venus2024,\n  title={Venus Exploration},\n  author={NASA},\n}\n"
         )
         result = rc_executor._remove_bibtex_entries(bib, {"venus2024"})
         assert "smith2024" in result
         assert "venus2024" not in result
 
     def test_keeps_all_when_no_match(self) -> None:
-        bib = '@article{smith2024,\n  title={Paper},\n}\n'
+        bib = "@article{smith2024,\n  title={Paper},\n}\n"
         result = rc_executor._remove_bibtex_entries(bib, {"other_key"})
         assert "smith2024" in result
 
@@ -1625,10 +1631,12 @@ class TestCollectExperimentEvidence:
         runs_dir = run_dir / "stage-12" / "runs"
         runs_dir.mkdir(parents=True, exist_ok=True)
         (runs_dir / "run-1.json").write_text(
-            json.dumps({
-                "metrics": {"loss": 0.5},
-                "stderr": "RuntimeWarning: divide by zero",
-            }),
+            json.dumps(
+                {
+                    "metrics": {"loss": 0.5},
+                    "stderr": "RuntimeWarning: divide by zero",
+                }
+            ),
             encoding="utf-8",
         )
         result = rc_executor._collect_experiment_evidence(run_dir)
@@ -1638,12 +1646,14 @@ class TestCollectExperimentEvidence:
         refine_dir = run_dir / "stage-13"
         refine_dir.mkdir(parents=True, exist_ok=True)
         (refine_dir / "refinement_log.json").write_text(
-            json.dumps({
-                "iterations": [{"iteration": 1}, {"iteration": 2}],
-                "converged": True,
-                "stop_reason": "no_improvement_for_2_iterations",
-                "best_metric": 0.3,
-            }),
+            json.dumps(
+                {
+                    "iterations": [{"iteration": 1}, {"iteration": 2}],
+                    "converged": True,
+                    "stop_reason": "no_improvement_for_2_iterations",
+                    "best_metric": 0.3,
+                }
+            ),
             encoding="utf-8",
         )
         result = rc_executor._collect_experiment_evidence(run_dir)
@@ -1679,11 +1689,13 @@ class TestWritePaperSections:
             def chat(self, messages, **kwargs):
                 self.calls.append(messages)
                 from researchclaw.llm.client import LLMResponse
+
                 idx = len(self.calls) - 1
                 return LLMResponse(content=parts[min(idx, 2)], model="fake")
 
         llm = MultiCallLLM()
         from researchclaw.prompts import PromptManager
+
         pm = PromptManager()
 
         draft = rc_executor._write_paper_sections(
@@ -1713,10 +1725,12 @@ class TestWritePaperSections:
                     if m.get("role") == "user":
                         self.user_prompts.append(m["content"])
                 from researchclaw.llm.client import LLMResponse
+
                 return LLMResponse(content="## Section\nContent here.", model="fake")
 
         llm = ContextTrackingLLM()
         from researchclaw.prompts import PromptManager
+
         pm = PromptManager()
 
         rc_executor._write_paper_sections(
@@ -1770,7 +1784,9 @@ class TestExpandSearchQueries:
 
     def test_adds_broader_queries(self) -> None:
         queries = ["gradient descent optimization algorithms"]
-        topic = "Comparing gradient descent optimization algorithms on benchmark functions"
+        topic = (
+            "Comparing gradient descent optimization algorithms on benchmark functions"
+        )
         result = rc_executor._expand_search_queries(queries, topic)
         assert len(result) > len(queries)
 
@@ -1866,16 +1882,12 @@ class TestComputeBudgetBlock:
         stage_dir = run_dir / "stage-11"
         stage_dir.mkdir(parents=True, exist_ok=True)
 
-        rc_executor._execute_code_generation(
-            stage_dir, run_dir, cfg, adapters, llm=llm
-        )
+        rc_executor._execute_code_generation(stage_dir, run_dir, cfg, adapters, llm=llm)
 
         # The LLM should have received compute budget info in some call
         # (may be first call in legacy mode, or second call with CodeAgent)
         assert len(llm.calls) >= 1
-        all_user_msgs = " ".join(
-            call[-1]["content"] for call in llm.calls if call
-        )
+        all_user_msgs = " ".join(call[-1]["content"] for call in llm.calls if call)
         assert "60" in all_user_msgs or "Compute Budget" in all_user_msgs
 
 
@@ -1941,9 +1953,7 @@ class TestPartialTimeoutStatus:
         stage_dir = run_dir / "stage-12"
         stage_dir.mkdir(parents=True, exist_ok=True)
 
-        rc_executor._execute_experiment_run(
-            stage_dir, run_dir, cfg, adapters
-        )
+        rc_executor._execute_experiment_run(stage_dir, run_dir, cfg, adapters)
 
         run_file = stage_dir / "runs" / "run-1.json"
         assert run_file.exists()
@@ -1966,14 +1976,16 @@ class TestTimeoutAwareRefine:
         runs_dir = run_dir / "stage-12" / "runs"
         runs_dir.mkdir(parents=True, exist_ok=True)
         (runs_dir / "run-1.json").write_text(
-            json.dumps({
-                "run_id": "run-1",
-                "task_id": "sandbox-main",
-                "status": "failed",
-                "metrics": {},
-                "timed_out": True,
-                "elapsed_sec": 120.0,
-            }),
+            json.dumps(
+                {
+                    "run_id": "run-1",
+                    "task_id": "sandbox-main",
+                    "status": "failed",
+                    "metrics": {},
+                    "timed_out": True,
+                    "elapsed_sec": 120.0,
+                }
+            ),
             encoding="utf-8",
         )
         # Write experiment code
@@ -2049,7 +2061,11 @@ class TestDataIntegrityBlock:
     """Test paper draft blocked when no metrics exist (R4-2a)."""
 
     def test_paper_draft_blocked_with_no_metrics(
-        self, tmp_path: Path, run_dir: Path, rc_config: RCConfig, adapters: AdapterBundle
+        self,
+        tmp_path: Path,
+        run_dir: Path,
+        rc_config: RCConfig,
+        adapters: AdapterBundle,
     ) -> None:
         # Write prior artifacts with NO metrics
         _write_prior_artifact(run_dir, 16, "outline.md", "# Outline\n## Abstract\n")
@@ -2057,7 +2073,14 @@ class TestDataIntegrityBlock:
         runs_dir = run_dir / "stage-12" / "runs"
         runs_dir.mkdir(parents=True, exist_ok=True)
         (runs_dir / "run-1.json").write_text(
-            json.dumps({"run_id": "run-1", "status": "failed", "metrics": {}, "timed_out": True}),
+            json.dumps(
+                {
+                    "run_id": "run-1",
+                    "status": "failed",
+                    "metrics": {},
+                    "timed_out": True,
+                }
+            ),
             encoding="utf-8",
         )
 
@@ -2076,19 +2099,25 @@ class TestDataIntegrityBlock:
         assert len(llm.calls) == 0
 
     def test_paper_draft_proceeds_with_metrics(
-        self, tmp_path: Path, run_dir: Path, rc_config: RCConfig, adapters: AdapterBundle
+        self,
+        tmp_path: Path,
+        run_dir: Path,
+        rc_config: RCConfig,
+        adapters: AdapterBundle,
     ) -> None:
         _write_prior_artifact(run_dir, 16, "outline.md", "# Outline\n## Abstract\n")
         # Write experiment data with real metrics
         runs_dir = run_dir / "stage-12" / "runs"
         runs_dir.mkdir(parents=True, exist_ok=True)
         (runs_dir / "run-1.json").write_text(
-            json.dumps({
-                "run_id": "run-1",
-                "status": "completed",
-                "metrics": {"best_loss": 0.123},
-                "stdout": "best_loss: 0.123\n",
-            }),
+            json.dumps(
+                {
+                    "run_id": "run-1",
+                    "status": "completed",
+                    "metrics": {"best_loss": 0.123},
+                    "stdout": "best_loss: 0.123\n",
+                }
+            ),
             encoding="utf-8",
         )
 
@@ -2103,9 +2132,7 @@ class TestDataIntegrityBlock:
         # Should proceed (LLM was called)
         assert len(llm.calls) >= 1
         # The prompt should contain anti-fabrication instructions
-        all_prompts = " ".join(
-            msg["content"] for call in llm.calls for msg in call
-        )
+        all_prompts = " ".join(msg["content"] for call in llm.calls for msg in call)
         assert "Data Integrity" in all_prompts or "ONLY report numbers" in all_prompts
 
 
@@ -2131,14 +2158,24 @@ class TestTitleGuidelines:
         assert "5-sentence" in block or "problem" in block.lower()
 
     def test_title_guidelines_injected_into_paper_draft(
-        self, tmp_path: Path, run_dir: Path, rc_config: RCConfig, adapters: AdapterBundle
+        self,
+        tmp_path: Path,
+        run_dir: Path,
+        rc_config: RCConfig,
+        adapters: AdapterBundle,
     ) -> None:
         _write_prior_artifact(run_dir, 16, "outline.md", "# Outline\n")
         runs_dir = run_dir / "stage-12" / "runs"
         runs_dir.mkdir(parents=True, exist_ok=True)
         (runs_dir / "run-1.json").write_text(
-            json.dumps({"run_id": "run-1", "status": "completed",
-                        "metrics": {"best_loss": 0.1}, "stdout": "best_loss: 0.1\n"}),
+            json.dumps(
+                {
+                    "run_id": "run-1",
+                    "status": "completed",
+                    "metrics": {"best_loss": 0.1},
+                    "stdout": "best_loss: 0.1\n",
+                }
+            ),
             encoding="utf-8",
         )
 
@@ -2150,9 +2187,7 @@ class TestTitleGuidelines:
             stage_dir, run_dir, rc_config, adapters, llm=llm
         )
 
-        all_prompts = " ".join(
-            msg["content"] for call in llm.calls for msg in call
-        )
+        all_prompts = " ".join(msg["content"] for call in llm.calls for msg in call)
         assert "Title" in all_prompts or "TITLE" in all_prompts
 
 
@@ -2192,7 +2227,9 @@ class TestConferenceWritingQuality:
         )
         # System prompt should mention key principles
         assert "NOVELTY" in sp.system or "novelty" in sp.system.lower()
-        assert "fabricate" in sp.system.lower() or "real experimental" in sp.system.lower()
+        assert (
+            "fabricate" in sp.system.lower() or "real experimental" in sp.system.lower()
+        )
 
 
 # ── R5-1 & R5-2: Bug Fixes Tests ────────────────────────────────────
@@ -2228,8 +2265,13 @@ class TestRefineTimeoutAndIterationCap:
         runs_dir = run_dir / "stage-12" / "runs"
         runs_dir.mkdir(parents=True, exist_ok=True)
         (runs_dir / "run-1.json").write_text(
-            json.dumps({"run_id": "run-1", "status": "completed",
-                        "metrics": {"best_loss": 0.5}}),
+            json.dumps(
+                {
+                    "run_id": "run-1",
+                    "status": "completed",
+                    "metrics": {"best_loss": 0.5},
+                }
+            ),
             encoding="utf-8",
         )
         exp_dir = run_dir / "stage-11" / "experiment"
@@ -2241,16 +2283,29 @@ class TestRefineTimeoutAndIterationCap:
 
         data = {
             "project": {"name": "rc-test", "mode": "docs-first"},
-            "research": {"topic": "test", "domains": ["ml"],
-                         "daily_paper_count": 2, "quality_threshold": 8.2},
+            "research": {
+                "topic": "test",
+                "domains": ["ml"],
+                "daily_paper_count": 2,
+                "quality_threshold": 8.2,
+            },
             "runtime": {"timezone": "UTC"},
-            "notifications": {"channel": "local", "on_stage_start": True,
-                              "on_stage_fail": False, "on_gate_required": True},
+            "notifications": {
+                "channel": "local",
+                "on_stage_start": True,
+                "on_stage_fail": False,
+                "on_gate_required": True,
+            },
             "knowledge_base": {"backend": "markdown", "root": str(tmp_path / "kb")},
             "openclaw_bridge": {"use_memory": True, "use_message": True},
-            "llm": {"provider": "openai-compatible", "base_url": "http://localhost:1234/v1",
-                    "api_key_env": "RC_TEST_KEY", "api_key": "inline-test-key",
-                    "primary_model": "fake-model", "fallback_models": []},
+            "llm": {
+                "provider": "openai-compatible",
+                "base_url": "http://localhost:1234/v1",
+                "api_key_env": "RC_TEST_KEY",
+                "api_key": "inline-test-key",
+                "primary_model": "fake-model",
+                "fallback_models": [],
+            },
             "security": {"hitl_required_stages": [5, 9, 20]},
             "experiment": {
                 "mode": "sandbox",
@@ -2269,7 +2324,9 @@ class TestRefineTimeoutAndIterationCap:
             stage_dir, run_dir, cfg, adapters, llm=llm
         )
 
-        log = json.loads((stage_dir / "refinement_log.json").read_text(encoding="utf-8"))
+        log = json.loads(
+            (stage_dir / "refinement_log.json").read_text(encoding="utf-8")
+        )
         # Should have been allowed more than 3 iterations (capped at 7)
         assert log["max_iterations_executed"] == 7
         # But may have stopped early due to no_improvement_for_2_iterations
@@ -2351,6 +2408,7 @@ class TestExperimentHarness:
         h = ExperimentHarness(time_budget=1)
         assert not h.should_stop()  # Just created, not at 80% yet
         import time
+
         time.sleep(0.9)
         assert h.should_stop()  # Should be past 80% of 1s
 
@@ -2392,7 +2450,9 @@ class TestExperimentHarness:
             h.log_result({"condition": "A", "value": 1.0})
             h.finalize()
 
-            results = json.loads((tmp_path / "results.json").read_text(encoding="utf-8"))
+            results = json.loads(
+                (tmp_path / "results.json").read_text(encoding="utf-8")
+            )
             assert results["metrics"]["accuracy"] == 0.95
             assert results["metrics"]["loss"] == 0.05
             assert len(results["results"]) == 1
@@ -2439,7 +2499,9 @@ class TestExperimentHarness:
         project = tmp_path / "project"
         project.mkdir()
         (project / "main.py").write_text("print('test: 1.0')\n", encoding="utf-8")
-        (project / "experiment_harness.py").write_text("# FAKE HARNESS", encoding="utf-8")
+        (project / "experiment_harness.py").write_text(
+            "# FAKE HARNESS", encoding="utf-8"
+        )
 
         sandbox.run_project(project, timeout_sec=5)
 
@@ -2469,14 +2531,18 @@ class TestStdoutTruncation:
         # Create a run with very long stdout
         runs_dir = run_dir / "stage-12" / "runs"
         runs_dir.mkdir(parents=True, exist_ok=True)
-        long_stdout = "\n".join(f"step {i}: loss={0.5 - i * 0.001:.6f}" for i in range(200))
+        long_stdout = "\n".join(
+            f"step {i}: loss={0.5 - i * 0.001:.6f}" for i in range(200)
+        )
         (runs_dir / "run-1.json").write_text(
-            json.dumps({
-                "run_id": "run-1",
-                "status": "completed",
-                "metrics": {"best_loss": 0.3},
-                "stdout": long_stdout,
-            }),
+            json.dumps(
+                {
+                    "run_id": "run-1",
+                    "status": "completed",
+                    "metrics": {"best_loss": 0.3},
+                    "stdout": long_stdout,
+                }
+            ),
             encoding="utf-8",
         )
 
@@ -2489,16 +2555,29 @@ class TestStdoutTruncation:
 
         data = {
             "project": {"name": "rc-test", "mode": "docs-first"},
-            "research": {"topic": "test", "domains": ["ml"],
-                         "daily_paper_count": 2, "quality_threshold": 8.2},
+            "research": {
+                "topic": "test",
+                "domains": ["ml"],
+                "daily_paper_count": 2,
+                "quality_threshold": 8.2,
+            },
             "runtime": {"timezone": "UTC"},
-            "notifications": {"channel": "local", "on_stage_start": True,
-                              "on_stage_fail": False, "on_gate_required": True},
+            "notifications": {
+                "channel": "local",
+                "on_stage_start": True,
+                "on_stage_fail": False,
+                "on_gate_required": True,
+            },
             "knowledge_base": {"backend": "markdown", "root": str(tmp_path / "kb")},
             "openclaw_bridge": {"use_memory": True, "use_message": True},
-            "llm": {"provider": "openai-compatible", "base_url": "http://localhost:1234/v1",
-                    "api_key_env": "RC_TEST_KEY", "api_key": "inline-test-key",
-                    "primary_model": "fake-model", "fallback_models": []},
+            "llm": {
+                "provider": "openai-compatible",
+                "base_url": "http://localhost:1234/v1",
+                "api_key_env": "RC_TEST_KEY",
+                "api_key": "inline-test-key",
+                "primary_model": "fake-model",
+                "fallback_models": [],
+            },
             "security": {"hitl_required_stages": [5, 9, 20]},
             "experiment": {
                 "mode": "sandbox",
@@ -2537,12 +2616,14 @@ class TestNoImproveStreakFix:
         runs_dir = run_dir / "stage-12" / "runs"
         runs_dir.mkdir(parents=True, exist_ok=True)
         (runs_dir / "run-1.json").write_text(
-            json.dumps({
-                "run_id": "run-1",
-                "status": "failed",
-                "metrics": {},
-                "stdout": "FAIL: NaN/divergence detected",
-            }),
+            json.dumps(
+                {
+                    "run_id": "run-1",
+                    "status": "failed",
+                    "metrics": {},
+                    "stdout": "FAIL: NaN/divergence detected",
+                }
+            ),
             encoding="utf-8",
         )
         exp_dir = run_dir / "stage-11" / "experiment"
@@ -2554,16 +2635,29 @@ class TestNoImproveStreakFix:
 
         data = {
             "project": {"name": "rc-test", "mode": "docs-first"},
-            "research": {"topic": "test", "domains": ["ml"],
-                         "daily_paper_count": 2, "quality_threshold": 8.2},
+            "research": {
+                "topic": "test",
+                "domains": ["ml"],
+                "daily_paper_count": 2,
+                "quality_threshold": 8.2,
+            },
             "runtime": {"timezone": "UTC"},
-            "notifications": {"channel": "local", "on_stage_start": True,
-                              "on_stage_fail": False, "on_gate_required": True},
+            "notifications": {
+                "channel": "local",
+                "on_stage_start": True,
+                "on_stage_fail": False,
+                "on_gate_required": True,
+            },
             "knowledge_base": {"backend": "markdown", "root": str(tmp_path / "kb")},
             "openclaw_bridge": {"use_memory": True, "use_message": True},
-            "llm": {"provider": "openai-compatible", "base_url": "http://localhost:1234/v1",
-                    "api_key_env": "RC_TEST_KEY", "api_key": "inline-test-key",
-                    "primary_model": "fake-model", "fallback_models": []},
+            "llm": {
+                "provider": "openai-compatible",
+                "base_url": "http://localhost:1234/v1",
+                "api_key_env": "RC_TEST_KEY",
+                "api_key": "inline-test-key",
+                "primary_model": "fake-model",
+                "fallback_models": [],
+            },
             "security": {"hitl_required_stages": [5, 9, 20]},
             "experiment": {
                 "mode": "sandbox",
@@ -2614,16 +2708,29 @@ class TestStdoutFailureDetection:
 
         data = {
             "project": {"name": "rc-test", "mode": "docs-first"},
-            "research": {"topic": "test", "domains": ["ml"],
-                         "daily_paper_count": 2, "quality_threshold": 8.2},
+            "research": {
+                "topic": "test",
+                "domains": ["ml"],
+                "daily_paper_count": 2,
+                "quality_threshold": 8.2,
+            },
             "runtime": {"timezone": "UTC"},
-            "notifications": {"channel": "local", "on_stage_start": True,
-                              "on_stage_fail": False, "on_gate_required": True},
+            "notifications": {
+                "channel": "local",
+                "on_stage_start": True,
+                "on_stage_fail": False,
+                "on_gate_required": True,
+            },
             "knowledge_base": {"backend": "markdown", "root": str(tmp_path / "kb")},
             "openclaw_bridge": {"use_memory": True, "use_message": True},
-            "llm": {"provider": "openai-compatible", "base_url": "http://localhost:1234/v1",
-                    "api_key_env": "RC_TEST_KEY", "api_key": "inline-test-key",
-                    "primary_model": "fake-model", "fallback_models": []},
+            "llm": {
+                "provider": "openai-compatible",
+                "base_url": "http://localhost:1234/v1",
+                "api_key_env": "RC_TEST_KEY",
+                "api_key": "inline-test-key",
+                "primary_model": "fake-model",
+                "fallback_models": [],
+            },
             "security": {"hitl_required_stages": [5, 9, 20]},
             "experiment": {
                 "mode": "sandbox",
@@ -2642,9 +2749,7 @@ class TestStdoutFailureDetection:
         cfg = RCConfig.from_dict(data, project_root=tmp_path, check_paths=False)
         adapters = AdapterBundle()
 
-        result = _execute_experiment_run(
-            stage_dir, run_dir, cfg, adapters
-        )
+        result = _execute_experiment_run(stage_dir, run_dir, cfg, adapters)
 
         # Check the run payload
         runs_dir = stage_dir / "runs"
@@ -2673,16 +2778,29 @@ class TestStdoutFailureDetection:
 
         data = {
             "project": {"name": "rc-test", "mode": "docs-first"},
-            "research": {"topic": "test", "domains": ["ml"],
-                         "daily_paper_count": 2, "quality_threshold": 8.2},
+            "research": {
+                "topic": "test",
+                "domains": ["ml"],
+                "daily_paper_count": 2,
+                "quality_threshold": 8.2,
+            },
             "runtime": {"timezone": "UTC"},
-            "notifications": {"channel": "local", "on_stage_start": True,
-                              "on_stage_fail": False, "on_gate_required": True},
+            "notifications": {
+                "channel": "local",
+                "on_stage_start": True,
+                "on_stage_fail": False,
+                "on_gate_required": True,
+            },
             "knowledge_base": {"backend": "markdown", "root": str(tmp_path / "kb")},
             "openclaw_bridge": {"use_memory": True, "use_message": True},
-            "llm": {"provider": "openai-compatible", "base_url": "http://localhost:1234/v1",
-                    "api_key_env": "RC_TEST_KEY", "api_key": "inline-test-key",
-                    "primary_model": "fake-model", "fallback_models": []},
+            "llm": {
+                "provider": "openai-compatible",
+                "base_url": "http://localhost:1234/v1",
+                "api_key_env": "RC_TEST_KEY",
+                "api_key": "inline-test-key",
+                "primary_model": "fake-model",
+                "fallback_models": [],
+            },
             "security": {"hitl_required_stages": [5, 9, 20]},
             "experiment": {
                 "mode": "sandbox",
@@ -2701,9 +2819,7 @@ class TestStdoutFailureDetection:
         cfg = RCConfig.from_dict(data, project_root=tmp_path, check_paths=False)
         adapters = AdapterBundle()
 
-        result = _execute_experiment_run(
-            stage_dir, run_dir, cfg, adapters
-        )
+        result = _execute_experiment_run(stage_dir, run_dir, cfg, adapters)
 
         runs_dir = stage_dir / "runs"
         payload = json.loads((runs_dir / "run-1.json").read_text())
@@ -2716,13 +2832,16 @@ class TestMetricValUndefined:
     def test_metric_val_initialized_before_use(self) -> None:
         """Verify the code pattern: metric_val = None before if block."""
         import inspect
+
         source = inspect.getsource(rc_executor._execute_iterative_refine)
         # Find that metric_val = None appears before the sandbox block
         init_pos = source.find("metric_val = None")
         sandbox_pos = source.find("if validation.ok and config.experiment.mode")
         assert init_pos != -1, "metric_val = None not found"
         assert sandbox_pos != -1, "sandbox block not found"
-        assert init_pos < sandbox_pos, "metric_val = None should come before sandbox block"
+        assert init_pos < sandbox_pos, (
+            "metric_val = None should come before sandbox block"
+        )
 
 
 class TestConsecutiveEmptyMetrics:
@@ -2736,17 +2855,25 @@ class TestConsecutiveEmptyMetrics:
         # Current cycle (stage-14)
         s14 = run_dir / "stage-14"
         s14.mkdir(parents=True)
-        (s14 / "experiment_summary.json").write_text(json.dumps({
-            "metrics_summary": {},
-            "best_run": {"metrics": {}},
-        }))
+        (s14 / "experiment_summary.json").write_text(
+            json.dumps(
+                {
+                    "metrics_summary": {},
+                    "best_run": {"metrics": {}},
+                }
+            )
+        )
         # Previous cycle (stage-14_v1)
         s14v1 = run_dir / "stage-14_v1"
         s14v1.mkdir(parents=True)
-        (s14v1 / "experiment_summary.json").write_text(json.dumps({
-            "metrics_summary": {},
-            "best_run": {"metrics": {}},
-        }))
+        (s14v1 / "experiment_summary.json").write_text(
+            json.dumps(
+                {
+                    "metrics_summary": {},
+                    "best_run": {"metrics": {}},
+                }
+            )
+        )
 
         assert _consecutive_empty_metrics(run_dir, pivot_count=1) is True
 
@@ -2757,16 +2884,24 @@ class TestConsecutiveEmptyMetrics:
         run_dir = tmp_path / "run"
         s14 = run_dir / "stage-14"
         s14.mkdir(parents=True)
-        (s14 / "experiment_summary.json").write_text(json.dumps({
-            "metrics_summary": {},
-            "best_run": {"metrics": {"loss": 0.5}},
-        }))
+        (s14 / "experiment_summary.json").write_text(
+            json.dumps(
+                {
+                    "metrics_summary": {},
+                    "best_run": {"metrics": {"loss": 0.5}},
+                }
+            )
+        )
         s14v1 = run_dir / "stage-14_v1"
         s14v1.mkdir(parents=True)
-        (s14v1 / "experiment_summary.json").write_text(json.dumps({
-            "metrics_summary": {},
-            "best_run": {"metrics": {}},
-        }))
+        (s14v1 / "experiment_summary.json").write_text(
+            json.dumps(
+                {
+                    "metrics_summary": {},
+                    "best_run": {"metrics": {}},
+                }
+            )
+        )
 
         assert _consecutive_empty_metrics(run_dir, pivot_count=1) is False
 
@@ -2777,10 +2912,14 @@ class TestConsecutiveEmptyMetrics:
         run_dir = tmp_path / "run"
         s14 = run_dir / "stage-14"
         s14.mkdir(parents=True)
-        (s14 / "experiment_summary.json").write_text(json.dumps({
-            "metrics_summary": {},
-            "best_run": {"metrics": {}},
-        }))
+        (s14 / "experiment_summary.json").write_text(
+            json.dumps(
+                {
+                    "metrics_summary": {},
+                    "best_run": {"metrics": {}},
+                }
+            )
+        )
 
         # No stage-14_v1 exists
         assert _consecutive_empty_metrics(run_dir, pivot_count=1) is False
@@ -2797,6 +2936,7 @@ class TestMultiConditionEnforcement:
     def test_code_generation_prompt_has_multi_condition_block(self) -> None:
         """The code_generation prompt should contain multi-condition instructions."""
         from researchclaw.prompts import PromptManager
+
         pm = PromptManager()
         sp = pm.for_stage(
             "code_generation",
@@ -2812,6 +2952,7 @@ class TestMultiConditionEnforcement:
     def test_multi_condition_labels_required(self) -> None:
         """Prompt must mention per-condition labeled output format."""
         from researchclaw.prompts import PromptManager
+
         pm = PromptManager()
         sp = pm.for_stage(
             "code_generation",
@@ -2829,6 +2970,7 @@ class TestEvidenceBoundedWriting:
     def test_paper_draft_has_evidence_bounding_rules(self) -> None:
         """System prompt should contain evidence-bounding rules."""
         from researchclaw.prompts import PromptManager
+
         pm = PromptManager()
         sp = pm.for_stage(
             "paper_draft",
@@ -2840,11 +2982,14 @@ class TestEvidenceBoundedWriting:
         )
         assert "EVIDENCE-BOUNDING RULES" in sp.system
         assert "title" in sp.system.lower()
-        assert "causal claim" in sp.system.lower() or "causal claims" in sp.system.lower()
+        assert (
+            "causal claim" in sp.system.lower() or "causal claims" in sp.system.lower()
+        )
 
     def test_hedging_language_guidance(self) -> None:
         """Should suggest hedged alternatives like 'Toward...' for partial data."""
         from researchclaw.prompts import PromptManager
+
         pm = PromptManager()
         sp = pm.for_stage(
             "paper_draft",
@@ -2867,12 +3012,14 @@ class TestConditionCoverageDetection:
         runs_dir = run_dir / "stage-12" / "runs"
         runs_dir.mkdir(parents=True, exist_ok=True)
         (runs_dir / "run-1.json").write_text(
-            json.dumps({
-                "run_id": "run-1",
-                "status": "completed",
-                "metrics": {"primary_metric": 0.5},
-                "stdout": "primary_metric: 0.5\nprimary_metric: 0.3\n",
-            }),
+            json.dumps(
+                {
+                    "run_id": "run-1",
+                    "status": "completed",
+                    "metrics": {"primary_metric": 0.5},
+                    "stdout": "primary_metric: 0.5\nprimary_metric: 0.3\n",
+                }
+            ),
             encoding="utf-8",
         )
 
@@ -2885,23 +3032,38 @@ class TestConditionCoverageDetection:
 
         exp_dir = run_dir / "stage-11" / "experiment"
         exp_dir.mkdir(parents=True, exist_ok=True)
-        (exp_dir / "main.py").write_text("print('primary_metric: 0.5')\n", encoding="utf-8")
+        (exp_dir / "main.py").write_text(
+            "print('primary_metric: 0.5')\n", encoding="utf-8"
+        )
 
         stage_dir = run_dir / "stage-13"
         stage_dir.mkdir(parents=True, exist_ok=True)
 
         data = {
             "project": {"name": "rc-test", "mode": "docs-first"},
-            "research": {"topic": "test", "domains": ["ml"],
-                         "daily_paper_count": 2, "quality_threshold": 8.2},
+            "research": {
+                "topic": "test",
+                "domains": ["ml"],
+                "daily_paper_count": 2,
+                "quality_threshold": 8.2,
+            },
             "runtime": {"timezone": "UTC"},
-            "notifications": {"channel": "local", "on_stage_start": True,
-                              "on_stage_fail": False, "on_gate_required": True},
+            "notifications": {
+                "channel": "local",
+                "on_stage_start": True,
+                "on_stage_fail": False,
+                "on_gate_required": True,
+            },
             "knowledge_base": {"backend": "markdown", "root": str(tmp_path / "kb")},
             "openclaw_bridge": {"use_memory": True, "use_message": True},
-            "llm": {"provider": "openai-compatible", "base_url": "http://localhost:1234/v1",
-                    "api_key_env": "RC_TEST_KEY", "api_key": "inline-test-key",
-                    "primary_model": "fake-model", "fallback_models": []},
+            "llm": {
+                "provider": "openai-compatible",
+                "base_url": "http://localhost:1234/v1",
+                "api_key_env": "RC_TEST_KEY",
+                "api_key": "inline-test-key",
+                "primary_model": "fake-model",
+                "fallback_models": [],
+            },
             "security": {"hitl_required_stages": [5, 9, 20]},
             "experiment": {
                 "mode": "sandbox",
@@ -2929,12 +3091,14 @@ class TestConditionCoverageDetection:
         runs_dir = run_dir / "stage-12" / "runs"
         runs_dir.mkdir(parents=True, exist_ok=True)
         (runs_dir / "run-1.json").write_text(
-            json.dumps({
-                "run_id": "run-1",
-                "status": "completed",
-                "metrics": {"primary_metric": 0.5},
-                "stdout": "condition=echo primary_metric: 0.5\ncondition=bridge primary_metric: 0.3\n",
-            }),
+            json.dumps(
+                {
+                    "run_id": "run-1",
+                    "status": "completed",
+                    "metrics": {"primary_metric": 0.5},
+                    "stdout": "condition=echo primary_metric: 0.5\ncondition=bridge primary_metric: 0.3\n",
+                }
+            ),
             encoding="utf-8",
         )
 
@@ -2947,23 +3111,38 @@ class TestConditionCoverageDetection:
 
         exp_dir = run_dir / "stage-11" / "experiment"
         exp_dir.mkdir(parents=True, exist_ok=True)
-        (exp_dir / "main.py").write_text("print('primary_metric: 0.5')\n", encoding="utf-8")
+        (exp_dir / "main.py").write_text(
+            "print('primary_metric: 0.5')\n", encoding="utf-8"
+        )
 
         stage_dir = run_dir / "stage-13"
         stage_dir.mkdir(parents=True, exist_ok=True)
 
         data = {
             "project": {"name": "rc-test", "mode": "docs-first"},
-            "research": {"topic": "test", "domains": ["ml"],
-                         "daily_paper_count": 2, "quality_threshold": 8.2},
+            "research": {
+                "topic": "test",
+                "domains": ["ml"],
+                "daily_paper_count": 2,
+                "quality_threshold": 8.2,
+            },
             "runtime": {"timezone": "UTC"},
-            "notifications": {"channel": "local", "on_stage_start": True,
-                              "on_stage_fail": False, "on_gate_required": True},
+            "notifications": {
+                "channel": "local",
+                "on_stage_start": True,
+                "on_stage_fail": False,
+                "on_gate_required": True,
+            },
             "knowledge_base": {"backend": "markdown", "root": str(tmp_path / "kb")},
             "openclaw_bridge": {"use_memory": True, "use_message": True},
-            "llm": {"provider": "openai-compatible", "base_url": "http://localhost:1234/v1",
-                    "api_key_env": "RC_TEST_KEY", "api_key": "inline-test-key",
-                    "primary_model": "fake-model", "fallback_models": []},
+            "llm": {
+                "provider": "openai-compatible",
+                "base_url": "http://localhost:1234/v1",
+                "api_key_env": "RC_TEST_KEY",
+                "api_key": "inline-test-key",
+                "primary_model": "fake-model",
+                "fallback_models": [],
+            },
             "security": {"hitl_required_stages": [5, 9, 20]},
             "experiment": {
                 "mode": "sandbox",
@@ -2995,6 +3174,7 @@ class TestBreadthFirstPrompt:
 
     def test_breadth_first_in_code_generation(self) -> None:
         from researchclaw.prompts import PromptManager
+
         pm = PromptManager()
         sp = pm.for_stage(
             "code_generation",
@@ -3017,19 +3197,23 @@ class TestRefineFilePreservation:
         runs_dir = run_dir / "stage-12" / "runs"
         runs_dir.mkdir(parents=True, exist_ok=True)
         (runs_dir / "run-1.json").write_text(
-            json.dumps({
-                "run_id": "run-1",
-                "status": "completed",
-                "metrics": {"primary_metric": 0.5},
-                "stdout": "primary_metric: 0.5",
-            }),
+            json.dumps(
+                {
+                    "run_id": "run-1",
+                    "status": "completed",
+                    "metrics": {"primary_metric": 0.5},
+                    "stdout": "primary_metric: 0.5",
+                }
+            ),
             encoding="utf-8",
         )
 
         # Multi-file experiment project
         exp_dir = run_dir / "stage-11" / "experiment"
         exp_dir.mkdir(parents=True, exist_ok=True)
-        (exp_dir / "main.py").write_text("from helpers import foo\nprint('primary_metric: 0.5')\n")
+        (exp_dir / "main.py").write_text(
+            "from helpers import foo\nprint('primary_metric: 0.5')\n"
+        )
         (exp_dir / "helpers.py").write_text("def foo(): return 42\n")
         (exp_dir / "utils.py").write_text("def bar(): return 99\n")
 
@@ -3038,16 +3222,29 @@ class TestRefineFilePreservation:
 
         data = {
             "project": {"name": "rc-test", "mode": "docs-first"},
-            "research": {"topic": "test", "domains": ["ml"],
-                         "daily_paper_count": 2, "quality_threshold": 8.2},
+            "research": {
+                "topic": "test",
+                "domains": ["ml"],
+                "daily_paper_count": 2,
+                "quality_threshold": 8.2,
+            },
             "runtime": {"timezone": "UTC"},
-            "notifications": {"channel": "local", "on_stage_start": True,
-                              "on_stage_fail": False, "on_gate_required": True},
+            "notifications": {
+                "channel": "local",
+                "on_stage_start": True,
+                "on_stage_fail": False,
+                "on_gate_required": True,
+            },
             "knowledge_base": {"backend": "markdown", "root": str(tmp_path / "kb")},
             "openclaw_bridge": {"use_memory": True, "use_message": True},
-            "llm": {"provider": "openai-compatible", "base_url": "http://localhost:1234/v1",
-                    "api_key_env": "RC_TEST_KEY", "api_key": "inline-test-key",
-                    "primary_model": "fake-model", "fallback_models": []},
+            "llm": {
+                "provider": "openai-compatible",
+                "base_url": "http://localhost:1234/v1",
+                "api_key_env": "RC_TEST_KEY",
+                "api_key": "inline-test-key",
+                "primary_model": "fake-model",
+                "fallback_models": [],
+            },
             "security": {"hitl_required_stages": [5, 9, 20]},
             "experiment": {
                 "mode": "sandbox",
@@ -3060,7 +3257,9 @@ class TestRefineFilePreservation:
         cfg = RCConfig.from_dict(data, project_root=tmp_path, check_paths=False)
 
         # LLM returns only main.py in multi-file format
-        llm = FakeLLMClient("```filename:main.py\nfrom helpers import foo\nprint('primary_metric: 0.3')\n```")
+        llm = FakeLLMClient(
+            "```filename:main.py\nfrom helpers import foo\nprint('primary_metric: 0.3')\n```"
+        )
         rc_executor._execute_iterative_refine(
             stage_dir, run_dir, cfg, adapters, llm=llm
         )
@@ -3070,7 +3269,9 @@ class TestRefineFilePreservation:
         assert v1_dir.exists()
         v1_files = {f.name for f in v1_dir.glob("*.py")}
         assert "main.py" in v1_files
-        assert "helpers.py" in v1_files, "Supporting file helpers.py should be preserved"
+        assert "helpers.py" in v1_files, (
+            "Supporting file helpers.py should be preserved"
+        )
         assert "utils.py" in v1_files, "Supporting file utils.py should be preserved"
 
 
@@ -3084,6 +3285,7 @@ class TestCodeGenTopicNeutral:
 
     def test_no_gradient_descent_bias(self) -> None:
         from researchclaw.prompts import PromptManager
+
         pm = PromptManager()
         sp = pm.for_stage(
             "code_generation",
@@ -3101,6 +3303,7 @@ class TestCodeGenTopicNeutral:
 
     def test_topic_relevant_guidance(self) -> None:
         from researchclaw.prompts import PromptManager
+
         pm = PromptManager()
         sp = pm.for_stage(
             "code_generation",
@@ -3119,6 +3322,7 @@ class TestRefineTopicAlignment:
 
     def test_topic_alignment_in_refine_prompt(self) -> None:
         from researchclaw.prompts import PromptManager
+
         pm = PromptManager()
         sp = pm.sub_prompt(
             "iterative_improve",
@@ -3209,8 +3413,9 @@ class TestValidateDraftQuality:
         draft = _build_draft(Method=_make_prose(200))
         result = rc_executor._validate_draft_quality(draft)
         assert any("Method" in w for w in result["overall_warnings"])
-        assert any("EXPAND" in d or "Expand" in d
-                    for d in result["revision_directives"])
+        assert any(
+            "EXPAND" in d or "Expand" in d for d in result["revision_directives"]
+        )
 
     def test_bullet_density_triggers_warning(self) -> None:
         """Bullet-heavy Method section triggers rewrite warning."""
@@ -3236,8 +3441,7 @@ class TestValidateDraftQuality:
             Results=_make_prose(100),
         )
         result = rc_executor._validate_draft_quality(draft)
-        bal = [w for w in result["overall_warnings"]
-               if "imbalance" in w.lower()]
+        bal = [w for w in result["overall_warnings"] if "imbalance" in w.lower()]
         assert len(bal) >= 1, (
             f"Expected balance warning, got: {result['overall_warnings']}"
         )
@@ -3247,9 +3451,7 @@ class TestValidateDraftQuality:
         draft = _build_draft(Method=_make_prose(200))
         rc_executor._validate_draft_quality(draft, stage_dir=tmp_path)
         assert (tmp_path / "draft_quality.json").exists()
-        data = json.loads(
-            (tmp_path / "draft_quality.json").read_text()
-        )
+        data = json.loads((tmp_path / "draft_quality.json").read_text())
         assert "section_analysis" in data
         assert "overall_warnings" in data
         assert "revision_directives" in data

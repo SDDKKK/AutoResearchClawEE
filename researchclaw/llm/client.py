@@ -24,11 +24,13 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Transient errno values for connection error retry
-_TRANSIENT_ERRNOS = frozenset({
-    errno.ECONNRESET,
-    errno.ETIMEDOUT,
-    errno.ECONNREFUSED,
-})
+_TRANSIENT_ERRNOS = frozenset(
+    {
+        errno.ECONNRESET,
+        errno.ETIMEDOUT,
+        errno.ECONNREFUSED,
+    }
+)
 
 # Models that require max_completion_tokens instead of max_tokens
 _NEW_PARAM_MODELS = frozenset(
@@ -97,7 +99,9 @@ class LLMClient:
         self._anthropic = None  # Will be set by from_rc_config if needed
 
         # Build provider pool for round-robin rotation
-        self._pool: list[tuple[str, str, str, str]] = []  # (name, base_url, api_key, model)
+        self._pool: list[
+            tuple[str, str, str, str]
+        ] = []  # (name, base_url, api_key, model)
         self._pool_index = 0
 
         # Build from provider_pool if configured (EE feature)
@@ -124,9 +128,7 @@ class LLMClient:
         preset_base_url = preset.get("base_url")
 
         api_key = str(
-            rc_config.llm.api_key
-            or os.environ.get(rc_config.llm.api_key_env, "")
-            or ""
+            rc_config.llm.api_key or os.environ.get(rc_config.llm.api_key_env, "") or ""
         )
 
         # Use preset base_url if available and config doesn't override
@@ -223,11 +225,17 @@ class LLMClient:
             name, base_url, api_key, m = pool[idx]
             try:
                 resp = self._call_with_retry(
-                    m, messages, max_tok, temp, json_mode,
-                    base_url=base_url, api_key=api_key
+                    m,
+                    messages,
+                    max_tok,
+                    temp,
+                    json_mode,
+                    base_url=base_url,
+                    api_key=api_key,
                 )
                 if strip_thinking:
                     from researchclaw.utils.thinking_tags import strip_thinking_tags
+
                     resp = LLMResponse(
                         content=strip_thinking_tags(resp.content),
                         model=resp.model,
@@ -244,7 +252,9 @@ class LLMClient:
                 if e.code == 429 and i < len(pool) - 1:
                     logger.warning(f"Provider {name}/{m} rate limited. Rotating...")
                     continue
-                logger.warning("Provider %s/%s failed: HTTP %s. Trying next.", name, m, e.code)
+                logger.warning(
+                    "Provider %s/%s failed: HTTP %s. Trying next.", name, m, e.code
+                )
                 last_error = e
             except OSError as e:
                 if getattr(e, "errno", None) in _TRANSIENT_ERRNOS and i < len(pool) - 1:
@@ -306,8 +316,13 @@ class LLMClient:
         for attempt in range(self.config.max_retries):
             try:
                 return self._raw_call(
-                    model, messages, max_tokens, temperature, json_mode,
-                    base_url=base_url, api_key=api_key
+                    model,
+                    messages,
+                    max_tokens,
+                    temperature,
+                    json_mode,
+                    base_url=base_url,
+                    api_key=api_key,
                 )
             except urllib.error.HTTPError as e:
                 status = e.code
@@ -350,8 +365,15 @@ class LLMClient:
                 raise
 
         # Should not reach here, but just in case
-        return self._raw_call(model, messages, max_tokens, temperature, json_mode,
-                              base_url=base_url, api_key=api_key)
+        return self._raw_call(
+            model,
+            messages,
+            max_tokens,
+            temperature,
+            json_mode,
+            base_url=base_url,
+            api_key=api_key,
+        )
 
     def _raw_call(
         self,
@@ -370,7 +392,9 @@ class LLMClient:
 
         # Use Anthropic adapter if configured
         if self._anthropic:
-            data = self._anthropic.chat_completion(model, messages, max_tokens, temperature, json_mode)
+            data = self._anthropic.chat_completion(
+                model, messages, max_tokens, temperature, json_mode
+            )
         else:
             # Original OpenAI logic
             body: dict[str, Any] = {
@@ -403,7 +427,9 @@ class LLMClient:
             req = urllib.request.Request(url, data=payload, headers=headers)
 
             try:
-                with urllib.request.urlopen(req, timeout=self.config.timeout_sec) as resp:
+                with urllib.request.urlopen(
+                    req, timeout=self.config.timeout_sec
+                ) as resp:
                     data = json.loads(resp.read())
             except (urllib.error.URLError, OSError) as exc:
                 # MetaClaw bridge: fallback to direct LLM if proxy unreachable

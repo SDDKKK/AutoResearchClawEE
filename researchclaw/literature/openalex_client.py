@@ -183,7 +183,7 @@ def _request_with_retry(
                 continue
 
             if exc.code in (500, 502, 503, 504):
-                wait = 2 ** attempt
+                wait = 2**attempt
                 jitter = random.uniform(0, wait * 0.2)
                 logger.warning(
                     "OpenAlex HTTP %d. Retry %d/%d in %.0fs...",
@@ -292,7 +292,9 @@ def _parse_openalex_work(item: dict[str, Any]) -> Paper:
         url = openalex_id
 
     # Paper ID
-    paper_id = f"oalex-{openalex_id.split('/')[-1]}" if openalex_id else f"oalex-{title[:20]}"
+    paper_id = (
+        f"oalex-{openalex_id.split('/')[-1]}" if openalex_id else f"oalex-{title[:20]}"
+    )
 
     return Paper(
         paper_id=paper_id,

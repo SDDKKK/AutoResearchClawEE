@@ -43,9 +43,9 @@ _TIMEOUT_SEC = 30
 # Three-state circuit breaker  (mirrors S2 breaker in semantic_scholar.py)
 # ---------------------------------------------------------------------------
 
-_CB_THRESHOLD = 3           # consecutive 429s to trip
+_CB_THRESHOLD = 3  # consecutive 429s to trip
 _CB_INITIAL_COOLDOWN = 180  # seconds before first HALF_OPEN probe (3 min)
-_CB_MAX_COOLDOWN = 600      # cap cooldown at 10 minutes
+_CB_MAX_COOLDOWN = 600  # cap cooldown at 10 minutes
 
 _CB_CLOSED = "closed"
 _CB_OPEN = "open"
@@ -262,8 +262,7 @@ def _fetch_with_retry(url: str) -> str | None:
                 wait = _RATE_LIMIT_SEC * (2**attempt)
                 jitter = random.uniform(0, wait * 0.2)
                 logger.warning(
-                    "arXiv 503 (service unavailable). "
-                    "Retry %d/%d in %.0fs...",
+                    "arXiv 503 (service unavailable). Retry %d/%d in %.0fs...",
                     attempt + 1,
                     _MAX_RETRIES,
                     wait + jitter,

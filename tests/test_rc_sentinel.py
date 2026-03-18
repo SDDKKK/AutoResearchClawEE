@@ -79,7 +79,9 @@ class TestHeartbeatInPipeline:
                 return StageResult(
                     stage=stage, status=StageStatus.FAILED, artifacts=(), error="stop"
                 )
-            return StageResult(stage=stage, status=StageStatus.DONE, artifacts=("x.md",))
+            return StageResult(
+                stage=stage, status=StageStatus.DONE, artifacts=("x.md",)
+            )
 
         monkeypatch.setattr(rc_runner, "execute_stage", mock_execute_stage)
         rc_runner.execute_pipeline(

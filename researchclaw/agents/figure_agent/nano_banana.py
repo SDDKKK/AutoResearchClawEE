@@ -93,6 +93,7 @@ class NanoBananaAgent(BaseAgent):
         if self._use_sdk is None:
             try:
                 import google.genai  # noqa: F401
+
                 self._use_sdk = True
             except ImportError:
                 self._use_sdk = False
@@ -118,9 +119,7 @@ class NanoBananaAgent(BaseAgent):
         """
         image_figures = context.get("image_figures", [])
         topic = context.get("topic", "")
-        output_dir = Path(
-            context.get("output_dir", self._output_dir or "charts")
-        )
+        output_dir = Path(context.get("output_dir", self._output_dir or "charts"))
         output_dir.mkdir(parents=True, exist_ok=True)
 
         if not image_figures:
@@ -139,9 +138,7 @@ class NanoBananaAgent(BaseAgent):
         generated: list[dict[str, Any]] = []
 
         for i, fig in enumerate(image_figures):
-            figure_id = sanitize_figure_id(
-                fig.get("figure_id", f"conceptual_{i + 1}")
-            )
+            figure_id = sanitize_figure_id(fig.get("figure_id", f"conceptual_{i + 1}"))
             description = fig.get("description", "")
             figure_type = fig.get("figure_type", "architecture_diagram")
             section = fig.get("section", "Method")
@@ -164,38 +161,43 @@ class NanoBananaAgent(BaseAgent):
                 )
 
                 if success:
-                    generated.append({
-                        "figure_id": figure_id,
-                        "figure_type": figure_type,
-                        "section": section,
-                        "description": description,
-                        "path": str(output_path),
-                        "prompt": prompt,
-                        "success": True,
-                        "backend": "nano_banana",
-                    })
-                    logger.info(
-                        "Generated %s: %s", figure_id, output_path
+                    generated.append(
+                        {
+                            "figure_id": figure_id,
+                            "figure_type": figure_type,
+                            "section": section,
+                            "description": description,
+                            "path": str(output_path),
+                            "prompt": prompt,
+                            "success": True,
+                            "backend": "nano_banana",
+                        }
                     )
+                    logger.info("Generated %s: %s", figure_id, output_path)
                 else:
-                    generated.append({
-                        "figure_id": figure_id,
-                        "success": False,
-                        "error": "Generation returned no image",
-                        "backend": "nano_banana",
-                    })
+                    generated.append(
+                        {
+                            "figure_id": figure_id,
+                            "success": False,
+                            "error": "Generation returned no image",
+                            "backend": "nano_banana",
+                        }
+                    )
 
             except Exception as e:
                 logger.warning(
                     "Failed to generate %s via Nano Banana: %s",
-                    figure_id, e,
+                    figure_id,
+                    e,
                 )
-                generated.append({
-                    "figure_id": figure_id,
-                    "success": False,
-                    "error": str(e),
-                    "backend": "nano_banana",
-                })
+                generated.append(
+                    {
+                        "figure_id": figure_id,
+                        "success": False,
+                        "error": str(e),
+                        "backend": "nano_banana",
+                    }
+                )
 
         success_count = sum(1 for g in generated if g.get("success"))
 

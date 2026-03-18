@@ -138,7 +138,8 @@ class RendererAgent(BaseAgent):
             success_count = sum(1 for r in results if r["success"])
             self.logger.info(
                 "Rendered %d/%d figures successfully",
-                success_count, len(scripts),
+                success_count,
+                len(scripts),
             )
 
             return self._make_result(
@@ -165,9 +166,10 @@ class RendererAgent(BaseAgent):
     ) -> dict[str, Any]:
         """Render a single figure script."""
         figure_id = sanitize_figure_id(figure_id)
-        output_filename = sanitize_figure_id(
-            output_filename.replace(".png", ""), fallback="figure"
-        ) + ".png"
+        output_filename = (
+            sanitize_figure_id(output_filename.replace(".png", ""), fallback="figure")
+            + ".png"
+        )
         result: dict[str, Any] = {
             "figure_id": figure_id,
             "success": False,
@@ -229,7 +231,9 @@ class RendererAgent(BaseAgent):
         result["success"] = True
         result["output_path"] = str(output_path)
         result["file_size"] = file_size
-        self.logger.info("Rendered %s: %s (%d bytes)", figure_id, output_path, file_size)
+        self.logger.info(
+            "Rendered %s: %s (%d bytes)", figure_id, output_path, file_size
+        )
         return result
 
     # ------------------------------------------------------------------
@@ -287,18 +291,27 @@ class RendererAgent(BaseAgent):
         container_name = f"rc-viz-{figure_id}-{os.getpid()}"
 
         cmd = [
-            "docker", "run",
-            "--name", container_name,
+            "docker",
+            "run",
+            "--name",
+            container_name,
             "--rm",
-            "--network", "none",
+            "--network",
+            "none",
             "--read-only",
-            "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
+            "--tmpfs",
+            "/tmp:rw,noexec,nosuid,size=64m",
             f"--memory=512m",
-            "-v", f"{script_path.resolve()}:/workspace/script.py:ro",
-            "-v", f"{output_dir.resolve()}:/workspace/output:rw",
-            "-w", "/workspace",
-            "--user", f"{os.getuid()}:{os.getgid()}",
-            "--entrypoint", "python3",
+            "-v",
+            f"{script_path.resolve()}:/workspace/script.py:ro",
+            "-v",
+            f"{output_dir.resolve()}:/workspace/output:rw",
+            "-w",
+            "/workspace",
+            "--user",
+            f"{os.getuid()}:{os.getgid()}",
+            "--entrypoint",
+            "python3",
             self._docker_image,
             "/workspace/script.py",
         ]

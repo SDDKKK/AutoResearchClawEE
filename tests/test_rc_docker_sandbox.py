@@ -121,7 +121,12 @@ def test_build_run_command_specific_gpus(tmp_path: Path):
 
 
 def test_harness_injection(tmp_path: Path):
-    harness_src = Path(__file__).parent.parent / "researchclaw" / "experiment" / "harness_template.py"
+    harness_src = (
+        Path(__file__).parent.parent
+        / "researchclaw"
+        / "experiment"
+        / "harness_template.py"
+    )
     if not harness_src.exists():
         pytest.skip("harness_template.py not found")
 
@@ -142,23 +147,38 @@ def test_factory_returns_experiment_sandbox(tmp_path: Path):
     assert isinstance(sandbox, ExperimentSandbox)
 
 
-@patch("researchclaw.experiment.docker_sandbox.DockerSandbox.ensure_image", return_value=True)
-@patch("researchclaw.experiment.docker_sandbox.DockerSandbox.check_docker_available", return_value=True)
+@patch(
+    "researchclaw.experiment.docker_sandbox.DockerSandbox.ensure_image",
+    return_value=True,
+)
+@patch(
+    "researchclaw.experiment.docker_sandbox.DockerSandbox.check_docker_available",
+    return_value=True,
+)
 def test_factory_returns_docker_sandbox(mock_avail, mock_image, tmp_path: Path):
     config = ExperimentConfig(mode="docker")
     sandbox = create_sandbox(config, tmp_path / "work")
     assert isinstance(sandbox, DockerSandbox)
 
 
-@patch("researchclaw.experiment.docker_sandbox.DockerSandbox.check_docker_available", return_value=False)
+@patch(
+    "researchclaw.experiment.docker_sandbox.DockerSandbox.check_docker_available",
+    return_value=False,
+)
 def test_factory_raises_when_docker_unavailable(mock_avail, tmp_path: Path):
     config = ExperimentConfig(mode="docker")
     with pytest.raises(RuntimeError, match="Docker daemon"):
         create_sandbox(config, tmp_path / "work")
 
 
-@patch("researchclaw.experiment.docker_sandbox.DockerSandbox.ensure_image", return_value=False)
-@patch("researchclaw.experiment.docker_sandbox.DockerSandbox.check_docker_available", return_value=True)
+@patch(
+    "researchclaw.experiment.docker_sandbox.DockerSandbox.ensure_image",
+    return_value=False,
+)
+@patch(
+    "researchclaw.experiment.docker_sandbox.DockerSandbox.check_docker_available",
+    return_value=True,
+)
 def test_factory_raises_when_image_missing(mock_avail, mock_image, tmp_path: Path):
     config = ExperimentConfig(mode="docker")
     with pytest.raises(RuntimeError, match="not found locally"):
@@ -212,9 +232,7 @@ def test_detect_pip_packages(tmp_path: Path):
 
 def test_detect_pip_packages_finds_unknown(tmp_path: Path):
     """Unknown packages should be detected."""
-    (tmp_path / "main.py").write_text(
-        "import some_new_package\nimport numpy\n"
-    )
+    (tmp_path / "main.py").write_text("import some_new_package\nimport numpy\n")
     detected = DockerSandbox._detect_pip_packages(tmp_path)
     assert "some_new_package" in detected
     assert "numpy" not in detected
@@ -230,9 +248,7 @@ def test_detect_pip_packages_skips_setup_py(tmp_path: Path):
 
 def test_detect_pip_packages_maps_imports(tmp_path: Path):
     """Known import-to-pip mappings should be applied."""
-    (tmp_path / "main.py").write_text(
-        "import cv2\nimport wandb\n"
-    )
+    (tmp_path / "main.py").write_text("import cv2\nimport wandb\n")
     detected = DockerSandbox._detect_pip_packages(tmp_path)
     assert "opencv-python" in detected
     assert "wandb" in detected

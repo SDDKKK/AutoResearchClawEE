@@ -67,11 +67,18 @@ class CriticAgent(BaseAgent):
             for fig in rendered:
                 figure_id = fig.get("figure_id", "unknown")
                 if not fig.get("success"):
-                    reviews.append({
-                        "figure_id": figure_id,
-                        "passed": False,
-                        "issues": [{"type": "render_failure", "message": fig.get("error", "Render failed")}],
-                    })
+                    reviews.append(
+                        {
+                            "figure_id": figure_id,
+                            "passed": False,
+                            "issues": [
+                                {
+                                    "type": "render_failure",
+                                    "message": fig.get("error", "Render failed"),
+                                }
+                            ],
+                        }
+                    )
                     all_passed = False
                     continue
 
@@ -93,7 +100,8 @@ class CriticAgent(BaseAgent):
             passed_count = sum(1 for r in reviews if r["passed"])
             self.logger.info(
                 "Critic review: %d/%d figures passed",
-                passed_count, len(reviews),
+                passed_count,
+                len(reviews),
             )
 
             return self._make_result(
@@ -133,15 +141,11 @@ class CriticAgent(BaseAgent):
         issues.extend(num_issues)
 
         # Dimension 2: Text correctness
-        text_issues = self._check_text_correctness(
-            script_code, fig_info
-        )
+        text_issues = self._check_text_correctness(script_code, fig_info)
         issues.extend(text_issues)
 
         # Dimension 3: Visual quality (LLM-based)
-        quality_issues = self._check_visual_quality(
-            script_code, fig_info
-        )
+        quality_issues = self._check_visual_quality(script_code, fig_info)
         issues.extend(quality_issues)
 
         # Determine pass/fail
@@ -204,15 +208,17 @@ class CriticAgent(BaseAgent):
         missing = expected_values - script_numbers
 
         if missing and len(missing) > len(expected_values) / 2:
-            issues.append({
-                "type": "numerical_accuracy",
-                "severity": "critical",
-                "message": (
-                    f"Script may not contain correct data values. "
-                    f"Expected values like {list(missing)[:3]} not found in script. "
-                    f"Found values: {list(found)[:5]}"
-                ),
-            })
+            issues.append(
+                {
+                    "type": "numerical_accuracy",
+                    "severity": "critical",
+                    "message": (
+                        f"Script may not contain correct data values. "
+                        f"Expected values like {list(missing)[:3]} not found in script. "
+                        f"Found values: {list(found)[:5]}"
+                    ),
+                }
+            )
 
         return issues
 
@@ -237,39 +243,49 @@ class CriticAgent(BaseAgent):
         has_title = "set_title" in script_code or ".title(" in script_code
 
         if not has_xlabel:
-            issues.append({
-                "type": "text_correctness",
-                "severity": "warning",
-                "message": "Missing x-axis label",
-            })
+            issues.append(
+                {
+                    "type": "text_correctness",
+                    "severity": "warning",
+                    "message": "Missing x-axis label",
+                }
+            )
         if not has_ylabel:
-            issues.append({
-                "type": "text_correctness",
-                "severity": "warning",
-                "message": "Missing y-axis label",
-            })
+            issues.append(
+                {
+                    "type": "text_correctness",
+                    "severity": "warning",
+                    "message": "Missing y-axis label",
+                }
+            )
         if not has_title:
-            issues.append({
-                "type": "text_correctness",
-                "severity": "warning",
-                "message": "Missing chart title",
-            })
+            issues.append(
+                {
+                    "type": "text_correctness",
+                    "severity": "warning",
+                    "message": "Missing chart title",
+                }
+            )
 
         # Check for savefig call
         if "savefig" not in script_code:
-            issues.append({
-                "type": "text_correctness",
-                "severity": "critical",
-                "message": "Missing fig.savefig() call — chart will not be saved",
-            })
+            issues.append(
+                {
+                    "type": "text_correctness",
+                    "severity": "critical",
+                    "message": "Missing fig.savefig() call — chart will not be saved",
+                }
+            )
 
         # Check for plt.close to prevent memory leaks
         if "plt.close" not in script_code and "close()" not in script_code:
-            issues.append({
-                "type": "text_correctness",
-                "severity": "warning",
-                "message": "Missing plt.close() — may cause memory leaks",
-            })
+            issues.append(
+                {
+                    "type": "text_correctness",
+                    "severity": "warning",
+                    "message": "Missing plt.close() — may cause memory leaks",
+                }
+            )
 
         return issues
 
@@ -317,17 +333,21 @@ class CriticAgent(BaseAgent):
 
         for issue in result.get("issues", []):
             if isinstance(issue, dict) and issue.get("message"):
-                issues.append({
-                    "type": "visual_quality",
-                    "severity": issue.get("severity", "warning"),
-                    "message": str(issue["message"]),
-                })
+                issues.append(
+                    {
+                        "type": "visual_quality",
+                        "severity": issue.get("severity", "warning"),
+                        "message": str(issue["message"]),
+                    }
+                )
 
         if quality_score < 4:
-            issues.append({
-                "type": "visual_quality",
-                "severity": "critical",
-                "message": f"Overall quality score too low: {quality_score}/10",
-            })
+            issues.append(
+                {
+                    "type": "visual_quality",
+                    "severity": "critical",
+                    "message": f"Overall quality score too low: {quality_score}/10",
+                }
+            )
 
         return issues

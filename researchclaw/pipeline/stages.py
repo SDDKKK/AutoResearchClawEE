@@ -126,8 +126,8 @@ GATE_ROLLBACK: dict[Stage, Stage] = {
 # ---------------------------------------------------------------------------
 
 DECISION_ROLLBACK: dict[str, Stage] = {
-    "pivot": Stage.HYPOTHESIS_GEN,       # Discard hypotheses, re-generate
-    "refine": Stage.ITERATIVE_REFINE,    # Keep hypotheses, re-run experiments
+    "pivot": Stage.HYPOTHESIS_GEN,  # Discard hypotheses, re-generate
+    "refine": Stage.ITERATIVE_REFINE,  # Keep hypotheses, re-run experiments
 }
 
 MAX_DECISION_PIVOTS: int = 2  # Prevent infinite loops

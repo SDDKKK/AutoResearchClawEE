@@ -53,13 +53,23 @@ class _FakeLLM:
         self._response = response
         self.calls: list[dict[str, Any]] = []
 
-    def chat(self, messages, *, system=None, max_tokens=None,
-             temperature=None, json_mode=False, **kwargs):
-        self.calls.append({
-            "messages": messages,
-            "system": system,
-            "json_mode": json_mode,
-        })
+    def chat(
+        self,
+        messages,
+        *,
+        system=None,
+        max_tokens=None,
+        temperature=None,
+        json_mode=False,
+        **kwargs,
+    ):
+        self.calls.append(
+            {
+                "messages": messages,
+                "system": system,
+                "json_mode": json_mode,
+            }
+        )
         return _FakeLLMResponse(content=self._response)
 
 
@@ -67,31 +77,35 @@ class _FakeLLM:
 # FigureDecisionAgent._parse_decisions()
 # =========================================================================
 
+
 class TestParseDecisions:
     """Edge cases for JSON parsing in the decision agent."""
 
     def _agent(self):
         from researchclaw.agents.figure_agent.decision import FigureDecisionAgent
+
         return FigureDecisionAgent(_FakeLLM())
 
     def test_valid_json_array(self):
         agent = self._agent()
-        raw = json.dumps([
-            {
-                "section": "Method",
-                "figure_type": "architecture_diagram",
-                "backend": "image",
-                "description": "Architecture overview",
-                "priority": 1,
-            },
-            {
-                "section": "Results",
-                "figure_type": "bar_comparison",
-                "backend": "code",
-                "description": "Main results",
-                "priority": 1,
-            },
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "section": "Method",
+                    "figure_type": "architecture_diagram",
+                    "backend": "image",
+                    "description": "Architecture overview",
+                    "priority": 1,
+                },
+                {
+                    "section": "Results",
+                    "figure_type": "bar_comparison",
+                    "backend": "code",
+                    "description": "Main results",
+                    "priority": 1,
+                },
+            ]
+        )
         decisions = agent._parse_decisions(raw)
         assert len(decisions) == 2
         assert decisions[0]["backend"] == "image"
@@ -122,21 +136,35 @@ class TestParseDecisions:
 
     def test_non_dict_items_skipped(self):
         agent = self._agent()
-        raw = json.dumps([
-            "not a dict",
-            42,
-            {"section": "Method", "figure_type": "architecture_diagram",
-             "backend": "image", "description": "Arch", "priority": 1},
-        ])
+        raw = json.dumps(
+            [
+                "not a dict",
+                42,
+                {
+                    "section": "Method",
+                    "figure_type": "architecture_diagram",
+                    "backend": "image",
+                    "description": "Arch",
+                    "priority": 1,
+                },
+            ]
+        )
         decisions = agent._parse_decisions(raw)
         assert len(decisions) == 1
 
     def test_invalid_backend_auto_inferred(self):
         agent = self._agent()
-        raw = json.dumps([
-            {"section": "Method", "figure_type": "architecture_diagram",
-             "backend": "invalid_backend", "description": "Arch", "priority": 1},
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "section": "Method",
+                    "figure_type": "architecture_diagram",
+                    "backend": "invalid_backend",
+                    "description": "Arch",
+                    "priority": 1,
+                },
+            ]
+        )
         decisions = agent._parse_decisions(raw)
         assert decisions[0]["backend"] == "image"  # architecture → image
 
@@ -155,11 +183,13 @@ class TestParseDecisions:
 # FigureDecisionAgent._heuristic_decide()
 # =========================================================================
 
+
 class TestHeuristicDecide:
     """Test the rule-based fallback decision logic."""
 
     def _agent(self, min_figures=3, max_figures=10):
         from researchclaw.agents.figure_agent.decision import FigureDecisionAgent
+
         return FigureDecisionAgent(
             _FakeLLM(), min_figures=min_figures, max_figures=max_figures
         )
@@ -213,27 +243,39 @@ class TestHeuristicDecide:
 # FigureDecisionAgent._infer_backend()
 # =========================================================================
 
+
 class TestInferBackend:
     def test_code_types(self):
         from researchclaw.agents.figure_agent.decision import FigureDecisionAgent
+
         code_types = [
-            "bar_comparison", "line_chart", "heatmap", "confusion_matrix",
-            "training_curve", "ablation_chart", "scatter_plot",
+            "bar_comparison",
+            "line_chart",
+            "heatmap",
+            "confusion_matrix",
+            "training_curve",
+            "ablation_chart",
+            "scatter_plot",
         ]
         for t in code_types:
             assert FigureDecisionAgent._infer_backend(t) == "code", f"Failed for {t}"
 
     def test_image_types(self):
         from researchclaw.agents.figure_agent.decision import FigureDecisionAgent
+
         image_types = [
-            "architecture_diagram", "method_flowchart", "pipeline_overview",
-            "concept_illustration", "system_diagram",
+            "architecture_diagram",
+            "method_flowchart",
+            "pipeline_overview",
+            "concept_illustration",
+            "system_diagram",
         ]
         for t in image_types:
             assert FigureDecisionAgent._infer_backend(t) == "image", f"Failed for {t}"
 
     def test_unknown_defaults_to_image(self):
         from researchclaw.agents.figure_agent.decision import FigureDecisionAgent
+
         assert FigureDecisionAgent._infer_backend("unknown_chart_type") == "image"
 
 
@@ -241,9 +283,11 @@ class TestInferBackend:
 # FigureDecisionAgent._enforce_bounds()
 # =========================================================================
 
+
 class TestEnforceBounds:
     def _agent(self, min_figures=3, max_figures=6):
         from researchclaw.agents.figure_agent.decision import FigureDecisionAgent
+
         return FigureDecisionAgent(
             _FakeLLM(), min_figures=min_figures, max_figures=max_figures
         )
@@ -252,8 +296,13 @@ class TestEnforceBounds:
         """When fewer than min figures, should pad."""
         agent = self._agent(min_figures=4)
         decisions = [
-            {"section": "Results", "figure_type": "bar_comparison",
-             "backend": "code", "description": "Test", "priority": 1},
+            {
+                "section": "Results",
+                "figure_type": "bar_comparison",
+                "backend": "code",
+                "description": "Test",
+                "priority": 1,
+            },
         ]
         result = agent._enforce_bounds(decisions, has_experiments=True)
         assert len(result) >= 4
@@ -262,8 +311,13 @@ class TestEnforceBounds:
         """When more than max figures, should truncate."""
         agent = self._agent(max_figures=3)
         decisions = [
-            {"section": f"S{i}", "figure_type": "bar_comparison",
-             "backend": "code", "description": f"Fig {i}", "priority": i}
+            {
+                "section": f"S{i}",
+                "figure_type": "bar_comparison",
+                "backend": "code",
+                "description": f"Fig {i}",
+                "priority": i,
+            }
             for i in range(8)
         ]
         result = agent._enforce_bounds(decisions, has_experiments=True)
@@ -273,8 +327,13 @@ class TestEnforceBounds:
         """Should add architecture diagram if none present."""
         agent = self._agent(min_figures=1)
         decisions = [
-            {"section": "Results", "figure_type": "bar_comparison",
-             "backend": "code", "description": "Bar", "priority": 1},
+            {
+                "section": "Results",
+                "figure_type": "bar_comparison",
+                "backend": "code",
+                "description": "Bar",
+                "priority": 1,
+            },
         ]
         result = agent._enforce_bounds(decisions, has_experiments=True)
         assert any(d["backend"] == "image" for d in result)
@@ -283,8 +342,13 @@ class TestEnforceBounds:
         """Should add bar_comparison if experiments exist but no code figure."""
         agent = self._agent(min_figures=1)
         decisions = [
-            {"section": "Method", "figure_type": "architecture_diagram",
-             "backend": "image", "description": "Arch", "priority": 1},
+            {
+                "section": "Method",
+                "figure_type": "architecture_diagram",
+                "backend": "image",
+                "description": "Arch",
+                "priority": 1,
+            },
         ]
         result = agent._enforce_bounds(decisions, has_experiments=True)
         assert any(d["backend"] == "code" for d in result)
@@ -294,11 +358,15 @@ class TestEnforceBounds:
 # NanoBananaAgent._build_prompt()
 # =========================================================================
 
+
 class TestBuildPrompt:
     def _agent(self):
         from researchclaw.agents.figure_agent.nano_banana import NanoBananaAgent
+
         return NanoBananaAgent(
-            _FakeLLM(), gemini_api_key="fake-key", use_sdk=False,
+            _FakeLLM(),
+            gemini_api_key="fake-key",
+            use_sdk=False,
         )
 
     def test_prompt_contains_description(self):
@@ -327,12 +395,16 @@ class TestBuildPrompt:
     def test_prompt_varies_by_type(self):
         agent = self._agent()
         arch_prompt = agent._build_prompt(
-            description="Test", figure_type="architecture_diagram",
-            section="Method", topic="Test",
+            description="Test",
+            figure_type="architecture_diagram",
+            section="Method",
+            topic="Test",
         )
         flow_prompt = agent._build_prompt(
-            description="Test", figure_type="method_flowchart",
-            section="Method", topic="Test",
+            description="Test",
+            figure_type="method_flowchart",
+            section="Method",
+            topic="Test",
         )
         # Different guidelines for different types
         assert arch_prompt != flow_prompt
@@ -342,12 +414,18 @@ class TestBuildPrompt:
 # NanoBananaAgent._get_type_guidelines()
 # =========================================================================
 
+
 class TestGetTypeGuidelines:
     def test_known_types(self):
         from researchclaw.agents.figure_agent.nano_banana import NanoBananaAgent
+
         known = [
-            "architecture_diagram", "method_flowchart", "pipeline_overview",
-            "concept_illustration", "system_diagram", "attention_visualization",
+            "architecture_diagram",
+            "method_flowchart",
+            "pipeline_overview",
+            "concept_illustration",
+            "system_diagram",
+            "attention_visualization",
             "comparison_illustration",
         ]
         for t in known:
@@ -356,6 +434,7 @@ class TestGetTypeGuidelines:
 
     def test_unknown_type_falls_back(self):
         from researchclaw.agents.figure_agent.nano_banana import NanoBananaAgent
+
         g = NanoBananaAgent._get_type_guidelines("totally_unknown")
         fallback = NanoBananaAgent._get_type_guidelines("concept_illustration")
         assert g == fallback
@@ -365,36 +444,51 @@ class TestGetTypeGuidelines:
 # NanoBananaAgent — no API key
 # =========================================================================
 
+
 class TestNanoBananaNoKey:
     def test_execute_without_key_fails(self, tmp_path):
         from researchclaw.agents.figure_agent.nano_banana import NanoBananaAgent
+
         # Clear env
         with mock.patch.dict(os.environ, {}, clear=True):
             agent = NanoBananaAgent(
-                _FakeLLM(), gemini_api_key="", use_sdk=False,
+                _FakeLLM(),
+                gemini_api_key="",
+                use_sdk=False,
             )
-            result = agent.execute({
-                "image_figures": [
-                    {"figure_id": "fig_1", "description": "Test",
-                     "figure_type": "architecture_diagram", "section": "Method"},
-                ],
-                "topic": "Test",
-                "output_dir": str(tmp_path),
-            })
+            result = agent.execute(
+                {
+                    "image_figures": [
+                        {
+                            "figure_id": "fig_1",
+                            "description": "Test",
+                            "figure_type": "architecture_diagram",
+                            "section": "Method",
+                        },
+                    ],
+                    "topic": "Test",
+                    "output_dir": str(tmp_path),
+                }
+            )
             assert not result.success
             assert "API key" in result.error
 
     def test_execute_empty_figures_succeeds(self, tmp_path):
         from researchclaw.agents.figure_agent.nano_banana import NanoBananaAgent
+
         with mock.patch.dict(os.environ, {}, clear=True):
             agent = NanoBananaAgent(
-                _FakeLLM(), gemini_api_key="", use_sdk=False,
+                _FakeLLM(),
+                gemini_api_key="",
+                use_sdk=False,
             )
-            result = agent.execute({
-                "image_figures": [],
-                "topic": "Test",
-                "output_dir": str(tmp_path),
-            })
+            result = agent.execute(
+                {
+                    "image_figures": [],
+                    "topic": "Test",
+                    "output_dir": str(tmp_path),
+                }
+            )
             assert result.success
             assert result.data["count"] == 0
 
@@ -403,9 +497,11 @@ class TestNanoBananaNoKey:
 # RendererAgent._execute_in_docker() — Docker command construction
 # =========================================================================
 
+
 class TestDockerRenderer:
     def _agent(self):
         from researchclaw.agents.figure_agent.renderer import RendererAgent
+
         return RendererAgent(
             _FakeLLM(),
             timeout_sec=10,
@@ -493,8 +589,10 @@ class TestDockerRenderer:
 
         with mock.patch("subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=[], returncode=1,
-                stdout="", stderr="Traceback: Exception: boom",
+                args=[],
+                returncode=1,
+                stdout="",
+                stderr="Traceback: Exception: boom",
             )
             result = agent._execute_in_docker(
                 script_path=script_path,
@@ -509,19 +607,23 @@ class TestDockerRenderer:
 # strip_thinking_tags() — safety tests
 # =========================================================================
 
+
 class TestStripThinkingTags:
     def test_closed_tags_removed(self):
         from researchclaw.utils.thinking_tags import strip_thinking_tags
+
         text = "Hello <think>internal reasoning</think> World"
         assert strip_thinking_tags(text) == "Hello  World"
 
     def test_no_tags(self):
         from researchclaw.utils.thinking_tags import strip_thinking_tags
+
         text = "Normal text without tags"
         assert strip_thinking_tags(text) == text
 
     def test_empty_string(self):
         from researchclaw.utils.thinking_tags import strip_thinking_tags
+
         assert strip_thinking_tags("") == ""
 
     def test_nested_code_preserved(self):
@@ -534,6 +636,7 @@ class TestStripThinkingTags:
     def test_unclosed_tag_behavior(self):
         """Document the behavior: unclosed <think> removes everything after it."""
         from researchclaw.utils.thinking_tags import strip_thinking_tags
+
         text = "Prefix <think>reasoning that never closes"
         result = strip_thinking_tags(text)
         # The unclosed tag strips everything after <think>
@@ -545,25 +648,46 @@ class TestStripThinkingTags:
 # FigureDecisionAgent.execute() — full integration with mock LLM
 # =========================================================================
 
+
 class TestDecisionAgentExecute:
     def test_llm_decision(self):
         from researchclaw.agents.figure_agent.decision import FigureDecisionAgent
-        llm_response = json.dumps([
-            {"section": "Method", "figure_type": "architecture_diagram",
-             "backend": "image", "description": "Arch", "priority": 1},
-            {"section": "Results", "figure_type": "bar_comparison",
-             "backend": "code", "description": "Results", "priority": 1},
-            {"section": "Results", "figure_type": "heatmap",
-             "backend": "code", "description": "Heatmap", "priority": 2},
-        ])
+
+        llm_response = json.dumps(
+            [
+                {
+                    "section": "Method",
+                    "figure_type": "architecture_diagram",
+                    "backend": "image",
+                    "description": "Arch",
+                    "priority": 1,
+                },
+                {
+                    "section": "Results",
+                    "figure_type": "bar_comparison",
+                    "backend": "code",
+                    "description": "Results",
+                    "priority": 1,
+                },
+                {
+                    "section": "Results",
+                    "figure_type": "heatmap",
+                    "backend": "code",
+                    "description": "Heatmap",
+                    "priority": 2,
+                },
+            ]
+        )
         agent = FigureDecisionAgent(_FakeLLM(llm_response), min_figures=3)
-        result = agent.execute({
-            "topic": "Graph anomaly detection",
-            "hypothesis": "GRACE improves detection",
-            "paper_draft": "# Introduction\n...",
-            "has_experiments": True,
-            "condition_summaries": {"proposed": {}, "baseline": {}},
-        })
+        result = agent.execute(
+            {
+                "topic": "Graph anomaly detection",
+                "hypothesis": "GRACE improves detection",
+                "paper_draft": "# Introduction\n...",
+                "has_experiments": True,
+                "condition_summaries": {"proposed": {}, "baseline": {}},
+            }
+        )
         assert result.success
         assert result.data["total"] >= 3
         assert len(result.data["code_figures"]) >= 1
@@ -572,27 +696,33 @@ class TestDecisionAgentExecute:
     def test_fallback_on_bad_llm(self):
         """When LLM returns garbage, heuristic fallback should kick in."""
         from researchclaw.agents.figure_agent.decision import FigureDecisionAgent
+
         agent = FigureDecisionAgent(
             _FakeLLM("This is not JSON"),
             min_figures=3,
         )
-        result = agent.execute({
-            "topic": "Test topic",
-            "has_experiments": True,
-            "condition_summaries": {"a": {}, "b": {}},
-        })
+        result = agent.execute(
+            {
+                "topic": "Test topic",
+                "has_experiments": True,
+                "condition_summaries": {"a": {}, "b": {}},
+            }
+        )
         assert result.success  # fallback succeeds
         assert result.data["total"] >= 3
 
     def test_fallback_on_no_llm(self):
         """When LLM is None, heuristic fallback should work."""
         from researchclaw.agents.figure_agent.decision import FigureDecisionAgent
+
         agent = FigureDecisionAgent(None, min_figures=2)
-        result = agent.execute({
-            "topic": "Test",
-            "has_experiments": False,
-            "condition_summaries": {},
-        })
+        result = agent.execute(
+            {
+                "topic": "Test",
+                "has_experiments": False,
+                "condition_summaries": {},
+            }
+        )
         assert result.success
         assert result.data["total"] >= 2
 
@@ -601,12 +731,14 @@ class TestDecisionAgentExecute:
 # CWD regression test (Issue #2)
 # =========================================================================
 
+
 class TestRendererCwd:
     """Verify the CWD is set to output_dir, not its parent."""
 
     def test_local_cwd_is_output_dir(self, tmp_path):
         """Scripts using relative savefig should write to output_dir."""
         from researchclaw.agents.figure_agent.renderer import RendererAgent
+
         agent = RendererAgent(_FakeLLM(), timeout_sec=10, use_docker=False)
         output_dir = tmp_path / "charts"
 
@@ -628,6 +760,7 @@ class TestRendererCwd:
 # chat(strip_thinking=True) — opt-in parameter (Issue #1 fix)
 # =========================================================================
 
+
 class TestChatStripThinking:
     """Verify the opt-in strip_thinking parameter on LLMClient.chat()."""
 
@@ -643,13 +776,15 @@ class TestChatStripThinking:
         client = LLMClient(config)
 
         response_with_think = (
-            '<think>internal reasoning</think>The actual answer is 42.'
+            "<think>internal reasoning</think>The actual answer is 42."
         )
         fake_api_response = {
-            "choices": [{
-                "message": {"content": response_with_think},
-                "finish_reason": "stop",
-            }],
+            "choices": [
+                {
+                    "message": {"content": response_with_think},
+                    "finish_reason": "stop",
+                }
+            ],
             "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
             "model": "test-model",
         }
@@ -680,13 +815,15 @@ class TestChatStripThinking:
         client = LLMClient(config)
 
         response_with_think = (
-            '<think>internal reasoning</think>The actual answer is 42.'
+            "<think>internal reasoning</think>The actual answer is 42."
         )
         fake_api_response = {
-            "choices": [{
-                "message": {"content": response_with_think},
-                "finish_reason": "stop",
-            }],
+            "choices": [
+                {
+                    "message": {"content": response_with_think},
+                    "finish_reason": "stop",
+                }
+            ],
             "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
             "model": "test-model",
         }
@@ -711,6 +848,7 @@ class TestChatStripThinking:
 # LaTeX converter — display math $$...$$ fix
 # =========================================================================
 
+
 class TestLatexDisplayMath:
     """Verify the $$...$$ → equation environment fix in converter.py."""
 
@@ -718,13 +856,7 @@ class TestLatexDisplayMath:
         """$$...$$ display math should become \\begin{equation}."""
         from researchclaw.templates.converter import _convert_block
 
-        md = (
-            "Some text before.\n"
-            "\n"
-            "$$\\alpha_{ij} = \\frac{x}{y}$$\n"
-            "\n"
-            "Some text after."
-        )
+        md = "Some text before.\n\n$$\\alpha_{ij} = \\frac{x}{y}$$\n\nSome text after."
         result = _convert_block(md)
         assert "\\begin{equation}" in result
         assert "\\end{equation}" in result
@@ -736,11 +868,7 @@ class TestLatexDisplayMath:
         """$$...$$ spanning multiple lines should also convert."""
         from researchclaw.templates.converter import _convert_block
 
-        md = (
-            "$$\n"
-            "\\mathcal{L} = -\\log \\frac{a}{b}\n"
-            "$$\n"
-        )
+        md = "$$\n\\mathcal{L} = -\\log \\frac{a}{b}\n$$\n"
         result = _convert_block(md)
         assert "\\begin{equation}" in result
         assert "\\mathcal{L}" in result
@@ -758,6 +886,7 @@ class TestLatexDisplayMath:
 # =========================================================================
 # LaTeX converter — figure [t] placement
 # =========================================================================
+
 
 class TestLatexFigurePlacement:
     """Verify figures use [t] placement specifier."""
@@ -795,7 +924,9 @@ class TestChatWithPromptStripThinking:
 
         mock_llm = MagicMock()
         mock_llm.chat.return_value = LLMResponse(
-            content="clean output", model="test", finish_reason="stop",
+            content="clean output",
+            model="test",
+            finish_reason="stop",
         )
 
         result = _chat_with_prompt(mock_llm, system="sys", user="hello")
@@ -812,13 +943,16 @@ class TestChatWithPromptStripThinking:
         mock_llm = MagicMock()
         mock_llm.chat.return_value = LLMResponse(
             content="<think>reasoning</think>output",
-            model="test", finish_reason="stop",
+            model="test",
+            finish_reason="stop",
         )
 
         _chat_with_prompt(
-            mock_llm, system="sys", user="hello", strip_thinking=False,
+            mock_llm,
+            system="sys",
+            user="hello",
+            strip_thinking=False,
         )
 
         call_kwargs = mock_llm.chat.call_args
         assert call_kwargs.kwargs.get("strip_thinking") is False
-

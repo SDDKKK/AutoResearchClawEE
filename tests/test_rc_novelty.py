@@ -323,7 +323,12 @@ class TestCheckNovelty:
             topic="Test",
             hypotheses_text="## H1: Hypothesis one\n",
         )
-        assert result["recommendation"] in ("proceed", "differentiate", "abort", "proceed_with_caution")
+        assert result["recommendation"] in (
+            "proceed",
+            "differentiate",
+            "abort",
+            "proceed_with_caution",
+        )
 
     @patch("researchclaw.literature.search.search_papers_multi_query")
     def test_json_serializable(self, mock_search: MagicMock) -> None:

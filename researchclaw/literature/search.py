@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 IEEE_PUBLISHER_ID = "I4210136063"
 IEEE_VENUE_IDS = {
     "tpwrs": "V3149224464",  # IEEE Trans. Power Systems
-    "tsg": "V4210145280",    # IEEE Trans. Smart Grid
-    "tpd": "V734141294",     # IEEE Trans. Power Delivery
+    "tsg": "V4210145280",  # IEEE Trans. Smart Grid
+    "tpd": "V734141294",  # IEEE Trans. Power Delivery
 }
 
 # OpenAlex first (10K/day), then S2 (1K/5min), then arXiv (1/3s) — least
@@ -181,9 +181,7 @@ def search_papers(
                 all_papers.extend(papers)
                 cache_put(query, "openalex", limit, _papers_to_dicts(papers))
                 source_stats["openalex"] = len(papers)
-                logger.info(
-                    "OpenAlex returned %d papers for %r", len(papers), query
-                )
+                logger.info("OpenAlex returned %d papers for %r", len(papers), query)
                 time.sleep(0.5)
 
             elif src_lower in ("semantic_scholar", "s2"):
@@ -229,13 +227,9 @@ def search_papers(
                 papers = _dicts_to_papers(cached)
                 all_papers.extend(papers)
                 cache_hits += len(papers)
-                logger.info(
-                    "[cache] HIT: %d papers for %s/%r", len(papers), src, query
-                )
+                logger.info("[cache] HIT: %d papers for %s/%r", len(papers), src, query)
             else:
-                logger.warning(
-                    "No cache available for %s/%r — skipping", src, query
-                )
+                logger.warning("No cache available for %s/%r — skipping", src, query)
 
     # Summary log
     total = len(all_papers)

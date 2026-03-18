@@ -94,12 +94,16 @@ class _ChatClient(Protocol):
         self, messages: list[dict[str, str]], *, system: str | None = None
     ) -> _ChatResponse: ...
 
+
 class _GitManager(Protocol):
     def is_git_repo(self) -> bool: ...
     def create_experiment_branch(self, tag: str) -> str: ...
-    def commit_experiment(self, run_id: str, metrics: dict[str, object], description: str) -> str: ...
+    def commit_experiment(
+        self, run_id: str, metrics: dict[str, object], description: str
+    ) -> str: ...
     def discard_experiment(self, run_id: str, reason: str) -> bool: ...
     def return_to_original_branch(self) -> bool: ...
+
 
 class ExperimentRunner:
     def __init__(
@@ -119,11 +123,15 @@ class ExperimentRunner:
         self._git: _GitManager | None = None
         if git_repo_dir is not None:
             from arc.experiment_git import ExperimentGitManager
+
             mgr = ExperimentGitManager(git_repo_dir)
             if mgr.is_git_repo():
                 self._git = mgr
             else:
-                logger.warning("git_repo_dir %s is not a git repo; git integration disabled", git_repo_dir)
+                logger.warning(
+                    "git_repo_dir %s is not a git repo; git integration disabled",
+                    git_repo_dir,
+                )
 
     def run_experiment(
         self, code: str, *, run_id: str, iteration: int = 0

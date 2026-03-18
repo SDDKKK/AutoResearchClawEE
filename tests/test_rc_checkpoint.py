@@ -111,9 +111,9 @@ class TestContentMetrics:
                         "suspicious": 1,
                         "hallucinated": 1,
                         "skipped": 0,
-                        "integrity_score": 0.8
+                        "integrity_score": 0.8,
                     },
-                    "results": []
+                    "results": [],
                 }
             ),
             encoding="utf-8",

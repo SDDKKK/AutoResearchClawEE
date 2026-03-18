@@ -90,6 +90,7 @@ class Paper:
         # T1.4: Detect arXiv category codes used as venue (e.g. "cs.CY", "math.OC")
         # These are NOT journal names and must be treated as arXiv preprints.
         import re as _re
+
         _venue = self.venue or ""
         _is_arxiv_category = bool(
             _re.match(
@@ -144,7 +145,11 @@ class Paper:
         if venue_lower and any(kw in venue_lower for kw in _JOURNAL_KEYWORDS):
             entry_type = "article"
             venue_field = f"  journal = {{{_venue}}},"
-        elif venue_lower and not _is_arxiv_category and any(kw in venue_lower for kw in _CONFERENCE_KEYWORDS):
+        elif (
+            venue_lower
+            and not _is_arxiv_category
+            and any(kw in venue_lower for kw in _CONFERENCE_KEYWORDS)
+        ):
             entry_type = "inproceedings"
             venue_field = f"  booktitle = {{{_venue}}},"
         elif self.arxiv_id and (not _venue or _is_arxiv_category):
@@ -153,9 +158,7 @@ class Paper:
             venue_field = f"  journal = {{arXiv preprint arXiv:{self.arxiv_id}}},"
         else:
             entry_type = "article"
-            venue_field = (
-                f"  journal = {{{_venue or 'Unknown'}}}," if _venue else ""
-            )
+            venue_field = f"  journal = {{{_venue or 'Unknown'}}}," if _venue else ""
 
         lines = [f"@{entry_type}{{{key},"]
         lines.append(f"  title = {{{self.title}}},")

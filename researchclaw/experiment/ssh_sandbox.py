@@ -113,7 +113,11 @@ class SshRemoteSandbox:
         cmd.append("echo researchclaw-ssh-ok")
         try:
             cp = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=15, check=False,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
             )
             if cp.returncode == 0 and "researchclaw-ssh-ok" in cp.stdout:
                 return True, f"SSH connection to {config.host} OK"
@@ -128,9 +132,7 @@ class SshRemoteSandbox:
         harness_src = Path(__file__).parent / "harness_template.py"
         if harness_src.exists():
             dest = target_dir / "experiment_harness.py"
-            dest.write_text(
-                harness_src.read_text(encoding="utf-8"), encoding="utf-8"
-            )
+            dest.write_text(harness_src.read_text(encoding="utf-8"), encoding="utf-8")
 
     # ------------------------------------------------------------------
     # Internals
@@ -186,17 +188,21 @@ class SshRemoteSandbox:
             if setup_result.returncode != 0:
                 logger.warning(
                     "Setup command failed: %s (exit %d): %s",
-                    setup_cmd, setup_result.returncode, setup_result.stderr,
+                    setup_cmd,
+                    setup_result.returncode,
+                    setup_result.stderr,
                 )
 
         # 4. Execute experiment
         if cfg.use_docker:
             exec_cmd = self._build_docker_exec_cmd(
-                remote_dir, entry_point=entry_point,
+                remote_dir,
+                entry_point=entry_point,
             )
         else:
             exec_cmd = self._build_bare_exec_cmd(
-                remote_dir, entry_point=entry_point,
+                remote_dir,
+                entry_point=entry_point,
             )
 
         start = time.monotonic()
@@ -221,7 +227,10 @@ class SshRemoteSandbox:
         )
 
     def _build_bare_exec_cmd(
-        self, remote_dir: str, *, entry_point: str,
+        self,
+        remote_dir: str,
+        *,
+        entry_point: str,
     ) -> str:
         """Build command to run Python directly on remote host (with basic sandboxing)."""
         cfg = self.config
@@ -253,7 +262,10 @@ class SshRemoteSandbox:
         )
 
     def _build_docker_exec_cmd(
-        self, remote_dir: str, *, entry_point: str,
+        self,
+        remote_dir: str,
+        *,
+        entry_point: str,
     ) -> str:
         """Build command to run inside a Docker container on the remote host.
 
@@ -263,9 +275,13 @@ class SshRemoteSandbox:
         """
         cfg = self.config
         parts = [
-            "docker", "run", "--rm",
-            "-v", f"{shlex.quote(remote_dir)}:/workspace",
-            "-w", "/workspace",
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{shlex.quote(remote_dir)}:/workspace",
+            "-w",
+            "/workspace",
             f"--memory={cfg.docker_memory_limit_mb}m",
             f"--shm-size={cfg.docker_shm_size_mb}m",
         ]
@@ -287,9 +303,7 @@ class SshRemoteSandbox:
 
         return " ".join(parts)
 
-    def _ssh_run(
-        self, command: str, *, timeout_sec: int = 60
-    ) -> _SshResult:
+    def _ssh_run(self, command: str, *, timeout_sec: int = 60) -> _SshResult:
         """Execute a command on the remote host via ssh."""
         cmd = _build_ssh_base(self.config) + [command]
         try:
@@ -345,7 +359,11 @@ class SshRemoteSandbox:
 
         try:
             cp = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=60, check=False,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
             )
             if cp.returncode != 0:
                 logger.error("scp upload failed: %s", cp.stderr.strip())
@@ -358,6 +376,7 @@ class SshRemoteSandbox:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class _SshResult:
     __slots__ = ("returncode", "stdout", "stderr", "timed_out")
@@ -393,8 +412,10 @@ def _build_ssh_base(
     """
     cmd = [
         "ssh",
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "BatchMode=yes",
     ]
     if cfg.port != 22:
         cmd.extend(["-p", str(cfg.port)])

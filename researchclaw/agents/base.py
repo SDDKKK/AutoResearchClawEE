@@ -109,7 +109,8 @@ class BaseAgent:
     ) -> dict[str, Any]:
         """Send a chat message expecting JSON output.  Falls back to regex extraction."""
         raw = self._chat(
-            system, user,
+            system,
+            user,
             max_tokens=max_tokens,
             temperature=temperature,
             json_mode=True,
@@ -149,7 +150,10 @@ class BaseAgent:
         raise NotImplementedError
 
     def _make_result(
-        self, success: bool, data: dict[str, Any] | None = None, error: str = "",
+        self,
+        success: bool,
+        data: dict[str, Any] | None = None,
+        error: str = "",
     ) -> AgentStepResult:
         return AgentStepResult(
             success=success,

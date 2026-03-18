@@ -79,13 +79,15 @@ class ACPClient:
     def from_rc_config(cls, rc_config: Any) -> ACPClient:
         """Build from a ResearchClaw ``RCConfig``."""
         acp = rc_config.llm.acp
-        return cls(ACPConfig(
-            agent=acp.agent,
-            cwd=acp.cwd,
-            acpx_command=getattr(acp, "acpx_command", ""),
-            session_name=getattr(acp, "session_name", "researchclaw"),
-            timeout_sec=getattr(acp, "timeout_sec", 1800),
-        ))
+        return cls(
+            ACPConfig(
+                agent=acp.agent,
+                cwd=acp.cwd,
+                acpx_command=getattr(acp, "acpx_command", ""),
+                session_name=getattr(acp, "session_name", "researchclaw"),
+                timeout_sec=getattr(acp, "timeout_sec", 1800),
+            )
+        )
 
     # ------------------------------------------------------------------
     # Public interface (matches LLMClient)
@@ -144,10 +146,19 @@ class ACPClient:
             return
         try:
             subprocess.run(
-                [acpx, "--ttl", "0", "--cwd", self._abs_cwd(),
-                 self.config.agent, "sessions", "close",
-                 self.config.session_name],
-                capture_output=True, timeout=15,
+                [
+                    acpx,
+                    "--ttl",
+                    "0",
+                    "--cwd",
+                    self._abs_cwd(),
+                    self.config.agent,
+                    "sessions",
+                    "close",
+                    self.config.session_name,
+                ],
+                capture_output=True,
+                timeout=15,
             )
         except Exception:  # noqa: BLE001
             pass
@@ -196,25 +207,49 @@ class ACPClient:
 
         # Use 'ensure' which finds existing or creates new
         result = subprocess.run(
-            [acpx, "--ttl", "0", "--cwd", self._abs_cwd(),
-             self.config.agent, "sessions", "ensure",
-             "--name", self.config.session_name],
-            capture_output=True, text=True, timeout=30,
+            [
+                acpx,
+                "--ttl",
+                "0",
+                "--cwd",
+                self._abs_cwd(),
+                self.config.agent,
+                "sessions",
+                "ensure",
+                "--name",
+                self.config.session_name,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if result.returncode != 0:
             # Fall back to 'new'
             result = subprocess.run(
-                [acpx, "--ttl", "0", "--cwd", self._abs_cwd(),
-                 self.config.agent, "sessions", "new",
-                 "--name", self.config.session_name],
-                capture_output=True, text=True, timeout=30,
+                [
+                    acpx,
+                    "--ttl",
+                    "0",
+                    "--cwd",
+                    self._abs_cwd(),
+                    self.config.agent,
+                    "sessions",
+                    "new",
+                    "--name",
+                    self.config.session_name,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             if result.returncode != 0:
                 raise RuntimeError(
                     f"Failed to create ACP session: {result.stderr.strip()}"
                 )
         self._session_ready = True
-        logger.info("ACP session '%s' ready (%s)", self.config.session_name, self.config.agent)
+        logger.info(
+            "ACP session '%s' ready (%s)", self.config.session_name, self.config.agent
+        )
 
     # Linux MAX_ARG_STRLEN is 128KB; stay well under to leave room for env
     _MAX_CLI_PROMPT_BYTES = 100_000
@@ -244,16 +279,28 @@ class ACPClient:
     def _send_prompt_cli(self, acpx: str, prompt: str) -> str:
         """Send prompt as a CLI argument (original path)."""
         result = subprocess.run(
-            [acpx, "--approve-all", "--ttl", "0", "--cwd", self._abs_cwd(),
-             self.config.agent, "-s", self.config.session_name,
-             prompt],
-            capture_output=True, text=True,
+            [
+                acpx,
+                "--approve-all",
+                "--ttl",
+                "0",
+                "--cwd",
+                self._abs_cwd(),
+                self.config.agent,
+                "-s",
+                self.config.session_name,
+                prompt,
+            ],
+            capture_output=True,
+            text=True,
             timeout=self.config.timeout_sec,
         )
 
         if result.returncode != 0:
             stderr = result.stderr.strip()
-            raise RuntimeError(f"ACP prompt failed (exit {result.returncode}): {stderr}")
+            raise RuntimeError(
+                f"ACP prompt failed (exit {result.returncode}): {stderr}"
+            )
 
         return self._extract_response(result.stdout)
 
@@ -274,10 +321,20 @@ class ACPClient:
             )
 
             result = subprocess.run(
-                [acpx, "--approve-all", "--ttl", "0", "--cwd", self._abs_cwd(),
-                 self.config.agent, "-s", self.config.session_name,
-                 short_prompt],
-                capture_output=True, text=True,
+                [
+                    acpx,
+                    "--approve-all",
+                    "--ttl",
+                    "0",
+                    "--cwd",
+                    self._abs_cwd(),
+                    self.config.agent,
+                    "-s",
+                    self.config.session_name,
+                    short_prompt,
+                ],
+                capture_output=True,
+                text=True,
                 timeout=self.config.timeout_sec,
             )
 

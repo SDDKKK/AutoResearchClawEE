@@ -37,9 +37,9 @@ FONT_SIZE = {
 # ---------------------------------------------------------------------------
 
 FIGURE_WIDTH = {
-    "single_column": 3.5,   # IEEE / NeurIPS single column
-    "double_column": 7.0,   # IEEE / NeurIPS double column
-    "full_page": 7.0,       # Full width
+    "single_column": 3.5,  # IEEE / NeurIPS single column
+    "double_column": 7.0,  # IEEE / NeurIPS double column
+    "full_page": 7.0,  # Full width
 }
 
 DEFAULT_FIGURE_HEIGHT = 3.0  # reasonable default height
@@ -80,9 +80,9 @@ MARKER_STYLES = ["o", "s", "^", "D", "v", "P", "*", "X"]
 # Output format preferences
 # ---------------------------------------------------------------------------
 
-OUTPUT_FORMAT_PRIMARY = "pdf"      # Vector — preferred for publication
-OUTPUT_FORMAT_FALLBACK = "png"     # Raster — for markdown embedding
-OUTPUT_FORMATS = ["pdf", "png"]    # Generate both
+OUTPUT_FORMAT_PRIMARY = "pdf"  # Vector — preferred for publication
+OUTPUT_FORMAT_FALLBACK = "png"  # Raster — for markdown embedding
+OUTPUT_FORMATS = ["pdf", "png"]  # Generate both
 
 # ---------------------------------------------------------------------------
 # Chart type constants
@@ -107,7 +107,7 @@ CHART_TYPES = {
 # Style snippet for injection into generated scripts
 # ---------------------------------------------------------------------------
 
-STYLE_PREAMBLE = '''
+STYLE_PREAMBLE = """
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -140,7 +140,7 @@ plt.rcParams.update({{
     "savefig.bbox": "tight",
     "savefig.pad_inches": 0.05,
 }})
-'''.strip()
+""".strip()
 
 
 def get_style_preamble(*, dpi: int = DPI_PUBLICATION) -> str:

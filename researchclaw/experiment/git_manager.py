@@ -63,7 +63,9 @@ class ExperimentGitManager:
         return True
 
     def get_experiment_history(self) -> list[dict[str, str]]:
-        result = self._run_git(["log", "--oneline", "--fixed-strings", "--grep", "experiment("])
+        result = self._run_git(
+            ["log", "--oneline", "--fixed-strings", "--grep", "experiment("]
+        )
         if result is None or result.returncode != 0:
             self._log_git_failure("git log", result)
             return []

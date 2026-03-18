@@ -336,11 +336,14 @@ class ExportConfig:
     authors: str = "Anonymous"
     bib_file: str = "references"
 
+
 @dataclass(frozen=True)
 class PromptsConfig:
     """Configuration for prompt externalization."""
 
     custom_file: str = ""  # Path to custom prompts YAML (empty = use defaults)
+
+
 @dataclass(frozen=True)
 class RCConfig:
     project: ProjectConfig
@@ -354,9 +357,7 @@ class RCConfig:
     experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     prompts: PromptsConfig = field(default_factory=PromptsConfig)
-    metaclaw_bridge: MetaClawBridgeConfig = field(
-        default_factory=MetaClawBridgeConfig
-    )
+    metaclaw_bridge: MetaClawBridgeConfig = field(default_factory=MetaClawBridgeConfig)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -570,9 +571,7 @@ def _parse_experiment_config(data: dict[str, Any]) -> ExperimentConfig:
         docker=DockerSandboxConfig(
             image=docker_data.get("image", "researchclaw/experiment:latest"),
             gpu_enabled=bool(docker_data.get("gpu_enabled", True)),
-            gpu_device_ids=tuple(
-                int(g) for g in docker_data.get("gpu_device_ids", ())
-            ),
+            gpu_device_ids=tuple(int(g) for g in docker_data.get("gpu_device_ids", ())),
             memory_limit_mb=int(docker_data.get("memory_limit_mb", 8192)),
             network_policy=docker_data.get("network_policy", "setup_only"),
             pip_pre_install=tuple(docker_data.get("pip_pre_install", ())),
@@ -649,17 +648,13 @@ def _parse_code_agent_config(data: dict[str, Any]) -> CodeAgentConfig:
         architecture_planning=bool(data.get("architecture_planning", True)),
         sequential_generation=bool(data.get("sequential_generation", True)),
         hard_validation=bool(data.get("hard_validation", True)),
-        hard_validation_max_repairs=int(
-            data.get("hard_validation_max_repairs", 2)
-        ),
+        hard_validation_max_repairs=int(data.get("hard_validation_max_repairs", 2)),
         exec_fix_max_iterations=int(data.get("exec_fix_max_iterations", 3)),
         exec_fix_timeout_sec=int(data.get("exec_fix_timeout_sec", 60)),
         tree_search_enabled=bool(data.get("tree_search_enabled", False)),
         tree_search_candidates=int(data.get("tree_search_candidates", 3)),
         tree_search_max_depth=int(data.get("tree_search_max_depth", 2)),
-        tree_search_eval_timeout_sec=int(
-            data.get("tree_search_eval_timeout_sec", 120)
-        ),
+        tree_search_eval_timeout_sec=int(data.get("tree_search_eval_timeout_sec", 120)),
         review_max_rounds=int(data.get("review_max_rounds", 2)),
     )
 

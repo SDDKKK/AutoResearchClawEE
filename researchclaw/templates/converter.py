@@ -128,7 +128,9 @@ def _sanitize_latex_output(tex: str) -> str:
     # 3. Remove stray markdown code fences in LaTeX body (outside verbatim)
     #    Only match fences NOT inside \begin{verbatim}...\end{verbatim}
     #    Simple approach: remove ``` lines that don't have verbatim nearby
-    tex = re.sub(r"^(\s*```[a-z]*\s*)$", r"% removed stray fence: \1", tex, flags=re.MULTILINE)
+    tex = re.sub(
+        r"^(\s*```[a-z]*\s*)$", r"% removed stray fence: \1", tex, flags=re.MULTILINE
+    )
 
     # 4. Fix placeholder table captions: \caption{Table N} → descriptive
     #    Can't auto-generate content, but at least don't leave "Table 1" as
@@ -203,6 +205,7 @@ _RAW_METRIC_RE = re.compile(r"(\d+\.\d{5,})")
 
 def _round_raw_metrics(text: str) -> str:
     """Round excessively precise metric values (>4 decimal places) to 4."""
+
     def _rounder(m: re.Match[str]) -> str:
         try:
             val = float(m.group(1))
@@ -210,6 +213,7 @@ def _round_raw_metrics(text: str) -> str:
             return f"{val:.4f}"
         except ValueError:
             return m.group(0)
+
     return _RAW_METRIC_RE.sub(_rounder, text)
 
 
@@ -245,10 +249,7 @@ def _preprocess_markdown(md: str) -> str:
             while last_idx > 0 and not lines[last_idx].strip():
                 last_idx -= 1
             last = lines[last_idx].strip() if last_idx > 0 else ""
-            if (
-                re.match(r"^```(?:markdown|md|latex|tex)?\s*$", first)
-                and last == "```"
-            ):
+            if re.match(r"^```(?:markdown|md|latex|tex)?\s*$", first) and last == "```":
                 text = "\n".join(lines[1:last_idx])
                 stripped = True
         if not stripped:
@@ -320,11 +321,32 @@ def _preprocess_markdown(md: str) -> str:
     # 4. T1.2: Remove stray markdown/latex/text fences that appear mid-document.
     #    LLMs sometimes emit ```markdown or ```latex between sections.
     #    Only remove documentation fences — preserve code fences (```python etc.)
-    _CODE_LANGS = frozenset({
-        "python", "java", "cpp", "c", "javascript", "typescript", "rust",
-        "go", "ruby", "bash", "sh", "sql", "r", "julia", "lua", "perl",
-        "scala", "kotlin", "swift", "haskell", "algorithm", "pseudocode",
-    })
+    _CODE_LANGS = frozenset(
+        {
+            "python",
+            "java",
+            "cpp",
+            "c",
+            "javascript",
+            "typescript",
+            "rust",
+            "go",
+            "ruby",
+            "bash",
+            "sh",
+            "sql",
+            "r",
+            "julia",
+            "lua",
+            "perl",
+            "scala",
+            "kotlin",
+            "swift",
+            "haskell",
+            "algorithm",
+            "pseudocode",
+        }
+    )
     _lines = text.split("\n")
     _cleaned: list[str] = []
     _in_code = False
@@ -367,6 +389,7 @@ def _preprocess_markdown(md: str) -> str:
 # ---------------------------------------------------------------------------
 # Section parsing
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class _Section:
@@ -430,22 +453,86 @@ _KNOWN_SECTION_NAMES = {
 
 _HEADING_CONNECTORS = frozenset(
     {
-        "and", "or", "for", "in", "of", "the", "a", "an", "with",
-        "under", "to", "on", "at", "by", "as", "via", "from",
-        "not", "but", "yet", "nor", "vs", "versus", "is", "are",
+        "and",
+        "or",
+        "for",
+        "in",
+        "of",
+        "the",
+        "a",
+        "an",
+        "with",
+        "under",
+        "to",
+        "on",
+        "at",
+        "by",
+        "as",
+        "via",
+        "from",
+        "not",
+        "but",
+        "yet",
+        "nor",
+        "vs",
+        "versus",
+        "is",
+        "are",
     }
 )
 
 _SENTENCE_STARTERS = frozenset(
     {
-        "the", "a", "an", "this", "these", "those", "that",
-        "it", "we", "our", "their", "its", "each", "every",
-        "in", "for", "to", "here", "there", "however", "moreover",
-        "furthermore", "additionally", "specifically", "notably",
-        "all", "many", "several", "some", "most", "both",
-        "among", "between", "across", "unlike", "given", "such",
-        "while", "although", "because", "since", "when", "where",
-        "rather", "let", "table", "figure", "as", "at", "if",
+        "the",
+        "a",
+        "an",
+        "this",
+        "these",
+        "those",
+        "that",
+        "it",
+        "we",
+        "our",
+        "their",
+        "its",
+        "each",
+        "every",
+        "in",
+        "for",
+        "to",
+        "here",
+        "there",
+        "however",
+        "moreover",
+        "furthermore",
+        "additionally",
+        "specifically",
+        "notably",
+        "all",
+        "many",
+        "several",
+        "some",
+        "most",
+        "both",
+        "among",
+        "between",
+        "across",
+        "unlike",
+        "given",
+        "such",
+        "while",
+        "although",
+        "because",
+        "since",
+        "when",
+        "where",
+        "rather",
+        "let",
+        "table",
+        "figure",
+        "as",
+        "at",
+        "if",
     }
 )
 
@@ -465,7 +552,7 @@ def _separate_heading_body(heading: str) -> tuple[str, str]:
     # Strip optional leading section number for matching
     num_match = re.match(r"^(\d+(?:\.\d+)*\.?\s+)", heading)
     num_prefix = num_match.group(1) if num_match else ""
-    rest = heading[len(num_prefix):]
+    rest = heading[len(num_prefix) :]
     rest_lower = rest.lower()
 
     # Check against known section heading names
@@ -596,7 +683,11 @@ def _extract_title(sections: list[_Section], raw_md: str) -> str:
             if first_line and not _is_bad_title(first_line):
                 return first_line
         # Handle "## Title Actual Paper Title" pattern (title embedded in heading)
-        if sec.level in (1, 2) and sec.heading_lower.startswith("title ") and len(sec.heading) > 6:
+        if (
+            sec.level in (1, 2)
+            and sec.heading_lower.startswith("title ")
+            and len(sec.heading) > 6
+        ):
             return sec.heading[6:].strip()
 
     # Fallback: first H1/H2 heading that isn't a meta-heading or artefact
@@ -744,9 +835,7 @@ def _deduplicate_tables(body: str) -> str:
     """
     import logging as _dup_log
 
-    _TABLE_ENV_RE = re.compile(
-        r"(\\begin\{table\}.*?\\end\{table\})", re.DOTALL
-    )
+    _TABLE_ENV_RE = re.compile(r"(\\begin\{table\}.*?\\end\{table\})", re.DOTALL)
     tables = list(_TABLE_ENV_RE.finditer(body))
     if len(tables) < 2:
         return body
@@ -811,9 +900,7 @@ def _convert_block(text: str) -> str:
         """Convert $$...$$ to \\begin{equation}...\\end{equation}."""
         idx = len(math_blocks)
         inner = m.group(1).strip()
-        math_blocks.append(
-            f"\\begin{{equation}}\n{inner}\n\\end{{equation}}"
-        )
+        math_blocks.append(f"\\begin{{equation}}\n{inner}\n\\end{{equation}}")
         return f"%%MATH_BLOCK_{idx}%%"
 
     text = _DISPLAY_MATH_RE.sub(_stash_math, text)
@@ -1042,7 +1129,7 @@ def _auto_table_caption(header: list[str], table_num: int) -> str:
     if len(cols) < 2:
         return f"Table {table_num}"
     col0 = cols[0].lower()
-    rest = [_convert_inline(c) for c in cols[1:min(5, len(cols))]]
+    rest = [_convert_inline(c) for c in cols[1 : min(5, len(cols))]]
     # Detect common table types by first-column header
     _HP_HINTS = {"hyperparameter", "parameter", "param", "hp", "setting", "config"}
     _ABL_HINTS = {"component", "variant", "ablation", "configuration", "module"}
@@ -1092,24 +1179,57 @@ def _parse_alignments(sep_line: str, ncols: int) -> list[str]:
 
 
 _UNICODE_TO_ASCII: dict[str, str] = {
-    "\u2190": "<-",   "\u2192": "->",   "\u21d0": "<=",   "\u21d2": "=>",
-    "\u2264": "<=",   "\u2265": ">=",   "\u2260": "!=",   "\u2248": "~=",
-    "\u2208": " in ", "\u2209": " not in ",
-    "\u2200": "forall ", "\u2203": "exists ",
-    "\u2207": "nabla", "\u221e": "inf",  "\u00b1": "+/-",
-    "\u00d7": "x",    "\u00b7": "*",    "\u2026": "...",
-    "\u03b1": "alpha", "\u03b2": "beta", "\u03b3": "gamma",
-    "\u03b4": "delta", "\u03b5": "epsilon", "\u03b6": "zeta",
-    "\u03b7": "eta",   "\u03b8": "theta", "\u03b9": "iota",
-    "\u03ba": "kappa", "\u03bb": "lambda", "\u03bc": "mu",
-    "\u03bd": "nu",    "\u03be": "xi",    "\u03c0": "pi",
-    "\u03c1": "rho",   "\u03c3": "sigma",  "\u03c4": "tau",
-    "\u03c5": "upsilon", "\u03c6": "phi", "\u03c7": "chi",
-    "\u03c8": "psi",   "\u03c9": "omega",
-    "\u0394": "Delta", "\u0398": "Theta", "\u039b": "Lambda",
-    "\u03a3": "Sigma", "\u03a6": "Phi",   "\u03a8": "Psi",
+    "\u2190": "<-",
+    "\u2192": "->",
+    "\u21d0": "<=",
+    "\u21d2": "=>",
+    "\u2264": "<=",
+    "\u2265": ">=",
+    "\u2260": "!=",
+    "\u2248": "~=",
+    "\u2208": " in ",
+    "\u2209": " not in ",
+    "\u2200": "forall ",
+    "\u2203": "exists ",
+    "\u2207": "nabla",
+    "\u221e": "inf",
+    "\u00b1": "+/-",
+    "\u00d7": "x",
+    "\u00b7": "*",
+    "\u2026": "...",
+    "\u03b1": "alpha",
+    "\u03b2": "beta",
+    "\u03b3": "gamma",
+    "\u03b4": "delta",
+    "\u03b5": "epsilon",
+    "\u03b6": "zeta",
+    "\u03b7": "eta",
+    "\u03b8": "theta",
+    "\u03b9": "iota",
+    "\u03ba": "kappa",
+    "\u03bb": "lambda",
+    "\u03bc": "mu",
+    "\u03bd": "nu",
+    "\u03be": "xi",
+    "\u03c0": "pi",
+    "\u03c1": "rho",
+    "\u03c3": "sigma",
+    "\u03c4": "tau",
+    "\u03c5": "upsilon",
+    "\u03c6": "phi",
+    "\u03c7": "chi",
+    "\u03c8": "psi",
+    "\u03c9": "omega",
+    "\u0394": "Delta",
+    "\u0398": "Theta",
+    "\u039b": "Lambda",
+    "\u03a3": "Sigma",
+    "\u03a6": "Phi",
+    "\u03a8": "Psi",
     "\u03a9": "Omega",
-    "\u2113": "ell",   "\u2202": "d",     "\u222b": "int",
+    "\u2113": "ell",
+    "\u2202": "d",
+    "\u222b": "int",
 }
 
 
@@ -1135,9 +1255,7 @@ def _render_code_block(lang: str, code: str) -> str:
     for uni, ascii_eq in _UNICODE_TO_ASCII.items():
         escaped = escaped.replace(uni, ascii_eq)
     # Strip combining characters (tildes, hats, etc.) that break pdflatex
-    escaped = "".join(
-        c for c in escaped if not unicodedata.combining(c)
-    )
+    escaped = "".join(c for c in escaped if not unicodedata.combining(c))
 
     # IMP-28: Detect pseudocode and use algorithm environment
     lang_lower = lang.lower().strip()
@@ -1154,9 +1272,22 @@ def _render_code_block(lang: str, code: str) -> str:
             caption = algo_lines[0].strip().lstrip("/ ").strip()
             algo_lines = algo_lines[1:]
         # Wrap raw lines in \STATE unless they already use algorithmic commands
-        _algo_cmds = {"\\STATE", "\\IF", "\\ELSE", "\\ELSIF", "\\ENDIF",
-                       "\\FOR", "\\ENDFOR", "\\WHILE", "\\ENDWHILE",
-                       "\\REPEAT", "\\UNTIL", "\\RETURN", "\\REQUIRE", "\\ENSURE"}
+        _algo_cmds = {
+            "\\STATE",
+            "\\IF",
+            "\\ELSE",
+            "\\ELSIF",
+            "\\ENDIF",
+            "\\FOR",
+            "\\ENDFOR",
+            "\\WHILE",
+            "\\ENDWHILE",
+            "\\REPEAT",
+            "\\UNTIL",
+            "\\RETURN",
+            "\\REQUIRE",
+            "\\ENSURE",
+        }
         wrapped_lines = []
         for al in algo_lines:
             stripped = al.strip()
@@ -1232,19 +1363,19 @@ def _convert_inline(text: str) -> str:
     - Display math markers (already handled at block level)
     """
     # Normalize Unicode punctuation to LaTeX equivalents
-    text = text.replace("\u2014", "---")          # em-dash —
-    text = text.replace("\u2013", "--")            # en-dash –
-    text = text.replace("\u201c", "``")            # left double quote "
-    text = text.replace("\u201d", "''")            # right double quote "
-    text = text.replace("\u2018", "`")             # left single quote '
-    text = text.replace("\u2019", "'")             # right single quote '
-    text = text.replace("\u00b1", "$\\pm$")        # ±
-    text = text.replace("\u2248", "$\\approx$")    # ≈
-    text = text.replace("\u2264", "$\\leq$")       # ≤
-    text = text.replace("\u2265", "$\\geq$")       # ≥
+    text = text.replace("\u2014", "---")  # em-dash —
+    text = text.replace("\u2013", "--")  # en-dash –
+    text = text.replace("\u201c", "``")  # left double quote "
+    text = text.replace("\u201d", "''")  # right double quote "
+    text = text.replace("\u2018", "`")  # left single quote '
+    text = text.replace("\u2019", "'")  # right single quote '
+    text = text.replace("\u00b1", "$\\pm$")  # ±
+    text = text.replace("\u2248", "$\\approx$")  # ≈
+    text = text.replace("\u2264", "$\\leq$")  # ≤
+    text = text.replace("\u2265", "$\\geq$")  # ≥
     text = text.replace("\u2192", "$\\rightarrow$")  # →
-    text = text.replace("\u2190", "$\\leftarrow$")   # ←
-    text = text.replace("\u00d7", "$\\times$")     # ×
+    text = text.replace("\u2190", "$\\leftarrow$")  # ←
+    text = text.replace("\u00d7", "$\\times$")  # ×
 
     # Protect math and cite from escaping
     protected: list[str] = []
@@ -1353,9 +1484,22 @@ def check_paper_completeness(sections: list[_Section]) -> list[str]:
 
     # Check for valid title — look for any H1/H2 heading that could be a title
     _has_title = any(
-        sec.level in (1, 2) and sec.heading_lower not in ("abstract", "introduction",
-            "related work", "method", "methods", "methodology", "experiments",
-            "results", "discussion", "conclusion", "limitations", "references")
+        sec.level in (1, 2)
+        and sec.heading_lower
+        not in (
+            "abstract",
+            "introduction",
+            "related work",
+            "method",
+            "methods",
+            "methodology",
+            "experiments",
+            "results",
+            "discussion",
+            "conclusion",
+            "limitations",
+            "references",
+        )
         for sec in sections
     )
     if not _has_title:
@@ -1461,7 +1605,6 @@ def check_paper_completeness(sections: list[_Section]) -> list[str]:
             f"Content may be severely truncated."
         )
 
-
     # Per-section word count check (safety net during LaTeX conversion)
     from researchclaw.prompts import SECTION_WORD_TARGETS, _SECTION_TARGET_ALIASES
 
@@ -1501,9 +1644,8 @@ def check_paper_completeness(sections: list[_Section]) -> list[str]:
         total_lines = len([ln for ln in sec.body.splitlines() if ln.strip()])
         if total_lines < 4:
             continue
-        bullet_count = (
-            len(_bullet_re_cc.findall(sec.body))
-            + len(_numbered_re_cc.findall(sec.body))
+        bullet_count = len(_bullet_re_cc.findall(sec.body)) + len(
+            _numbered_re_cc.findall(sec.body)
         )
         density = bullet_count / total_lines
         if density > 0.30:

@@ -19,9 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Matches both plain "metric: value" and "condition=xxx metric: value" formats
 _FLOAT_RE = r"[+-]?\d+\.?\d*(?:[eE][+-]?\d+)?"
-_METRIC_PATTERN = re.compile(
-    rf"^(?:\S+=\S+\s+)?(\w[\w.]*)\s*:\s*({_FLOAT_RE})\s*$"
-)
+_METRIC_PATTERN = re.compile(rf"^(?:\S+=\S+\s+)?(\w[\w.]*)\s*:\s*({_FLOAT_RE})\s*$")
 # R17: Extract per-condition metrics with optional extra tags:
 #   "condition=<name> [regime=<r>] [H=<h>] [seed=<s>] metric: value"
 # Captures: (condition_name, extra_tags_string, metric_name, value)
@@ -285,7 +283,9 @@ class ExperimentSandbox:
                 dest = sandbox_project / src_file.name
                 # Do not allow project to overwrite the harness
                 if dest.name == "experiment_harness.py":
-                    logger.warning("Project contains experiment_harness.py — skipping (immutable)")
+                    logger.warning(
+                        "Project contains experiment_harness.py — skipping (immutable)"
+                    )
                     continue
                 dest.write_bytes(src_file.read_bytes())
 
@@ -301,7 +301,9 @@ class ExperimentSandbox:
 
         start = time.monotonic()
         command = self._build_command(entry)
-        logger.debug("Running project sandbox command: %s (cwd=%s)", command, sandbox_project)
+        logger.debug(
+            "Running project sandbox command: %s (cwd=%s)", command, sandbox_project
+        )
 
         result: SandboxResult
         try:

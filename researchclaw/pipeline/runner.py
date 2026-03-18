@@ -293,9 +293,7 @@ def execute_pipeline(
                     f"(attempt {pivot_count + 1}/{MAX_DECISION_PIVOTS})"
                 )
                 # Version existing stage directories before overwriting
-                _version_rollback_stages(
-                    run_dir, rollback_target, pivot_count + 1
-                )
+                _version_rollback_stages(run_dir, rollback_target, pivot_count + 1)
                 # Recurse from rollback target
                 pivot_results = execute_pipeline(
                     run_dir=run_dir,
@@ -322,9 +320,7 @@ def execute_pipeline(
                         MAX_DECISION_PIVOTS,
                         _quality_msg,
                     )
-                    print(
-                        f"[{run_id}] QUALITY WARNING: {_quality_msg}"
-                    )
+                    print(f"[{run_id}] QUALITY WARNING: {_quality_msg}")
                     # Write quality warning to run directory
                     _qw_path = run_dir / "quality_warning.txt"
                     _qw_path.write_text(
@@ -338,9 +334,7 @@ def execute_pipeline(
                         "Max pivot attempts (%d) reached — forcing PROCEED",
                         MAX_DECISION_PIVOTS,
                     )
-                print(
-                    f"[{run_id}] Max pivot attempts reached — forcing PROCEED"
-                )
+                print(f"[{run_id}] Max pivot attempts reached — forcing PROCEED")
 
         if result.status == StageStatus.FAILED:
             if skip_noncritical and stage in NONCRITICAL_STAGES:
@@ -546,16 +540,12 @@ def _package_deliverables(
             # IMP-15: Deduplicate .bib entries
             _seen_bib_keys: set[str] = set()
             _deduped_entries: list[str] = []
-            for _bm in _re.finditer(
-                r"(@\w+\{([^,]+),.*?\n\})", bib_text, _re.DOTALL
-            ):
+            for _bm in _re.finditer(r"(@\w+\{([^,]+),.*?\n\})", bib_text, _re.DOTALL):
                 _bkey = _bm.group(2).strip()
                 if _bkey not in _seen_bib_keys:
                     _seen_bib_keys.add(_bkey)
                     _deduped_entries.append(_bm.group(1))
-            if len(_deduped_entries) < len(
-                list(_re.finditer(r"@\w+\{", bib_text))
-            ):
+            if len(_deduped_entries) < len(list(_re.finditer(r"@\w+\{", bib_text))):
                 bib_text = "\n\n".join(_deduped_entries) + "\n"
                 bib_path.write_text(bib_text, encoding="utf-8")
                 logger.info(
@@ -573,8 +563,7 @@ def _package_deliverables(
             # IMP-14: Strip orphaned \cite{key} from paper.tex
             if missing:
                 logger.warning(
-                    "Deliverables: stripping %d orphaned cite keys from "
-                    "paper.tex: %s",
+                    "Deliverables: stripping %d orphaned cite keys from paper.tex: %s",
                     len(missing),
                     sorted(missing)[:10],
                 )
@@ -686,9 +675,7 @@ def _version_rollback_stages(
             if version_dir.exists():
                 shutil.rmtree(version_dir)
             stage_dir.rename(version_dir)
-            logger.debug(
-                "Versioned %s → %s", stage_dir.name, version_dir.name
-            )
+            logger.debug("Versioned %s → %s", stage_dir.name, version_dir.name)
 
 
 def _consecutive_empty_metrics(run_dir: Path, pivot_count: int) -> bool:
@@ -716,9 +703,7 @@ def _consecutive_empty_metrics(run_dir: Path, pivot_count: int) -> bool:
     return True  # Both cycles had empty metrics
 
 
-def _check_experiment_quality(
-    run_dir: Path, pivot_count: int
-) -> tuple[bool, str]:
+def _check_experiment_quality(run_dir: Path, pivot_count: int) -> tuple[bool, str]:
     """Quality gate before forced PROCEED.
 
     Returns (ok, message). ok=False means experiment results have critical
@@ -759,7 +744,9 @@ def _check_experiment_quality(
         primary_values = []
         for cond_name, cond_data in conditions.items():
             if isinstance(cond_data, dict):
-                pm = cond_data.get("primary_metric", cond_data.get("primary_metric_mean"))
+                pm = cond_data.get(
+                    "primary_metric", cond_data.get("primary_metric_mean")
+                )
                 if isinstance(pm, (int, float)):
                     primary_values.append(pm)
         if len(primary_values) >= 2 and len(set(primary_values)) == 1:
@@ -810,16 +797,16 @@ def _record_decision_history(
                 history = data
         except (json.JSONDecodeError, OSError):
             pass
-    history.append({
-        "decision": decision,
-        "rollback_target": rollback_target.name,
-        "rollback_stage_num": int(rollback_target),
-        "attempt": attempt,
-        "timestamp": _utcnow_iso(),
-    })
-    history_path.write_text(
-        json.dumps(history, indent=2), encoding="utf-8"
+    history.append(
+        {
+            "decision": decision,
+            "rollback_target": rollback_target.name,
+            "rollback_stage_num": int(rollback_target),
+            "attempt": attempt,
+            "timestamp": _utcnow_iso(),
+        }
     )
+    history_path.write_text(json.dumps(history, indent=2), encoding="utf-8")
 
 
 logger = logging.getLogger(__name__)
@@ -1036,18 +1023,35 @@ def _metaclaw_post_pipeline(
         )
         from researchclaw.metaclaw_bridge.stage_skill_map import get_stage_config
 
-        feedback_store = SkillFeedbackStore(run_dir / "evolution" / "skill_effectiveness.jsonl")
+        feedback_store = SkillFeedbackStore(
+            run_dir / "evolution" / "skill_effectiveness.jsonl"
+        )
         for result in results:
             stage_num = int(getattr(result, "stage", 0))
             stage_name = {
-                1: "topic_init", 2: "problem_decompose", 3: "search_strategy",
-                4: "literature_collect", 5: "literature_screen", 6: "knowledge_extract",
-                7: "synthesis", 8: "hypothesis_gen", 9: "experiment_design",
-                10: "code_generation", 11: "resource_planning", 12: "experiment_run",
-                13: "iterative_refine", 14: "result_analysis", 15: "research_decision",
-                16: "paper_outline", 17: "paper_draft", 18: "peer_review",
-                19: "paper_revision", 20: "quality_gate", 21: "knowledge_archive",
-                22: "export_publish", 23: "citation_verify",
+                1: "topic_init",
+                2: "problem_decompose",
+                3: "search_strategy",
+                4: "literature_collect",
+                5: "literature_screen",
+                6: "knowledge_extract",
+                7: "synthesis",
+                8: "hypothesis_gen",
+                9: "experiment_design",
+                10: "code_generation",
+                11: "resource_planning",
+                12: "experiment_run",
+                13: "iterative_refine",
+                14: "result_analysis",
+                15: "research_decision",
+                16: "paper_outline",
+                17: "paper_draft",
+                18: "peer_review",
+                19: "paper_revision",
+                20: "quality_gate",
+                21: "knowledge_archive",
+                22: "export_publish",
+                23: "citation_verify",
             }.get(stage_num, "")
             if not stage_name:
                 continue
@@ -1079,11 +1083,13 @@ def _metaclaw_post_pipeline(
         # Send a minimal request to signal session end
         proxy_url = getattr(bridge, "proxy_url", "http://localhost:30000")
         url = f"{proxy_url.rstrip('/')}/v1/chat/completions"
-        body = _json.dumps({
-            "model": "session-end",
-            "messages": [{"role": "user", "content": "session complete"}],
-            "max_tokens": 1,
-        }).encode("utf-8")
+        body = _json.dumps(
+            {
+                "model": "session-end",
+                "messages": [{"role": "user", "content": "session complete"}],
+                "max_tokens": 1,
+            }
+        ).encode("utf-8")
         headers = {"Content-Type": "application/json"}
         headers.update(end_headers)
         req = _urllib_req.Request(url, data=body, headers=headers)

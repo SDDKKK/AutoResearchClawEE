@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 # Built-in chart templates
 # ---------------------------------------------------------------------------
 
-_TEMPLATE_BAR_COMPARISON = '''
+_TEMPLATE_BAR_COMPARISON = """
 {style_preamble}
 
 # Data
@@ -67,9 +67,9 @@ fig.tight_layout()
 fig.savefig("{output_path}")
 plt.close(fig)
 print(f"Saved: {output_path}")
-'''
+"""
 
-_TEMPLATE_GROUPED_BAR = '''
+_TEMPLATE_GROUPED_BAR = """
 {style_preamble}
 
 # Data: conditions x metrics
@@ -103,9 +103,9 @@ fig.tight_layout()
 fig.savefig("{output_path}")
 plt.close(fig)
 print(f"Saved: {output_path}")
-'''
+"""
 
-_TEMPLATE_TRAINING_CURVE = '''
+_TEMPLATE_TRAINING_CURVE = """
 {style_preamble}
 
 # Data: each series is (label, epochs, values, [optional std])
@@ -140,9 +140,9 @@ fig.tight_layout()
 fig.savefig("{output_path}")
 plt.close(fig)
 print(f"Saved: {output_path}")
-'''
+"""
 
-_TEMPLATE_HEATMAP = '''
+_TEMPLATE_HEATMAP = """
 {style_preamble}
 
 # Data
@@ -173,9 +173,9 @@ fig.tight_layout()
 fig.savefig("{output_path}")
 plt.close(fig)
 print(f"Saved: {output_path}")
-'''
+"""
 
-_TEMPLATE_LINE_MULTI = '''
+_TEMPLATE_LINE_MULTI = """
 {style_preamble}
 
 # Data: list of series dicts with label, x, y, [std]
@@ -210,9 +210,9 @@ fig.tight_layout()
 fig.savefig("{output_path}")
 plt.close(fig)
 print(f"Saved: {output_path}")
-'''
+"""
 
-_TEMPLATE_SCATTER = '''
+_TEMPLATE_SCATTER = """
 {style_preamble}
 
 # Data: list of groups with label, x, y
@@ -237,7 +237,7 @@ fig.tight_layout()
 fig.savefig("{output_path}")
 plt.close(fig)
 print(f"Saved: {output_path}")
-'''
+"""
 
 _TEMPLATES: dict[str, str] = {
     "bar_comparison": _TEMPLATE_BAR_COMPARISON,
@@ -255,7 +255,7 @@ _TEMPLATES: dict[str, str] = {
 # LaTeX / PGFPlots templates — for direct LaTeX embedding
 # ---------------------------------------------------------------------------
 
-_LATEX_TEMPLATE_BAR_COMPARISON = r'''
+_LATEX_TEMPLATE_BAR_COMPARISON = r"""
 \begin{{figure}}[htbp]
 \centering
 \begin{{tikzpicture}}
@@ -283,9 +283,9 @@ _LATEX_TEMPLATE_BAR_COMPARISON = r'''
 \caption{{{caption}}}
 \label{{fig:{figure_id}}}
 \end{{figure}}
-'''
+"""
 
-_LATEX_TEMPLATE_LINE = r'''
+_LATEX_TEMPLATE_LINE = r"""
 \begin{{figure}}[htbp]
 \centering
 \begin{{tikzpicture}}
@@ -306,9 +306,9 @@ _LATEX_TEMPLATE_LINE = r'''
 \caption{{{caption}}}
 \label{{fig:{figure_id}}}
 \end{{figure}}
-'''
+"""
 
-_LATEX_TEMPLATE_HEATMAP = r'''
+_LATEX_TEMPLATE_HEATMAP = r"""
 \begin{{figure}}[htbp]
 \centering
 \begin{{tikzpicture}}
@@ -337,7 +337,7 @@ _LATEX_TEMPLATE_HEATMAP = r'''
 \caption{{{caption}}}
 \label{{fig:{figure_id}}}
 \end{{figure}}
-'''
+"""
 
 _LATEX_TEMPLATES: dict[str, str] = {
     "bar_comparison": _LATEX_TEMPLATE_BAR_COMPARISON,
@@ -394,7 +394,9 @@ class CodeGenAgent(BaseAgent):
             for fig_spec in figures:
                 # BUG-36: skip non-dict entries (LLM may return strings)
                 if not isinstance(fig_spec, dict):
-                    self.logger.warning("Skipping non-dict fig_spec: %s", type(fig_spec))
+                    self.logger.warning(
+                        "Skipping non-dict fig_spec: %s", type(fig_spec)
+                    )
                     continue
                 figure_id = fig_spec.get("figure_id", "unknown")
                 chart_type = fig_spec.get("chart_type", "bar_comparison")
@@ -417,16 +419,18 @@ class CodeGenAgent(BaseAgent):
                     critic_feedback=fig_feedback,
                 )
 
-                scripts.append({
-                    "figure_id": figure_id,
-                    "chart_type": chart_type,
-                    "script": script,
-                    "output_filename": f"{figure_id}.png",
-                    "title": fig_spec.get("title", ""),
-                    "caption": fig_spec.get("caption", ""),
-                    "section": fig_spec.get("section", "results"),
-                    "width": fig_spec.get("width", "single_column"),
-                })
+                scripts.append(
+                    {
+                        "figure_id": figure_id,
+                        "chart_type": chart_type,
+                        "script": script,
+                        "output_filename": f"{figure_id}.png",
+                        "title": fig_spec.get("title", ""),
+                        "caption": fig_spec.get("caption", ""),
+                        "section": fig_spec.get("section", "results"),
+                        "width": fig_spec.get("width", "single_column"),
+                    }
+                )
 
             return self._make_result(True, data={"scripts": scripts})
         except Exception as exc:
@@ -459,7 +463,11 @@ class CodeGenAgent(BaseAgent):
         width_key = fig_spec.get("width", "single_column")
         data_source = fig_spec.get("data_source", {})
 
-        from researchclaw.agents.figure_agent.style_config import FIGURE_WIDTH, DEFAULT_FIGURE_HEIGHT
+        from researchclaw.agents.figure_agent.style_config import (
+            FIGURE_WIDTH,
+            DEFAULT_FIGURE_HEIGHT,
+        )
+
         width = FIGURE_WIDTH.get(width_key, FIGURE_WIDTH["single_column"])
         height = DEFAULT_FIGURE_HEIGHT
 
@@ -537,7 +545,7 @@ class CodeGenAgent(BaseAgent):
             # BUG-37: LLM may return nested lists in metrics — flatten to list[str]
             _raw_metrics = data_source.get("metrics", [])
             _flat_metrics: list[str] = []
-            for _mi in (_raw_metrics if isinstance(_raw_metrics, list) else []):
+            for _mi in _raw_metrics if isinstance(_raw_metrics, list) else []:
                 if isinstance(_mi, str):
                     _flat_metrics.append(_mi)
                 elif isinstance(_mi, list):
@@ -691,7 +699,8 @@ class CodeGenAgent(BaseAgent):
         conditions = list(condition_summaries.keys())
         # Select non-timing metrics
         metric_names = [
-            m for m in metrics_summary
+            m
+            for m in metrics_summary
             if not any(t in m.lower() for t in ["time", "elapsed", "seed", "runtime"])
         ][:8]
 
@@ -784,9 +793,13 @@ class CodeGenAgent(BaseAgent):
         for cond, cdata in list(condition_summaries.items())[:10]:
             if isinstance(cdata, dict):
                 data_context[cond] = {
-                    "metrics": {k: v for k, v in (cdata.get("metrics") or {}).items()
-                                if not any(t in k.lower()
-                                           for t in ["time", "elapsed", "runtime"])},
+                    "metrics": {
+                        k: v
+                        for k, v in (cdata.get("metrics") or {}).items()
+                        if not any(
+                            t in k.lower() for t in ["time", "elapsed", "runtime"]
+                        )
+                    },
                     "ci95_low": cdata.get("ci95_low"),
                     "ci95_high": cdata.get("ci95_high"),
                 }
@@ -861,9 +874,13 @@ class CodeGenAgent(BaseAgent):
         for cond, cdata in list(condition_summaries.items())[:10]:
             if isinstance(cdata, dict):
                 data_context[cond] = {
-                    "metrics": {k: v for k, v in (cdata.get("metrics") or {}).items()
-                                if not any(t in k.lower()
-                                           for t in ["time", "elapsed", "runtime"])},
+                    "metrics": {
+                        k: v
+                        for k, v in (cdata.get("metrics") or {}).items()
+                        if not any(
+                            t in k.lower() for t in ["time", "elapsed", "runtime"]
+                        )
+                    },
                 }
 
         user_prompt = (

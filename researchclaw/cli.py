@@ -103,7 +103,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         resumed = read_checkpoint(run_dir)
         if resumed is not None:
             from_stage = resumed
-            print(f"Resuming from checkpoint: Stage {int(from_stage)}: {from_stage.name}")
+            print(
+                f"Resuming from checkpoint: Stage {int(from_stage)}: {from_stage.name}"
+            )
 
     print(f"ResearchClaw v0.1.0 — Starting pipeline")
     print(f"  Run ID:  {run_id}")
@@ -179,6 +181,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         write_doctor_report(report, Path(output))
     return 0 if report.overall == "pass" else 1
 
+
 _PROVIDER_CHOICES = {
     "1": ("openai", "OPENAI_API_KEY"),
     "2": ("openrouter", "OPENROUTER_API_KEY"),
@@ -214,8 +217,8 @@ def cmd_init(args: argparse.Namespace) -> int:
     # then in CWD (for development), then bundled in the package data dir.
     _candidates = [
         Path(__file__).resolve().parent.parent / EXAMPLE_CONFIG,  # repo root
-        Path.cwd() / EXAMPLE_CONFIG,                              # cwd fallback
-        Path(__file__).resolve().parent / "data" / EXAMPLE_CONFIG, # packaged
+        Path.cwd() / EXAMPLE_CONFIG,  # cwd fallback
+        Path(__file__).resolve().parent / "data" / EXAMPLE_CONFIG,  # packaged
     ]
     example = next((p for p in _candidates if p.exists()), None)
     if example is None:
@@ -268,7 +271,9 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     if provider in _PROVIDER_MODELS:
         primary, fallbacks = _PROVIDER_MODELS[provider]
-        content = content.replace('primary_model: "gpt-4o"', f'primary_model: "{primary}"')
+        content = content.replace(
+            'primary_model: "gpt-4o"', f'primary_model: "{primary}"'
+        )
         # Replace fallback models block
         old_fallbacks = '  fallback_models:\n    - "gpt-4.1"\n    - "gpt-4o-mini"'
         new_fallbacks = "  fallback_models:\n" + "".join(
@@ -312,6 +317,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"\nReport written to {output}")
     return 0
 
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="researchclaw",
@@ -322,7 +328,9 @@ def main(argv: list[str] | None = None) -> int:
     run_p = sub.add_parser("run", help="Run the 23-stage research pipeline")
     _ = run_p.add_argument("--topic", "-t", help="Override research topic")
     _ = run_p.add_argument(
-        "--config", "-c", default=None,
+        "--config",
+        "-c",
+        default=None,
         help="Config file (default: auto-detect config.arc.yaml or config.yaml)",
     )
     _ = run_p.add_argument("--output", "-o", help="Output directory")
@@ -339,12 +347,15 @@ def main(argv: list[str] | None = None) -> int:
         "--resume", action="store_true", help="Resume from last checkpoint"
     )
     _ = run_p.add_argument(
-        "--skip-noncritical-stage", action="store_true",
-        help="Skip noncritical stages on failure instead of aborting"
+        "--skip-noncritical-stage",
+        action="store_true",
+        help="Skip noncritical stages on failure instead of aborting",
     )
     val_p = sub.add_parser("validate", help="Validate config file")
     _ = val_p.add_argument(
-        "--config", "-c", default=None,
+        "--config",
+        "-c",
+        default=None,
         help="Config file (default: auto-detect config.arc.yaml or config.yaml)",
     )
     _ = val_p.add_argument(
@@ -353,7 +364,9 @@ def main(argv: list[str] | None = None) -> int:
 
     doc_p = sub.add_parser("doctor", help="Check environment and configuration health")
     _ = doc_p.add_argument(
-        "--config", "-c", default=None,
+        "--config",
+        "-c",
+        default=None,
         help="Config file (default: auto-detect config.arc.yaml or config.yaml)",
     )
     _ = doc_p.add_argument("--output", "-o", help="Write JSON report to file")

@@ -113,8 +113,7 @@ class ConferenceTemplate:
         if not style_dir.is_dir():
             return []
         return sorted(
-            p for p in style_dir.iterdir()
-            if p.suffix in {".sty", ".bst", ".cls"}
+            p for p in style_dir.iterdir() if p.suffix in {".sty", ".bst", ".cls"}
         )
 
     def _render_authors(self, authors: str) -> str:
@@ -127,10 +126,7 @@ class ConferenceTemplate:
             )
         if self.author_format == "ieee":
             # IEEE format: \IEEEmembership and \thanks support
-            return (
-                f"\\author{{{authors}}}\n"
-                f"\\markboth{{{self.display_name}}}{{}}"
-            )
+            return f"\\author{{{authors}}}\n\\markboth{{{self.display_name}}}{{}}"
         return f"\\author{{{authors}}}"
 
 

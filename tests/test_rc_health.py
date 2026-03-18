@@ -204,8 +204,10 @@ def test_check_model_chain_primary_missing_fallback_ok() -> None:
         return_value=_DummyHTTPResponse(status=200, payload=payload),
     ):
         result = health.check_model_chain(
-            "https://api.example.com/v1", "sk-test",
-            "gpt-5.2", ("gpt-4.1", "gpt-4o-mini")
+            "https://api.example.com/v1",
+            "sk-test",
+            "gpt-5.2",
+            ("gpt-4.1", "gpt-4o-mini"),
         )
     assert result.status == "pass"
     assert "unavailable" in result.detail
@@ -219,17 +221,14 @@ def test_check_model_chain_all_missing() -> None:
         return_value=_DummyHTTPResponse(status=200, payload=payload),
     ):
         result = health.check_model_chain(
-            "https://api.example.com/v1", "sk-test",
-            "gpt-5.2", ("gpt-5.1",)
+            "https://api.example.com/v1", "sk-test", "gpt-5.2", ("gpt-5.1",)
         )
     assert result.status == "fail"
     assert "No models available" in result.detail
 
 
 def test_check_model_chain_no_models() -> None:
-    result = health.check_model_chain(
-        "https://api.example.com/v1", "sk-test", "", ()
-    )
+    result = health.check_model_chain("https://api.example.com/v1", "sk-test", "", ())
     assert result.status == "warn"
     assert "No models configured" in result.detail
 
@@ -498,31 +497,38 @@ def test_run_doctor_acp_skips_http_checks(tmp_path: Path) -> None:
     _write_acp_config(config_path)
     with (
         patch.object(
-            health, "check_python_version",
+            health,
+            "check_python_version",
             return_value=health.CheckResult("python_version", "pass", "ok"),
         ),
         patch.object(
-            health, "check_yaml_import",
+            health,
+            "check_yaml_import",
             return_value=health.CheckResult("yaml_import", "pass", "ok"),
         ),
         patch.object(
-            health, "check_config_valid",
+            health,
+            "check_config_valid",
             return_value=health.CheckResult("config_valid", "pass", "ok"),
         ),
         patch.object(
-            health, "check_acp_agent",
+            health,
+            "check_acp_agent",
             return_value=health.CheckResult("acp_agent", "pass", "ok"),
         ),
         patch.object(
-            health, "check_sandbox_python",
+            health,
+            "check_sandbox_python",
             return_value=health.CheckResult("sandbox_python", "pass", "ok"),
         ),
         patch.object(
-            health, "check_matplotlib",
+            health,
+            "check_matplotlib",
             return_value=health.CheckResult("matplotlib", "pass", "ok"),
         ),
         patch.object(
-            health, "check_experiment_mode",
+            health,
+            "check_experiment_mode",
             return_value=health.CheckResult("experiment_mode", "pass", "ok"),
         ),
     ):
@@ -539,31 +545,38 @@ def test_run_doctor_acp_includes_agent_check(tmp_path: Path) -> None:
     _write_acp_config(config_path)
     with (
         patch.object(
-            health, "check_python_version",
+            health,
+            "check_python_version",
             return_value=health.CheckResult("python_version", "pass", "ok"),
         ),
         patch.object(
-            health, "check_yaml_import",
+            health,
+            "check_yaml_import",
             return_value=health.CheckResult("yaml_import", "pass", "ok"),
         ),
         patch.object(
-            health, "check_config_valid",
+            health,
+            "check_config_valid",
             return_value=health.CheckResult("config_valid", "pass", "ok"),
         ),
         patch.object(
-            health, "check_acp_agent",
+            health,
+            "check_acp_agent",
             return_value=health.CheckResult("acp_agent", "pass", "ok"),
         ),
         patch.object(
-            health, "check_sandbox_python",
+            health,
+            "check_sandbox_python",
             return_value=health.CheckResult("sandbox_python", "pass", "ok"),
         ),
         patch.object(
-            health, "check_matplotlib",
+            health,
+            "check_matplotlib",
             return_value=health.CheckResult("matplotlib", "pass", "ok"),
         ),
         patch.object(
-            health, "check_experiment_mode",
+            health,
+            "check_experiment_mode",
             return_value=health.CheckResult("experiment_mode", "pass", "ok"),
         ),
     ):

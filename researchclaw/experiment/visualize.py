@@ -47,17 +47,40 @@ _PAUL_TOL_BRIGHT = [
 
 # Extended palette for many conditions (Tol muted + bright merged)
 _PAUL_TOL_EXTENDED = [
-    "#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE",
-    "#AA3377", "#332288", "#88CCEE", "#44AA99", "#117733",
-    "#999933", "#CC6677", "#882255", "#661100", "#6699CC",
+    "#4477AA",
+    "#EE6677",
+    "#228833",
+    "#CCBB44",
+    "#66CCEE",
+    "#AA3377",
+    "#332288",
+    "#88CCEE",
+    "#44AA99",
+    "#117733",
+    "#999933",
+    "#CC6677",
+    "#882255",
+    "#661100",
+    "#6699CC",
 ]
 
 # Metrics to exclude from comparison charts (timing, meta, non-scientific)
 _EXCLUDED_METRICS: set[str] = {
-    "time_budget_sec", "elapsed_sec", "elapsed_time", "execution_time",
-    "wall_time", "runtime_sec", "total_time", "timeout",
-    "seed", "seed_count", "n_seeds", "num_seeds",
-    "success_rate", "num_conditions", "total_conditions",
+    "time_budget_sec",
+    "elapsed_sec",
+    "elapsed_time",
+    "execution_time",
+    "wall_time",
+    "runtime_sec",
+    "total_time",
+    "timeout",
+    "seed",
+    "seed_count",
+    "n_seeds",
+    "num_seeds",
+    "success_rate",
+    "num_conditions",
+    "total_conditions",
     "calibration_iterations",
 }
 
@@ -92,25 +115,27 @@ def _ensure_dir(path: Path) -> Path:
 
 def _setup_academic_style() -> None:
     """Apply academic styling via rcParams."""
-    plt.rcParams.update({
-        "font.family": "serif",
-        "font.size": 11,
-        "axes.labelsize": 12,
-        "axes.titlesize": 13,
-        "axes.titleweight": "bold",
-        "xtick.labelsize": 10,
-        "ytick.labelsize": 10,
-        "legend.fontsize": 10,
-        "figure.dpi": 300,
-        "savefig.dpi": 300,
-        "savefig.bbox": "tight",
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-        "axes.grid": True,
-        "grid.alpha": 0.3,
-        "grid.linestyle": "--",
-        "axes.axisbelow": True,
-    })
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            "font.size": 11,
+            "axes.labelsize": 12,
+            "axes.titlesize": 13,
+            "axes.titleweight": "bold",
+            "xtick.labelsize": 10,
+            "ytick.labelsize": 10,
+            "legend.fontsize": 10,
+            "figure.dpi": 300,
+            "savefig.dpi": 300,
+            "savefig.bbox": "tight",
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.grid": True,
+            "grid.alpha": 0.3,
+            "grid.linestyle": "--",
+            "axes.axisbelow": True,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -162,12 +187,23 @@ def plot_condition_comparison(
     fig, ax = plt.subplots(figsize=(max(7, n * 1.2), 5))
     x = np.arange(n)
     bars = ax.bar(
-        x, means, color=colors, alpha=0.88,
-        edgecolor="white", linewidth=0.8, width=0.7,
+        x,
+        means,
+        color=colors,
+        alpha=0.88,
+        edgecolor="white",
+        linewidth=0.8,
+        width=0.7,
     )
     ax.errorbar(
-        x, means, yerr=[yerr_lo, yerr_hi],
-        fmt="none", ecolor="#333333", capsize=5, capthick=1.5, linewidth=1.5,
+        x,
+        means,
+        yerr=[yerr_lo, yerr_hi],
+        fmt="none",
+        ecolor="#333333",
+        capsize=5,
+        capthick=1.5,
+        linewidth=1.5,
     )
 
     # Value labels above bars
@@ -175,8 +211,14 @@ def plot_condition_comparison(
     offset = y_max * 0.025
     for i, m in enumerate(means):
         ax.text(
-            i, m + yerr_hi[i] + offset, f"{m:.3f}",
-            ha="center", va="bottom", fontsize=9, fontweight="bold", color="#333",
+            i,
+            m + yerr_hi[i] + offset,
+            f"{m:.3f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            fontweight="bold",
+            color="#333",
         )
 
     ax.set_xlabel("Method / Condition")
@@ -265,13 +307,23 @@ def plot_metric_heatmap(
         for j in range(len(clean_keys)):
             val = data[i, j]
             color = "white" if val > 0.6 else "#333"
-            ax.text(j, i, f"{val:.2f}", ha="center", va="center",
-                    fontsize=8, color=color, fontweight="bold")
+            ax.text(
+                j,
+                i,
+                f"{val:.2f}",
+                ha="center",
+                va="center",
+                fontsize=8,
+                color=color,
+                fontweight="bold",
+            )
 
     ax.set_xticks(range(len(clean_keys)))
     ax.set_xticklabels(
         [_shorten_label(k.replace("_mean", "").replace("_", " ")) for k in clean_keys],
-        rotation=35, ha="right", fontsize=9,
+        rotation=35,
+        ha="right",
+        fontsize=9,
     )
     ax.set_yticks(range(len(cond_names)))
     ax.set_yticklabels([_format_cond_name(c) for c in cond_names], fontsize=9)
@@ -367,12 +419,22 @@ def plot_ablation_deltas(
     for i, d in enumerate(deltas):
         ha = "left" if d >= 0 else "right"
         offset = 0.5 if d >= 0 else -0.5
-        ax.text(d + offset, i, f"{d:+.1f}%", ha=ha, va="center", fontsize=9, fontweight="bold")
+        ax.text(
+            d + offset,
+            i,
+            f"{d:+.1f}%",
+            ha=ha,
+            va="center",
+            fontsize=9,
+            fontweight="bold",
+        )
 
     ax.set_yticks(y)
     ax.set_yticklabels(names)
     ax.set_xlabel(f"\u0394 {metric_key.replace('_', ' ').title()} vs. Baseline (%)")
-    ax.set_title(title or f"Ablation Analysis (Baseline: {_format_cond_name(base_key)})")
+    ax.set_title(
+        title or f"Ablation Analysis (Baseline: {_format_cond_name(base_key)})"
+    )
     ax.invert_yaxis()
     fig.tight_layout()
     fig.savefig(_ensure_dir(output_path), dpi=300, bbox_inches="tight")
@@ -416,9 +478,15 @@ def plot_metric_trajectory(
     fig, ax = plt.subplots(figsize=(max(6, len(values) * 1.5), 4.5))
     x = range(len(values))
     ax.plot(
-        x, values, "o-", color=_PAUL_TOL_BRIGHT[0],
-        linewidth=2.5, markersize=8, markerfacecolor="white",
-        markeredgewidth=2, markeredgecolor=_PAUL_TOL_BRIGHT[0],
+        x,
+        values,
+        "o-",
+        color=_PAUL_TOL_BRIGHT[0],
+        linewidth=2.5,
+        markersize=8,
+        markerfacecolor="white",
+        markeredgewidth=2,
+        markeredgecolor=_PAUL_TOL_BRIGHT[0],
     )
 
     # Fill area under curve
@@ -427,8 +495,13 @@ def plot_metric_trajectory(
     # Value annotations
     for i, v in enumerate(values):
         ax.annotate(
-            f"{v:.4f}", (i, v), textcoords="offset points",
-            xytext=(0, 12), ha="center", fontsize=9, fontweight="bold",
+            f"{v:.4f}",
+            (i, v),
+            textcoords="offset points",
+            xytext=(0, 12),
+            ha="center",
+            fontsize=9,
+            fontweight="bold",
         )
 
     metric_label = metric_key.replace("_", " ").title()
@@ -438,7 +511,8 @@ def plot_metric_trajectory(
     ax.set_xticks(list(x))
     ax.set_xticklabels(
         [_shorten_label(lb, 15) for lb in labels],
-        rotation=30, ha="right",
+        rotation=30,
+        ha="right",
     )
     fig.tight_layout()
     fig.savefig(_ensure_dir(output_path), dpi=300, bbox_inches="tight")
@@ -470,7 +544,9 @@ def plot_experiment_comparison(
 
     # Limit to top 12 metrics
     if len(filtered) > 12:
-        top = sorted(filtered.items(), key=lambda kv: abs(kv[1].get("mean", 0)), reverse=True)[:12]
+        top = sorted(
+            filtered.items(), key=lambda kv: abs(kv[1].get("mean", 0)), reverse=True
+        )[:12]
         filtered = dict(top)
 
     names = list(filtered.keys())
@@ -483,8 +559,14 @@ def plot_experiment_comparison(
     width = 0.6
 
     bars = ax.bar(
-        x, means, width=width, color=_PAUL_TOL_BRIGHT[0], alpha=0.88,
-        edgecolor="white", linewidth=0.8, label="Mean",
+        x,
+        means,
+        width=width,
+        color=_PAUL_TOL_BRIGHT[0],
+        alpha=0.88,
+        edgecolor="white",
+        linewidth=0.8,
+        label="Mean",
     )
 
     # Min-max range as thin lines
@@ -499,7 +581,8 @@ def plot_experiment_comparison(
     ax.set_xticks(x)
     ax.set_xticklabels(
         [_shorten_label(n.replace("_", " ")) for n in names],
-        rotation=35, ha="right",
+        rotation=35,
+        ha="right",
     )
     ax.legend(loc="upper right")
     fig.tight_layout()
@@ -582,13 +665,23 @@ def plot_iteration_scores(
 
     fig, ax = plt.subplots(figsize=(6, 4.5))
     ax.plot(
-        iters, vals, "o-", color=_PAUL_TOL_BRIGHT[5],
-        linewidth=2.5, markersize=9, markerfacecolor="white",
-        markeredgewidth=2, markeredgecolor=_PAUL_TOL_BRIGHT[5],
+        iters,
+        vals,
+        "o-",
+        color=_PAUL_TOL_BRIGHT[5],
+        linewidth=2.5,
+        markersize=9,
+        markerfacecolor="white",
+        markeredgewidth=2,
+        markeredgecolor=_PAUL_TOL_BRIGHT[5],
     )
     ax.axhline(
-        y=threshold, color=_PAUL_TOL_BRIGHT[1], linestyle="--",
-        alpha=0.7, linewidth=1.5, label=f"Threshold ({threshold})",
+        y=threshold,
+        color=_PAUL_TOL_BRIGHT[1],
+        linestyle="--",
+        alpha=0.7,
+        linewidth=1.5,
+        label=f"Threshold ({threshold})",
     )
     ax.fill_between(iters, vals, alpha=0.06, color=_PAUL_TOL_BRIGHT[5])
     ax.set_xlabel("Iteration")
@@ -657,7 +750,8 @@ def generate_all_charts(
             if cs:
                 # 2a. Condition comparison (bar chart with CI)
                 path = plot_condition_comparison(
-                    cs, output_dir / "method_comparison.png",
+                    cs,
+                    output_dir / "method_comparison.png",
                     metric_key=metric_key,
                 )
                 if path:
@@ -665,7 +759,8 @@ def generate_all_charts(
 
                 # 2b. Ablation delta chart (horizontal bars)
                 path = plot_ablation_deltas(
-                    cs, output_dir / "ablation_analysis.png",
+                    cs,
+                    output_dir / "ablation_analysis.png",
                     metric_key=metric_key,
                     higher_is_better=(metric_direction != "minimize"),
                 )
@@ -674,7 +769,8 @@ def generate_all_charts(
 
                 # 2c. Metric heatmap (condition × metric)
                 path = plot_metric_heatmap(
-                    cs, output_dir / "metric_heatmap.png",
+                    cs,
+                    output_dir / "metric_heatmap.png",
                 )
                 if path:
                     generated.append(path)

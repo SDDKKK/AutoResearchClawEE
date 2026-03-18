@@ -158,12 +158,15 @@ def convert_lessons_to_skills(
 
     # Filter by severity threshold (>= min_severity)
     filtered = [
-        l for l in lessons
+        l
+        for l in lessons
         if _severity_at_least(getattr(l, "severity", ""), min_severity)
     ]
     if not filtered:
         logger.info(
-            "No lessons at severity >= %s (total lessons: %d)", min_severity, len(lessons)
+            "No lessons at severity >= %s (total lessons: %d)",
+            min_severity,
+            len(lessons),
         )
         return []
 
