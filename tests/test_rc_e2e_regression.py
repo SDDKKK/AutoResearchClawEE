@@ -178,8 +178,8 @@ class TestLLMFallback:
 
         call_models: list[str] = []
 
-        def mock_raw_call(model, messages, max_tokens, temperature, json_mode):
-            _ = messages, max_tokens, temperature, json_mode
+        def mock_raw_call(model, messages, max_tokens, temperature, json_mode, base_url=None, api_key=None):
+            _ = messages, max_tokens, temperature, json_mode, base_url, api_key
             call_models.append(model)
             if model == "gpt-blocked":
                 raise urllib.error.HTTPError(

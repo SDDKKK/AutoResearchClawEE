@@ -289,6 +289,8 @@ def test_chat_prepends_system_message(monkeypatch: pytest.MonkeyPatch):
         max_tokens: int,
         temperature: float,
         json_mode: bool,
+        base_url: str | None = None,
+        api_key: str | None = None,
     ) -> LLMResponse:
         captured["messages"] = messages
         return LLMResponse(content="ok", model=model)
@@ -309,8 +311,10 @@ def test_chat_uses_fallback_after_first_model_error(monkeypatch: pytest.MonkeyPa
         max_tokens: int,
         temperature: float,
         json_mode: bool,
+        base_url: str | None = None,
+        api_key: str | None = None,
     ) -> LLMResponse:
-        _ = (self, messages, max_tokens, temperature, json_mode)
+        _ = (self, messages, max_tokens, temperature, json_mode, base_url, api_key)
         calls.append(model)
         if model == "gpt-5.2":
             raise RuntimeError("first failed")

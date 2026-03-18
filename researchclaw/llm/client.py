@@ -11,6 +11,7 @@ Features:
 
 from __future__ import annotations
 
+import errno
 import json
 import logging
 import os
@@ -21,6 +22,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Transient errno values for connection error retry
+_TRANSIENT_ERRNOS = frozenset({
+    errno.ECONNRESET,
+    errno.ETIMEDOUT,
+    errno.ECONNREFUSED,
+})
 
 # Models that require max_completion_tokens instead of max_tokens
 _NEW_PARAM_MODELS = frozenset(
@@ -76,6 +84,8 @@ class LLMConfig:
     # MetaClaw bridge: fallback URL if primary (proxy) is unreachable
     fallback_url: str = ""
     fallback_api_key: str = ""
+    # Provider pool for round-robin rotation (EE feature)
+    provider_pool: list[dict[str, Any]] = field(default_factory=list)
 
 
 class LLMClient:
@@ -85,6 +95,25 @@ class LLMClient:
         self.config = config
         self._model_chain = [config.primary_model] + list(config.fallback_models)
         self._anthropic = None  # Will be set by from_rc_config if needed
+
+        # Build provider pool for round-robin rotation
+        self._pool: list[tuple[str, str, str, str]] = []  # (name, base_url, api_key, model)
+        self._pool_index = 0
+
+        # Build from provider_pool if configured (EE feature)
+        if config.provider_pool:
+            for p in config.provider_pool:
+                name = p.get("name", "unnamed")
+                base_url = p.get("base_url", "")
+                api_key = p.get("api_key", "")
+                for m in p.get("models", []):
+                    self._pool.append((name, base_url, api_key, m))
+
+        # Fallback to single-provider behavior
+        if not self._pool:
+            models = [config.primary_model] + list(config.fallback_models)
+            for m in models:
+                self._pool.append(("default", config.base_url, config.api_key, m))
 
     @classmethod
     def from_rc_config(cls, rc_config: Any) -> LLMClient:
@@ -175,15 +204,28 @@ class LLMClient:
         if system:
             messages = [{"role": "system", "content": system}] + messages
 
-        models = [model] if model else self._model_chain
         max_tok = max_tokens or self.config.max_tokens
         temp = temperature if temperature is not None else self.config.temperature
 
+        # Filter pool if specific model requested
+        if model:
+            pool = [(n, b, k, m) for n, b, k, m in self._pool if m == model]
+            if not pool:
+                pool = [("override", self.config.base_url, self.config.api_key, model)]
+        else:
+            pool = self._pool
+
         last_error: Exception | None = None
 
-        for m in models:
+        # Round-robin through provider pool
+        for i in range(len(pool)):
+            idx = (self._pool_index + i) % len(pool)
+            name, base_url, api_key, m = pool[idx]
             try:
-                resp = self._call_with_retry(m, messages, max_tok, temp, json_mode)
+                resp = self._call_with_retry(
+                    m, messages, max_tok, temp, json_mode,
+                    base_url=base_url, api_key=api_key
+                )
                 if strip_thinking:
                     from researchclaw.utils.thinking_tags import strip_thinking_tags
                     resp = LLMResponse(
@@ -196,13 +238,26 @@ class LLMClient:
                         truncated=resp.truncated,
                         raw=resp.raw,
                     )
+                self._pool_index = idx  # Sticky rotation
                 return resp
+            except urllib.error.HTTPError as e:
+                if e.code == 429 and i < len(pool) - 1:
+                    logger.warning(f"Provider {name}/{m} rate limited. Rotating...")
+                    continue
+                logger.warning("Provider %s/%s failed: HTTP %s. Trying next.", name, m, e.code)
+                last_error = e
+            except OSError as e:
+                if getattr(e, "errno", None) in _TRANSIENT_ERRNOS and i < len(pool) - 1:
+                    logger.warning(f"Provider {name}/{m} connection error. Rotating...")
+                    continue
+                logger.warning("Provider %s/%s failed: %s. Trying next.", name, m, e)
+                last_error = e
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Model %s failed: %s. Trying next.", m, exc)
+                logger.warning("Provider %s/%s failed: %s. Trying next.", name, m, exc)
                 last_error = exc
 
         raise RuntimeError(
-            f"All models failed. Last error: {last_error}"
+            f"All {len(pool)} providers failed. Last error: {last_error}"
         ) from last_error
 
     def preflight(self) -> tuple[bool, str]:
@@ -244,12 +299,15 @@ class LLMClient:
         max_tokens: int,
         temperature: float,
         json_mode: bool,
+        base_url: str | None = None,
+        api_key: str | None = None,
     ) -> LLMResponse:
         """Call with exponential backoff retry."""
         for attempt in range(self.config.max_retries):
             try:
                 return self._raw_call(
-                    model, messages, max_tokens, temperature, json_mode
+                    model, messages, max_tokens, temperature, json_mode,
+                    base_url=base_url, api_key=api_key
                 )
             except urllib.error.HTTPError as e:
                 status = e.code
@@ -292,7 +350,8 @@ class LLMClient:
                 raise
 
         # Should not reach here, but just in case
-        return self._raw_call(model, messages, max_tokens, temperature, json_mode)
+        return self._raw_call(model, messages, max_tokens, temperature, json_mode,
+                              base_url=base_url, api_key=api_key)
 
     def _raw_call(
         self,
@@ -301,9 +360,14 @@ class LLMClient:
         max_tokens: int,
         temperature: float,
         json_mode: bool,
+        base_url: str | None = None,
+        api_key: str | None = None,
     ) -> LLMResponse:
         """Make a single API call."""
-        
+        # Use provided base_url/api_key or fall back to self.config
+        b_url = base_url if base_url is not None else self.config.base_url
+        key = api_key if api_key is not None else self.config.api_key
+
         # Use Anthropic adapter if configured
         if self._anthropic:
             data = self._anthropic.chat_completion(model, messages, max_tokens, temperature, json_mode)
@@ -326,10 +390,10 @@ class LLMClient:
                 body["response_format"] = {"type": "json_object"}
 
             payload = json.dumps(body).encode("utf-8")
-            url = f"{self.config.base_url.rstrip('/')}/chat/completions"
+            url = f"{b_url.rstrip('/')}/chat/completions"
 
             headers = {
-                "Authorization": f"Bearer {self.config.api_key}",
+                "Authorization": f"Bearer {key}",
                 "Content-Type": "application/json",
                 "User-Agent": self.config.user_agent,
             }
@@ -349,17 +413,17 @@ class LLMClient:
                         self.config.fallback_url,
                         exc,
                     )
-                    fallback_url = (
+                    fallback_url_str = (
                         f"{self.config.fallback_url.rstrip('/')}/chat/completions"
                     )
-                    fallback_key = self.config.fallback_api_key or self.config.api_key
+                    fallback_key = self.config.fallback_api_key or key
                     fallback_headers = {
                         "Authorization": f"Bearer {fallback_key}",
                         "Content-Type": "application/json",
                         "User-Agent": self.config.user_agent,
                     }
                     fallback_req = urllib.request.Request(
-                        fallback_url, data=payload, headers=fallback_headers
+                        fallback_url_str, data=payload, headers=fallback_headers
                     )
                     with urllib.request.urlopen(
                         fallback_req, timeout=self.config.timeout_sec

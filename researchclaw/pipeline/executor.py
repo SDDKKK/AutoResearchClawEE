@@ -96,6 +96,16 @@ _DOMAIN_KEYWORDS: dict[str, tuple[list[str], str, str]] = {
         "biology",
         "Nature, Science, Cell, PNAS",
     ),
+    "power_systems": (
+        ["power systems", "smart grid", "distribution network",
+         "transmission", "electrical grid", "power flow",
+         "optimal power flow", "OPF", "unit commitment",
+         "gurobipy", "MILP", "convex optimization", "CVXPY",
+         "pandapower", "PyPOWER", "state estimation",
+         "load flow", "economic dispatch", "voltage stability"],
+        "power systems engineering",
+        "IEEE Transactions on Power Systems, IEEE TPWRS",
+    ),
 }
 
 
@@ -281,7 +291,15 @@ def _extract_yaml_block(text: str) -> str:
 
 def _safe_json_loads(text: str, default: Any) -> Any:
     try:
-        return json.loads(text)
+        result = json.loads(text)
+        # EE: Reject non-dict JSON
+        if not isinstance(result, dict):
+            logger.warning(
+                f"JSON parse returned {type(result).__name__}, expected dict. "
+                f"Returning default."
+            )
+            return default
+        return result
     except Exception:  # noqa: BLE001
         return default
 

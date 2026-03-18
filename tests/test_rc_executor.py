@@ -135,7 +135,8 @@ def test_extract_yaml_block_variants(text: str, expected: str) -> None:
     ("payload", "default", "expected"),
     [
         ('{"ok": true}', {"fallback": True}, {"ok": True}),
-        ("[1, 2, 3]", {"fallback": True}, [1, 2, 3]),
+        # EE: Non-dict JSON (arrays) returns default
+        ("[1, 2, 3]", {"fallback": True}, {"fallback": True}),
         ("not-json", {"fallback": True}, {"fallback": True}),
     ],
 )
