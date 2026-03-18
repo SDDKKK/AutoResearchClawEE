@@ -266,6 +266,7 @@ compute_budget:
 # Code quality analysis (comprehensive)
 # ---------------------------------------------------------------------------
 
+
 def analyze_code_quality(files: dict[str, str], test_case: dict) -> dict:
     """Comprehensive code quality analysis."""
     report = {
@@ -285,7 +286,8 @@ def analyze_code_quality(files: dict[str, str], test_case: dict) -> dict:
         lines = code.split("\n")
         report["total_lines"] += len(lines)
         effective = [
-            l for l in lines
+            l
+            for l in lines
             if l.strip()
             and not l.strip().startswith("#")
             and not l.strip().startswith('"""')
@@ -299,7 +301,8 @@ def analyze_code_quality(files: dict[str, str], test_case: dict) -> dict:
             for node in ast.walk(tree):
                 if isinstance(node, ast.ClassDef):
                     methods = [
-                        n.name for n in node.body
+                        n.name
+                        for n in node.body
                         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
                     ]
                     method_lines = sum(
@@ -312,29 +315,36 @@ def analyze_code_quality(files: dict[str, str], test_case: dict) -> dict:
                     for n in node.body:
                         if isinstance(n, ast.FunctionDef):
                             body_stmts = [
-                                s for s in n.body
+                                s
+                                for s in n.body
                                 if not isinstance(s, (ast.Pass, ast.Expr))
-                                or (isinstance(s, ast.Expr)
-                                    and not isinstance(s.value, (ast.Constant, ast.Str)))
+                                or (
+                                    isinstance(s, ast.Expr)
+                                    and not isinstance(s.value, (ast.Constant, ast.Str))
+                                )
                             ]
                             if len(body_stmts) <= 1:
                                 empty_methods.append(n.name)
 
-                    report["classes_found"].append({
-                        "name": node.name,
-                        "file": fname,
-                        "methods": methods,
-                        "method_count": len(methods),
-                        "total_method_lines": method_lines,
-                        "bases": [ast.unparse(b) for b in node.bases],
-                        "empty_methods": empty_methods,
-                    })
+                    report["classes_found"].append(
+                        {
+                            "name": node.name,
+                            "file": fname,
+                            "methods": methods,
+                            "method_count": len(methods),
+                            "total_method_lines": method_lines,
+                            "bases": [ast.unparse(b) for b in node.bases],
+                            "empty_methods": empty_methods,
+                        }
+                    )
                 elif isinstance(node, ast.FunctionDef) and node.col_offset == 0:
-                    report["functions_found"].append({
-                        "name": node.name,
-                        "file": fname,
-                        "lines": (node.end_lineno or node.lineno) - node.lineno + 1,
-                    })
+                    report["functions_found"].append(
+                        {
+                            "name": node.name,
+                            "file": fname,
+                            "lines": (node.end_lineno or node.lineno) - node.lineno + 1,
+                        }
+                    )
                 elif isinstance(node, (ast.Import, ast.ImportFrom)):
                     if isinstance(node, ast.Import):
                         for alias in node.names:
@@ -367,7 +377,9 @@ def analyze_code_quality(files: dict[str, str], test_case: dict) -> dict:
 
     # 5. Method richness
     if report["classes_found"]:
-        avg_methods = sum(c["method_count"] for c in report["classes_found"]) / n_classes
+        avg_methods = (
+            sum(c["method_count"] for c in report["classes_found"]) / n_classes
+        )
         method_score = min(10, avg_methods * 2)  # 5+ methods = 10
     else:
         method_score = 0
@@ -375,8 +387,7 @@ def analyze_code_quality(files: dict[str, str], test_case: dict) -> dict:
 
     # 6. Class distinctness (check for identical/empty classes)
     empty_class_count = sum(
-        1 for c in report["classes_found"]
-        if c["total_method_lines"] < 5
+        1 for c in report["classes_found"] if c["total_method_lines"] < 5
     )
     identical_pairs = _check_identical_classes(files)
     distinctness = 10
@@ -431,9 +442,7 @@ def _check_identical_classes(files: dict[str, str]) -> list[str]:
                 if method_code:
                     key = hash(method_code)
                     if key in class_bodies:
-                        identical.append(
-                            f"{class_bodies[key]} == {node.name}"
-                        )
+                        identical.append(f"{class_bodies[key]} == {node.name}")
                     else:
                         class_bodies[key] = node.name
     return identical
@@ -442,6 +451,7 @@ def _check_identical_classes(files: dict[str, str]) -> list[str]:
 # ---------------------------------------------------------------------------
 # Sandbox execution
 # ---------------------------------------------------------------------------
+
 
 def run_in_sandbox(
     files: dict[str, str],
@@ -458,6 +468,7 @@ def run_in_sandbox(
 
     # Try to run with subprocess as fallback
     import subprocess
+
     main_py = code_dir / "main.py"
     if not main_py.exists():
         return {"status": "failed", "reason": "no main.py"}
@@ -540,6 +551,7 @@ def run_in_sandbox(
 # Load experiment plan from previous run
 # ---------------------------------------------------------------------------
 
+
 def load_from_run(run_dir: str) -> dict:
     """Load experiment plan and config from a previous pipeline run."""
     run_path = Path(run_dir)
@@ -580,6 +592,7 @@ def load_from_run(run_dir: str) -> dict:
     # Try to extract topic from exp_plan if not found elsewhere
     if not topic:
         import yaml
+
         try:
             plan_data = yaml.safe_load(exp_plan)
             topic = plan_data.get("topic", "Unknown Topic")
@@ -599,6 +612,7 @@ def load_from_run(run_dir: str) -> dict:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Test code generation quality with optional sandbox execution"
@@ -606,10 +620,18 @@ def main():
     parser.add_argument("--model", default="gpt-5.1", help="Model to use")
     parser.add_argument("--test-id", type=int, default=0, help="Test case ID (0=all)")
     parser.add_argument("--from-run", default="", help="Load exp plan from run dir")
-    parser.add_argument("--no-sandbox", action="store_true", help="Skip sandbox execution")
-    parser.add_argument("--sandbox-timeout", type=int, default=300, help="Sandbox timeout (sec)")
-    parser.add_argument("--output-dir", default="test_outputs_codegen", help="Output dir")
-    parser.add_argument("--config", default="config_run20.yaml", help="Config file for LLM")
+    parser.add_argument(
+        "--no-sandbox", action="store_true", help="Skip sandbox execution"
+    )
+    parser.add_argument(
+        "--sandbox-timeout", type=int, default=300, help="Sandbox timeout (sec)"
+    )
+    parser.add_argument(
+        "--output-dir", default="test_outputs_codegen", help="Output dir"
+    )
+    parser.add_argument(
+        "--config", default="config_run20.yaml", help="Config file for LLM"
+    )
     args = parser.parse_args()
 
     # Setup LLM client
@@ -617,6 +639,7 @@ def main():
     config_path = Path(args.config)
     if config_path.exists():
         import yaml
+
         with open(config_path) as f:
             cfg = yaml.safe_load(f)
         llm_cfg = cfg.get("llm", {})
@@ -658,7 +681,9 @@ def main():
         cases = {99: load_from_run(args.from_run)}
     elif args.test_id > 0:
         if args.test_id not in TEST_CASES:
-            print(f"ERROR: Unknown test ID {args.test_id}. Available: {list(TEST_CASES.keys())}")
+            print(
+                f"ERROR: Unknown test ID {args.test_id}. Available: {list(TEST_CASES.keys())}"
+            )
             sys.exit(1)
         cases = {args.test_id: TEST_CASES[args.test_id]}
     else:
@@ -670,9 +695,9 @@ def main():
     all_reports = []
 
     for test_id, tc in cases.items():
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print(f"  Test {test_id}: {tc['name']}")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
 
         stage_dir = output_dir / f"test_{test_id}"
         stage_dir.mkdir(parents=True, exist_ok=True)
@@ -749,7 +774,8 @@ def main():
         exec_result = {"status": "skipped"}
         if not args.no_sandbox and result.files:
             exec_result = run_in_sandbox(
-                result.files, stage_dir,
+                result.files,
+                stage_dir,
                 timeout_sec=args.sandbox_timeout,
             )
             report["execution"] = exec_result
@@ -783,9 +809,9 @@ def main():
 
     # Summary
     if len(all_reports) > 1:
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print("  SUMMARY")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         for r in all_reports:
             exec_info = ""
             if "execution" in r:

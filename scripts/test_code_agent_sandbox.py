@@ -119,8 +119,10 @@ compute_budget:
 
 def make_sandbox_factory(docker_cfg: DockerSandboxConfig):
     """Return a factory function that creates DockerSandbox instances."""
+
     def factory(exp_config, workdir: Path):
         return DockerSandbox(docker_cfg, workdir)
+
     return factory
 
 
@@ -128,9 +130,15 @@ def main():
     parser = argparse.ArgumentParser(description="Test CodeAgent with Docker sandbox")
     parser.add_argument("--model", default="gpt-5.1", help="Model to use")
     parser.add_argument("--test-id", type=int, default=1, help="Test case ID")
-    parser.add_argument("--output-dir", default="test_outputs_sandbox", help="Output dir")
-    parser.add_argument("--exec-fix-iters", type=int, default=3, help="Max exec-fix iterations")
-    parser.add_argument("--timeout", type=int, default=180, help="Sandbox timeout (sec)")
+    parser.add_argument(
+        "--output-dir", default="test_outputs_sandbox", help="Output dir"
+    )
+    parser.add_argument(
+        "--exec-fix-iters", type=int, default=3, help="Max exec-fix iterations"
+    )
+    parser.add_argument(
+        "--timeout", type=int, default=180, help="Sandbox timeout (sec)"
+    )
     args = parser.parse_args()
 
     # Setup LLM
@@ -204,11 +212,11 @@ def main():
         sandbox_factory=sandbox_factory,
     )
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Test {args.test_id}: {tc['name']}")
     print(f"  exec_fix_max_iterations: {args.exec_fix_iters}")
     print(f"  sandbox_timeout: {args.timeout}s")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     t0 = time.time()
     result = agent.generate(
@@ -253,14 +261,17 @@ def main():
 
     # Write validation log
     (stage_dir / "validation_log.json").write_text(
-        json.dumps({
-            "log": result.validation_log,
-            "total_llm_calls": result.total_llm_calls,
-            "total_sandbox_runs": result.total_sandbox_runs,
-            "review_rounds": result.review_rounds,
-            "best_score": result.best_score,
-            "elapsed_sec": round(elapsed, 1),
-        }, indent=2),
+        json.dumps(
+            {
+                "log": result.validation_log,
+                "total_llm_calls": result.total_llm_calls,
+                "total_sandbox_runs": result.total_sandbox_runs,
+                "review_rounds": result.review_rounds,
+                "best_score": result.best_score,
+                "elapsed_sec": round(elapsed, 1),
+            },
+            indent=2,
+        ),
         encoding="utf-8",
     )
 
@@ -270,7 +281,9 @@ def main():
     workdir.mkdir(parents=True, exist_ok=True)
     sandbox = DockerSandbox(docker_cfg, workdir)
     final_result = sandbox.run_project(
-        stage_dir, entry_point="main.py", timeout_sec=args.timeout,
+        stage_dir,
+        entry_point="main.py",
+        timeout_sec=args.timeout,
     )
     print(f"Return code: {final_result.returncode}")
     print(f"Elapsed: {final_result.elapsed_sec:.1f}s")
@@ -288,14 +301,21 @@ def main():
 
     # Save final run results
     (stage_dir / "final_run_result.json").write_text(
-        json.dumps({
-            "returncode": final_result.returncode,
-            "elapsed_sec": final_result.elapsed_sec,
-            "timed_out": final_result.timed_out,
-            "metrics": dict(final_result.metrics) if final_result.metrics else {},
-            "stdout_tail": "\n".join(stdout_lines[-20:]) if final_result.returncode == 0 else "",
-            "stderr_tail": final_result.stderr[-1000:] if final_result.returncode != 0 else "",
-        }, indent=2),
+        json.dumps(
+            {
+                "returncode": final_result.returncode,
+                "elapsed_sec": final_result.elapsed_sec,
+                "timed_out": final_result.timed_out,
+                "metrics": dict(final_result.metrics) if final_result.metrics else {},
+                "stdout_tail": "\n".join(stdout_lines[-20:])
+                if final_result.returncode == 0
+                else "",
+                "stderr_tail": final_result.stderr[-1000:]
+                if final_result.returncode != 0
+                else "",
+            },
+            indent=2,
+        ),
         encoding="utf-8",
     )
 

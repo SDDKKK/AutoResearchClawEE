@@ -210,8 +210,12 @@ def analyze_code_quality(files: dict[str, str], test_case: dict) -> dict:
         lines = code.split("\n")
         report["total_lines"] += len(lines)
         effective = [
-            l for l in lines
-            if l.strip() and not l.strip().startswith("#") and not l.strip().startswith("import") and not l.strip().startswith("from")
+            l
+            for l in lines
+            if l.strip()
+            and not l.strip().startswith("#")
+            and not l.strip().startswith("import")
+            and not l.strip().startswith("from")
         ]
         report["effective_lines"] += len(effective)
 
@@ -221,7 +225,8 @@ def analyze_code_quality(files: dict[str, str], test_case: dict) -> dict:
             for node in ast.walk(tree):
                 if isinstance(node, ast.ClassDef):
                     methods = [
-                        n.name for n in node.body
+                        n.name
+                        for n in node.body
                         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
                     ]
                     method_lines = sum(
@@ -230,19 +235,23 @@ def analyze_code_quality(files: dict[str, str], test_case: dict) -> dict:
                         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
                         and n.end_lineno
                     )
-                    report["classes_found"].append({
-                        "name": node.name,
-                        "file": fname,
-                        "methods": methods,
-                        "method_count": len(methods),
-                        "total_method_lines": method_lines,
-                    })
+                    report["classes_found"].append(
+                        {
+                            "name": node.name,
+                            "file": fname,
+                            "methods": methods,
+                            "method_count": len(methods),
+                            "total_method_lines": method_lines,
+                        }
+                    )
                 elif isinstance(node, ast.FunctionDef) and node.col_offset == 0:
-                    report["functions_found"].append({
-                        "name": node.name,
-                        "file": fname,
-                        "lines": (node.end_lineno or node.lineno) - node.lineno + 1,
-                    })
+                    report["functions_found"].append(
+                        {
+                            "name": node.name,
+                            "file": fname,
+                            "lines": (node.end_lineno or node.lineno) - node.lineno + 1,
+                        }
+                    )
                 elif isinstance(node, (ast.Import, ast.ImportFrom)):
                     if isinstance(node, ast.Import):
                         for alias in node.names:
@@ -261,7 +270,9 @@ def analyze_code_quality(files: dict[str, str], test_case: dict) -> dict:
     report["scores"]["file_structure"] = round(file_score, 1)
 
     # 2. Class count (target: min_classes)
-    class_score = min(10, (len(report["classes_found"]) / test_case["min_classes"]) * 10)
+    class_score = min(
+        10, (len(report["classes_found"]) / test_case["min_classes"]) * 10
+    )
     report["scores"]["class_coverage"] = round(class_score, 1)
 
     # 3. Code depth (effective lines)
@@ -270,7 +281,9 @@ def analyze_code_quality(files: dict[str, str], test_case: dict) -> dict:
 
     # 4. Method richness (average methods per class)
     if report["classes_found"]:
-        avg_methods = sum(c["method_count"] for c in report["classes_found"]) / len(report["classes_found"])
+        avg_methods = sum(c["method_count"] for c in report["classes_found"]) / len(
+            report["classes_found"]
+        )
         method_score = min(10, avg_methods / 0.5)  # 5 methods/class = 10
         report["scores"]["method_richness"] = round(method_score, 1)
     else:
@@ -291,9 +304,7 @@ def analyze_code_quality(files: dict[str, str], test_case: dict) -> dict:
 
     # Overall score
     scores = report["scores"]
-    report["overall_score"] = round(
-        sum(scores.values()) / len(scores), 1
-    )
+    report["overall_score"] = round(sum(scores.values()) / len(scores), 1)
 
     # Quality checks
     if len(files) < test_case["min_files"]:
@@ -322,7 +333,9 @@ def main():
     parser = argparse.ArgumentParser(description="Live test CodeAgent quality")
     parser.add_argument("--model", default="gpt-4.1", help="Model to use")
     parser.add_argument("--test-id", type=int, default=0, help="Test case ID (0=all)")
-    parser.add_argument("--no-sandbox", action="store_true", help="Skip sandbox exec-fix")
+    parser.add_argument(
+        "--no-sandbox", action="store_true", help="Skip sandbox exec-fix"
+    )
     parser.add_argument("--tree-search", action="store_true", help="Enable tree search")
     parser.add_argument("--output-dir", default="test_outputs", help="Output directory")
     args = parser.parse_args()
@@ -358,7 +371,9 @@ def main():
     # Select test cases
     if args.test_id > 0:
         if args.test_id not in TEST_CASES:
-            print(f"ERROR: Unknown test ID {args.test_id}. Available: {list(TEST_CASES.keys())}")
+            print(
+                f"ERROR: Unknown test ID {args.test_id}. Available: {list(TEST_CASES.keys())}"
+            )
             sys.exit(1)
         cases = {args.test_id: TEST_CASES[args.test_id]}
     else:
@@ -371,9 +386,9 @@ def main():
     all_reports = []
 
     for test_id, tc in cases.items():
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Test {test_id}: {tc['name']}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         stage_dir = output_dir / f"test_{test_id}"
         stage_dir.mkdir(parents=True, exist_ok=True)
@@ -441,7 +456,9 @@ def main():
         print(f"Effective lines: {report['effective_lines']}")
         print(f"Classes: {len(report['classes_found'])}")
         for cls in report["classes_found"]:
-            print(f"  - {cls['name']} ({cls['method_count']} methods, {cls['total_method_lines']} lines)")
+            print(
+                f"  - {cls['name']} ({cls['method_count']} methods, {cls['total_method_lines']} lines)"
+            )
         print(f"Imports: {', '.join(report['imports_found'])}")
         print(f"\nScores:")
         for k, v in report["scores"].items():
@@ -460,12 +477,14 @@ def main():
 
     # Summary
     if len(all_reports) > 1:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("SUMMARY")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         for r in all_reports:
-            print(f"  {r['test_name']}: {r['overall_score']}/10 "
-                  f"({r['effective_lines']} lines, {len(r['classes_found'])} classes)")
+            print(
+                f"  {r['test_name']}: {r['overall_score']}/10 "
+                f"({r['effective_lines']} lines, {len(r['classes_found'])} classes)"
+            )
         avg = sum(r["overall_score"] for r in all_reports) / len(all_reports)
         print(f"\n  Average: {avg:.1f}/10")
 
