@@ -63,6 +63,33 @@ class CodeValidation:
 # Dangerous call patterns (security scan)
 # ---------------------------------------------------------------------------
 
+# Gurobipy read-only model attributes that must never be assigned to.
+# These are solver-populated after optimize(); writing to them raises
+# ``AttributeError: Attribute 'X' cannot be set``.
+_GUROBI_READONLY_ATTRS: frozenset[str] = frozenset(
+    {
+        "Runtime",
+        "ObjVal",
+        "ObjBound",
+        "ObjBoundC",
+        "MIPGap",
+        "Status",
+        "SolCount",
+        "NodeCount",
+        "BarIterCount",
+        "IterCount",
+        "NumVars",
+        "NumConstrs",
+        "NumSOS",
+        "NumQConstrs",
+        "NumGenConstrs",
+        "NumNZs",
+        "NumIntVars",
+        "NumBinVars",
+        "NumPWLObjVars",
+    }
+)
+
 # Fully-qualified call names that are forbidden in experiment code.
 DANGEROUS_CALLS: frozenset[str] = frozenset(
     {
@@ -944,6 +971,22 @@ def check_api_correctness(code: str, fname: str = "main.py") -> list[str]:
                         f"via `from {mod} import {name}` but called as `{mod}.{name}()` "
                         f"— this will raise NameError. Use `{name}()` directly."
                     )
+
+        # Gurobipy read-only attribute assignment
+        # Catches patterns like: model.Runtime = ..., m.ObjVal = ...,
+        # grb_model.Status = ...
+        # Uses \w+ to match any model variable name.
+        for attr in _GUROBI_READONLY_ATTRS:
+            if _re.search(
+                rf"\b\w+\.{attr}\s*=[^=]",
+                stripped,
+            ):
+                warnings.append(
+                    f"[{fname}:{i}] Assignment to gurobipy read-only attribute "
+                    f"'.{attr}' — this will raise AttributeError at runtime. "
+                    f"Use 'model.{attr}' to READ the value, never assign to it"
+                )
+                break  # one warning per line is enough
 
     return warnings
 

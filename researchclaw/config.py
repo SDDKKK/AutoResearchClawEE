@@ -135,6 +135,7 @@ class LlmConfig:
     s2_api_key: str = ""
     notes: str = ""
     acp: AcpConfig = field(default_factory=AcpConfig)
+    provider_pool: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
