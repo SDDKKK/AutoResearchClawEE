@@ -1,0 +1,59 @@
+# Power Systems Domain Configuration (Example)
+# Copy this file to config.power_systems.yaml and fill in your API keys
+
+project:
+  mode: "full-auto"
+  target_conference: "ieee_tpwrs"
+
+research:
+  topic: "Optimal Power Flow Optimization Using Machine Learning"
+  domain: "power_systems"
+
+llm:
+  # Multi-provider pool for rate limit resilience
+  provider_pool:
+    - name: "openai-main"
+      base_url: "https://api.openai.com/v1"
+      api_key: "${OPENAI_API_KEY}"  # Set via environment variable
+      models:
+        - "gpt-4o"
+        - "gpt-4o-mini"
+
+    - name: "openrouter"
+      base_url: "https://openrouter.ai/api/v1"
+      api_key: "${OPENROUTER_API_KEY}"  # Set via environment variable
+      models:
+        - "anthropic/claude-sonnet-4"
+        - "anthropic/claude-3.5-sonnet"
+
+  primary_model: "gpt-4o"
+  fallback_models:
+    - "gpt-4o-mini"
+
+experiment:
+  mode: "docker"
+  compute_budget:
+    time_limit: 3600  # 1 hour for MILP problems
+
+  sandbox:
+    allowed_imports:
+      # Power systems optimization stack
+      - "gurobipy"
+      - "networkx"
+      - "pandapower"
+      - "pypower"
+      - "cvxpy"
+      - "linopy"
+      - "pypsa"
+
+# Power systems specific settings
+power_systems:
+  test_systems:
+    - "IEEE 14-bus"
+    - "IEEE 30-bus"
+    - "IEEE 118-bus"
+
+  solver:
+    name: "gurobi"
+    mip_gap: 0.01
+    time_limit: 3600
