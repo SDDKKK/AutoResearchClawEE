@@ -13,7 +13,7 @@
   <a href="#-クイックスタート">🚀 クイックスタート</a> ·
   <a href="#-フィードバックテンプレート">📋 フィードバックテンプレート</a> ·
   <a href="TESTER_GUIDE.md">🇺🇸 English Testing Guide</a> ·
-  <a href="TESTER_GUIDE_CN.md">🇨🇳 中文测试指南</a> ·
+  <a href="TESTER_GUIDE_CN.md">🇨🇳 中文测试指南</a>
 </p>
 
 ---
