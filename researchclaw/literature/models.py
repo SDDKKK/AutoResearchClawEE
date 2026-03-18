@@ -107,6 +107,7 @@ class Paper:
                 "conference",
                 "proc",
                 "workshop",
+                # ML conferences
                 "neurips",
                 "icml",
                 "iclr",
@@ -121,6 +122,18 @@ class Paper:
                 "kdd",
                 "www",
                 "ijcai",
+                # IEEE power systems venues
+                "ieee",
+                "transactions",
+                "power systems",
+                "smart grid",
+                "power delivery",
+                "pes",
+                "general meeting",
+                "powertech",
+                "isgt",
+                "cired",
+                "pesgm",
             )
         ):
             entry_type = "inproceedings"

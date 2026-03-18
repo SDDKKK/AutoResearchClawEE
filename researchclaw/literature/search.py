@@ -31,8 +31,18 @@ from researchclaw.literature.semantic_scholar import search_semantic_scholar
 
 logger = logging.getLogger(__name__)
 
+# IEEE publisher and venue IDs for OpenAlex filtering
+IEEE_PUBLISHER_ID = "I4210136063"
+IEEE_VENUE_IDS = {
+    "tpwrs": "V3149224464",  # IEEE Trans. Power Systems
+    "tsg": "V4210145280",    # IEEE Trans. Smart Grid
+    "tpd": "V734141294",     # IEEE Trans. Power Delivery
+}
+
 # OpenAlex first (10K/day), then S2 (1K/5min), then arXiv (1/3s) — least
 # pressure on the most restrictive API.
+# Note: For power systems research, consider prioritizing OpenAlex with
+# IEEE publisher/venue filters for better coverage of IEEE Transactions.
 _DEFAULT_SOURCES = ("openalex", "semantic_scholar", "arxiv")
 
 
@@ -109,6 +119,12 @@ def search_papers(
     year_min: int = 0,
     deduplicate: bool = True,
     s2_api_key: str = "",
+    # IEEE/OpenAlex filtering options
+    publisher_filter: str | None = None,
+    venue_ids: Sequence[str] | None = None,
+    # Semantic Scholar filtering options
+    fields_of_study: str | None = None,
+    venue: str | None = None,
 ) -> list[Paper]:
     """Search multiple academic sources and return deduplicated results.
 
@@ -126,6 +142,14 @@ def search_papers(
         Whether to remove duplicates across sources.
     s2_api_key:
         Optional Semantic Scholar API key.
+    publisher_filter:
+        Optional OpenAlex publisher ID filter (e.g., IEEE_PUBLISHER_ID).
+    venue_ids:
+        Optional OpenAlex venue/source IDs to filter by.
+    fields_of_study:
+        Optional Semantic Scholar fields of study filter (e.g., "Engineering").
+    venue:
+        Optional Semantic Scholar venue filter (e.g., "IEEE Transactions on Power Systems").
 
     Returns
     -------
@@ -151,6 +175,8 @@ def search_papers(
                     query,
                     limit=limit,
                     year_min=year_min,
+                    publisher_filter=publisher_filter,
+                    venue_ids=venue_ids,
                 )
                 all_papers.extend(papers)
                 cache_put(query, "openalex", limit, _papers_to_dicts(papers))
@@ -166,6 +192,8 @@ def search_papers(
                     limit=limit,
                     year_min=year_min,
                     api_key=s2_api_key,
+                    fields_of_study=fields_of_study,
+                    venue=venue,
                 )
                 all_papers.extend(papers)
                 cache_put(query, "semantic_scholar", limit, _papers_to_dicts(papers))
@@ -238,6 +266,12 @@ def search_papers_multi_query(
     year_min: int = 0,
     s2_api_key: str = "",
     inter_query_delay: float = 1.5,
+    # IEEE/OpenAlex filtering options
+    publisher_filter: str | None = None,
+    venue_ids: Sequence[str] | None = None,
+    # Semantic Scholar filtering options
+    fields_of_study: str | None = None,
+    venue: str | None = None,
 ) -> list[Paper]:
     """Run multiple queries and return deduplicated union.
 
@@ -255,6 +289,10 @@ def search_papers_multi_query(
             year_min=year_min,
             s2_api_key=s2_api_key,
             deduplicate=False,  # we dedup globally below
+            publisher_filter=publisher_filter,
+            venue_ids=venue_ids,
+            fields_of_study=fields_of_study,
+            venue=venue,
         )
         all_papers.extend(results)
         logger.info("Query %d/%d %r → %d papers", i + 1, len(queries), q, len(results))

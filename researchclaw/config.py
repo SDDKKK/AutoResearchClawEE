@@ -156,6 +156,8 @@ class SandboxConfig:
         "numpy",
         "torch",
         "sklearn",
+        "gurobipy",
+        "networkx",
     )
     max_memory_mb: int = 4096
 

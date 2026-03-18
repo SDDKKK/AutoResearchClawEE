@@ -6,6 +6,10 @@ research:
   topic: "Your research topic here"
   domains:
     - "machine-learning"
+    # For power systems optimization, use:
+    # - "electrical-engineering"
+    # - "power-systems"
+    # - "optimization"
   daily_paper_count: 10
   quality_threshold: 4.0
 
@@ -171,6 +175,8 @@ experiment:
 # Copy prompts.default.yaml, edit the prompts you want, and set the path here.
 prompts:
   custom_file: ""  # e.g. "my_prompts.yaml" (empty = use built-in defaults)
+  # For power systems optimization, use:
+  # custom_file: "prompts.power_systems.yaml"
 
 
 # === MetaClaw Integration ===
