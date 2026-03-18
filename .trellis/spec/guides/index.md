@@ -33,6 +33,7 @@ These guides help you **ask the right questions before coding**.
 | [Receiving Review](./receiving-review.md) | Protocol for handling feedback from check/review agents | When debug/implement agent receives review feedback |
 | [TDD Guide](./tdd-guide.md) | Red-Green-Refactor cycle for Python scientific computing | When task.json has tdd=true; pure functions, algorithms, data transforms |
 | [Finishing Branch](./finishing-branch.md) | Structured completion options after all checks pass | When finishing work and choosing commit/PR/keep/discard |
+| [Fork Maintenance Guide](./fork-maintenance-guide.md) | Strategy for merging upstream updates into customized fork | When fork diverged from upstream and needs sync |
 
 ## Quick Reference: Thinking Triggers
 
@@ -198,6 +199,17 @@ These guides help you **ask the right questions before coding**.
 → Read [Finishing Branch](./finishing-branch.md)
 
 **Quick Rule**: Present 4 options after checklist passes. Option 4 (discard) requires user confirmation.
+
+### When to Think About Fork Maintenance
+
+- [ ] Your fork is behind upstream by 20+ commits
+- [ ] Upstream released new version with features you want
+- [ ] You need to preserve custom modifications while merging upstream
+- [ ] Git shows: "Your branch is X commits ahead, Y commits behind"
+
+→ Read [Fork Maintenance Guide](./fork-maintenance-guide.md)
+
+**Quick Rule**: Use Strategy C (Hybrid: Upstream-First + Cherry-Pick). Start from upstream/main, cherry-pick your custom commits one by one. For complex files (both modified), use Upstream-First: accept upstream's architecture, add your features incrementally.
 
 ## Pre-Modification Rule (CRITICAL)
 
