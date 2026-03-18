@@ -153,3 +153,9 @@ llm:
 ## Tags
 
 `upstream-merge` `fork-workflow` `git-security` `provider-pool` `llm-resilience`
+
+## 2026-03-18: Upstream v0.3.0+ Merge & Security Cleanup
+
+**Category**: (pattern|gotcha|convention|mistake)
+
+Strategy C (Upstream-First + Cherry-Pick) is optimal for fork maintenance. Git filter-branch removes sensitive data from all history. Provider pool pattern provides LLM API resilience with backward compatibility.
