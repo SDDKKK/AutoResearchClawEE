@@ -63,15 +63,24 @@ All tests passing:
 - Validator tests: 83 passed
 - Plus 1203 other tests
 
-## Known Limitations
+## Phase 5 Complete Features
 
-The following EE features from commit b254857 were NOT fully integrated due to complexity:
+All Phase 5 features were successfully integrated:
 
-1. **client.py provider pool rotation** - Upstream client has evolved significantly; manual integration would require extensive testing
-2. **executor.py power_systems domain** - Upstream executor has new domain detection; manual integration needed
-3. **executor.py JSON type guards** - Would need to be reimplemented on upstream base
+1. **client.py provider pool rotation** ✅
+   - Round-robin rotation on 429 rate limits
+   - Transient errno handling (ECONNRESET, ETIMEDOUT, ECONNREFUSED)
+   - Backward compatible (falls back to single provider if pool empty)
 
-These features can be added incrementally in follow-up commits if needed.
+2. **executor.py power_systems domain** ✅
+   - Added to `_DOMAIN_KEYWORDS` with 17 power systems keywords
+   - Domain name: "power systems engineering"
+   - Top venues: "IEEE Transactions on Power Systems, IEEE TPWRS"
+
+3. **executor.py JSON type guards** ✅
+   - Rejects non-dict JSON returns
+   - Logs warning with type information
+   - Returns default value on rejection
 
 ## Files Modified
 
